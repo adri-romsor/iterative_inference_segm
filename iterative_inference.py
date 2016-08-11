@@ -72,7 +72,7 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
     infer_out_metrics = infer_out_dimshuffle.reshape((T.prod(sh[:3]), sh[3]))
 
     # derivative of energy wrt input
-    de = - pred_dae - pred_fcn
+    de = - (pred_dae - pred_fcn)
 
     # function to compute de
     de_fn = theano.function([input_fcn_var,
