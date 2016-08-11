@@ -29,7 +29,9 @@ Pre-trained models for semantic segmentation and pre-trained DAE for iterative i
 ## TODO list
 - [x] Code fcn8 model and script to train the model
 - [x] Code DAE model and script to train the model
-- [ ] Code to perform iterative inference
+- [x] Code to perform iterative inference
+- [ ] Add possibility of having an intermediate layer as input (not only x)
+- [ ] Add training DAE training from the output of FCN8 instead of GT.
 - [ ] Experiments on CamVid
 - [ ] Experiments on PascalVOC
 - [ ] Experiments on polyps
@@ -39,6 +41,7 @@ Pre-trained models for semantic segmentation and pre-trained DAE for iterative i
 | **Ours** | Gl. Accuracy | Jaccard Ind. |
 |-------------------|--------------|--------------|
 | FCN-8 baseline     |88.0|57.0|
+| FCN-8 + DAE (64)     |88.55|57.75|
 
 
 | **SOTA methods** | Gl. Accuracy | Jaccard Ind. |
