@@ -50,6 +50,6 @@ def buildDAE(input_repr_var, input_mask_var, nb_in_channels, n_classes,
 
     # Do not train
     if not trainable:
-        model_helpers.freezeParameters(net)
+        model_helpers.freezeParameters(net, single=False)
 
     return net

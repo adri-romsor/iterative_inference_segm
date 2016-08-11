@@ -1,4 +1,5 @@
 import argparse
+import os
 import numpy as np
 
 import theano
@@ -11,11 +12,13 @@ from data_loader import load_data
 from metrics import accuracy, jaccard
 from models.DAE import buildDAE
 from models.fcn8_void import buildFCN8
+from helpers import save_img
 
 _FLOATX = config.floatX
 
 
-def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500):
+def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
+              savepath=None):
 
     # Define symbolic variables
     input_fcn_var = T.tensor4('input_fcn_var')
@@ -36,6 +39,11 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500):
         n_classes_dae = n_classes + (1 if void_labels else 0)
     else:
         raise ValueError('unknown input layer')
+
+    # Prepare saving directory
+    savepath = savepath + dataset + "/"
+    if not os.path.exists(savepath):
+        os.makedirs(savepath)
 
     print 'Building networks'
     # Build FCN8 with pre-trained weights
@@ -80,7 +88,9 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500):
 
     print 'Start infering'
     acc_tot = 0
+    acc_tot_old = 0
     jacc_tot = 0
+    jacc_tot_old = 0
     for i in range(n_batches_test):
         info_str = "Batch %d out of %d" % (i, n_batches_test)
         print info_str
@@ -95,6 +105,12 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500):
         # Compute fcn prediction
         pred = pred_fcn_fn(X_test_batch)
 
+        # Compute metrics before iterative inference
+        acc_old, jacc_old = val_fn(pred, L_test_target)
+        acc_tot_old += acc_old
+        jacc_tot_old += jacc_tot
+        pred_old = pred
+
         # Iterative inference
         for it in range(num_iter):
             grad = de_fn(X_test_batch, L_test_batch.astype(_FLOATX))
@@ -104,17 +120,24 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500):
             if grad.min() == 0 and grad.max() == 0:
                 break
 
-        # Test step
+        # Compute metrics
         acc, jacc = val_fn(pred, L_test_target)
 
         acc_tot += acc
         jacc_tot += jacc
 
+        # Save images
+        save_img(X_test_batch, L_test_batch.argmax(1), pred, pred_old,
+                 savepath, n_classes, 'batch' + str(i), void_labels)
+
     acc_test = acc_tot/n_batches_test
     jacc_test = np.mean(jacc_tot[0, :] / jacc_tot[1, :])
+    acc_test_old = acc_tot_old/n_batches_test
+    jacc_test_old = np.mean(jacc_tot_old[0, :] / jacc_tot_old[1, :])
 
-    out_str = "FINAL MODEL: acc test % f, jacc test %f"
-    out_str = out_str % (acc_test, jacc_test)
+    out_str = "TEST: acc  % f, jacc %f, acc old %f, jacc old %f"
+    out_str = out_str % (acc_test, jacc_test,
+                         acc_test_old, jacc_test_old)
     print out_str
 
 
@@ -138,11 +161,16 @@ def main():
                         default=200,
                         help='Optional. Int to indicate the max'
                         'number of epochs.')
+    parser.add_argument('--savepath',
+                        '-sp',
+                        type=str,
+                        default='/Tmp/romerosa/itinf/img_plots/',
+                        help='Path to save images')
 
     args = parser.parse_args()
 
     inference(args.dataset, args.layer_name, float(args.learning_rate),
-              int(args.num_iter))
+              int(args.num_iter), args.savepath)
 
 if __name__ == "__main__":
     main()
