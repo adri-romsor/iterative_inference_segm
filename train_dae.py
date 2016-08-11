@@ -11,7 +11,7 @@ from lasagne.objectives import squared_error
 from lasagne.regularization import regularize_network_params
 
 from data_loader import load_data
-from metrics import crossentropy
+from metrics import crossentropy, entropy
 from models.DAE import buildDAE
 
 _FLOATX = config.floatX
@@ -19,7 +19,7 @@ _FLOATX = config.floatX
 
 def train(dataset, layer_name=None, learn_step=0.005,
           weight_decay=1e-4, num_epochs=500, max_patience=100,
-          optimizer='rmsprop', training_loss='squared_error',
+          epsilon=.0, optimizer='rmsprop', training_loss='squared_error',
           savepath='/Tmp/romerosa/itinf/models/'):
 
     # Define symbolic variables
@@ -59,6 +59,8 @@ def train(dataset, layer_name=None, learn_step=0.005,
         loss = squared_error(prediction, input_mask_var).mean()
     else:
         raise ValueError('Unknown training loss')
+
+    loss += epsilon*entropy(prediction)
 
     # regularizers
     weightsl2 = regularize_network_params(
@@ -192,6 +194,9 @@ def main():
                         default=100,
                         help='Optional. Int to indicate the max'
                         'patience.')
+    parser.add_argument('-epsilon',
+                        default=1.,
+                        help='Entropy weight')
     parser.add_argument('-optimizer',
                         type=str,
                         default='adam',
@@ -205,7 +210,8 @@ def main():
 
     train(args.dataset, args.layer_name, float(args.learning_rate),
           float(args.weight_decay), int(args.num_epochs),
-          int(args.max_patience), args.optimizer, args.training_loss)
+          int(args.max_patience), float(args.epsilon),
+          args.optimizer, args.training_loss)
 
 
 if __name__ == "__main__":

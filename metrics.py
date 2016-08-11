@@ -90,3 +90,12 @@ def binary_crossentropy(y_pred, y_true):
     loss = T.nnet.binary_crossentropy(y_pred, y_true)
 
     return loss.mean()
+
+
+def entropy(y_pred):
+    # Clip predictions to avoid numerical instability
+    y_pred = T.clip(y_pred, _EPSILON, 1.0 - _EPSILON)
+
+    ent = - T.sum(y_pred * T.log(y_pred), axis=1)
+
+    return ent.mean()
