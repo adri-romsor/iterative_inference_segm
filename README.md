@@ -30,6 +30,7 @@ Pre-trained models for semantic segmentation and pre-trained DAE for iterative i
 - [x] Code fcn8 model and script to train the model
 - [x] Code DAE model and script to train the model
 - [x] Code to perform iterative inference
+- [x] Add entropy
 - [ ] Add possibility of having an intermediate layer as input (not only x)
 - [ ] Add training DAE training from the output of FCN8 instead of GT.
 - [ ] Experiments on CamVid
