@@ -10,12 +10,14 @@ from lasagne.layers import ElemwiseSumLayer, ElemwiseMergeLayer
 from lasagne.layers import Deconv2DLayer as DeconvLayer
 from lasagne.nonlinearities import softmax, linear
 
+from model_helpers import freezeParameters
 
-def buildFCN8(nb_in_channels, input_var, discriminator,
+
+def buildFCN8(nb_in_channels, input_var,
               path_weights='/Tmp/romerosa/itinf/models/' +
               'camvid/fcn8_model.npz',
               n_classes=21, load_weights=True,
-              void_labels=[]):
+              void_labels=[], trainable=False):
 
     '''
     Build fcn8 model (generator)
@@ -129,6 +131,9 @@ def buildFCN8(nb_in_channels, input_var, discriminator,
         with np.load(path_weights) as f:
             param_values = [f['arr_%d' % i] for i in range(len(f.files))]
         lasagne.layers.set_all_param_values(net['probs'], param_values)
+
+    if not trainable:
+        freezeParameters(net['probs'], single=False)
 
     if any(void_labels):
         layVoid = lasagne.layers.get_output(net['probs']).shape

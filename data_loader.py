@@ -51,7 +51,7 @@ def load_data(dataset, train_crop_size=(224, 224)):
                                  get_01c=False,
                                  use_threads=True)
         test_iter = CamvidDataset(which_set='test',
-                                  batch_size=10,
+                                  batch_size=1,
                                   seq_per_video=0,
                                   seq_length=0,
                                   crop_size=None,

@@ -10,7 +10,7 @@ import lasagne
 from data_loader import load_data
 from metrics import accuracy, jaccard
 from models.DAE import buildDAE
-from model.fcn8_void import buildFCN8
+from models.fcn8_void import buildFCN8
 
 _FLOATX = config.floatX
 
@@ -41,6 +41,7 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500):
     # Build FCN8 with pre-trained weights
     fcn = buildFCN8(3, input_var=input_fcn_var,
                     n_classes=n_classes,
+                    void_labels=void_labels,
                     trainable=False, load_weights=True)
 
     # Build DAE with pre-trained weights
@@ -55,13 +56,12 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500):
     pred_dae = lasagne.layers.get_output(dae, deterministic=True)
 
     # function to compute output of fcn
-    pred_fcn_fn = theano.function([input_fcn_var])
+    pred_fcn_fn = theano.function([input_fcn_var], pred_fcn)
 
     # Reshape iterative inference output to b,01c
-    sh = infer_out_var.shape
-    infer_out_metrics = \
-        (infer_out_var.dimshuffle((0, 2, 3, 1))).reshape((sh[0],
-                                                          T.prod(sh[1:])))
+    infer_out_dimshuffle = infer_out_var.dimshuffle((0, 2, 3, 1))
+    sh = infer_out_dimshuffle.shape
+    infer_out_metrics = infer_out_dimshuffle.reshape((T.prod(sh[:3]), sh[3]))
 
     # derivative of energy wrt input
     de = - pred_dae - pred_fcn
@@ -78,14 +78,19 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500):
     val_fn = theano.function([infer_out_var, target_var],
                              [test_acc, test_jacc])
 
-    'Start infering'
+    print 'Start infering'
     acc_tot = 0
     jacc_tot = 0
     for i in range(n_batches_test):
+        info_str = "Batch %d out of %d" % (i, n_batches_test)
+        print info_str
+
         # Get minibatch
         X_test_batch, L_test_batch = test_iter.next()
-        L_test_target = np.reshape(L_test_batch,
-                                   np.prod(L_test_batch.shape))
+        L_test_target = L_test_batch.argmax(1)
+        L_test_target = np.reshape(L_test_target,
+                                   np.prod(L_test_target.shape))
+        L_test_target = L_test_target.astype('int32')
 
         # Compute fcn prediction
         pred = pred_fcn_fn(X_test_batch)
@@ -96,7 +101,7 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500):
 
             pred = pred - learn_step * grad
 
-            if grad == 0:
+            if grad.min() == 0 and grad.max() == 0:
                 break
 
         # Test step
@@ -130,7 +135,7 @@ def main():
     parser.add_argument('--num_iter',
                         '-nit',
                         type=int,
-                        default=1000,
+                        default=200,
                         help='Optional. Int to indicate the max'
                         'number of epochs.')
 
