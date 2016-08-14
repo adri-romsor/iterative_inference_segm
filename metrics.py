@@ -8,12 +8,7 @@ _EPSILON = 10e-8
 def jaccard(y_pred, y_true, n_classes):
 
     # y_pred to indices
-    if T.gt(y_pred.shape[1], 1):
-        y_pred = T.argmax(y_pred, axis=1)
-    else:
-        y_pred = T.flatten(y_pred)
-        y_pred = T.set_subtensor(y_pred[T.ge(y_pred, 0.5).nonzero()], 1)
-        y_pred = T.set_subtensor(y_pred[T.lt(y_pred, 0.5).nonzero()], 0)
+    y_pred = T.argmax(y_pred, axis=1)
 
     # Compute confusion matrix
     cm = T.zeros((n_classes, n_classes))
@@ -36,13 +31,7 @@ def jaccard(y_pred, y_true, n_classes):
 def accuracy(y_pred, y_true, void_labels):
 
     # y_pred to indices
-    if T.gt(y_pred.shape[1], 1):
-        y_pred = T.argmax(y_pred, axis=1)
-    else:
-        pass
-        y_pred = T.flatten(y_pred)
-        y_pred = T.set_subtensor(y_pred[T.ge(y_pred, 0.5).nonzero()], 1)
-        y_pred = T.set_subtensor(y_pred[T.lt(y_pred, 0.5).nonzero()], 0)
+    y_pred = T.argmax(y_pred, axis=1)
 
     # Compute accuracy
     acc = T.eq(y_pred, y_true)

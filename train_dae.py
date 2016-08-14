@@ -12,7 +12,8 @@ from lasagne.regularization import regularize_network_params
 
 from data_loader import load_data
 from metrics import crossentropy, entropy
-from models.DAE import buildDAE
+from models.DAE_h import buildDAE
+from models.fcn8_void import buildFCN8
 
 _FLOATX = config.floatX
 
@@ -20,38 +21,40 @@ _FLOATX = config.floatX
 def train(dataset, layer_name=None, learn_step=0.005,
           weight_decay=1e-4, num_epochs=500, max_patience=100,
           epsilon=.0, optimizer='rmsprop', training_loss='squared_error',
-          savepath='/Tmp/romerosa/itinf/models/'):
+          layer_h='pool5', savepath='/Tmp/romerosa/itinf/models/'):
 
     # Define symbolic variables
+    input_x_var = T.tensor4('input_x_var')
     input_repr_var = T.tensor4('input_repr_var')
     input_mask_var = T.tensor4('input_mask_var')
 
     # Build dataset iterator
-    train_iter, val_iter, _ = load_data(dataset, train_crop_size=None)
+    train_iter, val_iter, _ = load_data(dataset, train_crop_size=None,
+                                        one_hot=True)
 
     n_batches_train = train_iter.get_n_batches()
     n_batches_val = val_iter.get_n_batches()
     n_classes = train_iter.get_n_classes()
     void_labels = train_iter.get_void_label()
 
-    # Check which layer will be used to jointly train the DAE with the
-    # labels
-    if layer_name == 'input':
-        n_input_dae = 3
-        n_classes_dae = n_classes + (1 if void_labels else 0)
-    else:
-        raise ValueError('unknown input layer')
+    # Build FCN
+    print ' Building FCN network'
+    fcn = buildFCN8(3, input_x_var, n_classes=n_classes,
+                    void_labels=void_labels,
+                    trainable=True, load_weights=True, layer=layer_h)
 
     # Build DAE network
     print ' Building DAE network'
-    dae = buildDAE(input_repr_var, input_mask_var, n_input_dae, n_classes_dae,
-                   [64], [3], trainable=True,
-                   load_weights=False)
+    dae = buildDAE(input_repr_var, input_mask_var, n_classes,
+                   layer_h, [4096], [3], trainable=True,
+                   load_weights=False, void_labels=void_labels)
 
     # Define required theano functions for training and compile them
     print "Defining and compiling training functions"
 
     # prediction and loss
+    fcn_prediction = lasagne.layers.get_output(fcn, deterministic=True)
+
     prediction = lasagne.layers.get_output(dae)
     if training_loss == 'crossentropy':
         loss = crossentropy(prediction, input_mask_var, void_labels)
@@ -82,6 +85,7 @@ def train(dataset, layer_name=None, learn_step=0.005,
     # functions
     train_fn = theano.function([input_repr_var, input_mask_var],
                                loss, updates=updates)
+    fcn_fn = theano.function([input_x_var], fcn_prediction)
 
     # Define required theano functions for testing and compile them
     print "Defining and compiling test functions"
@@ -119,8 +123,11 @@ def train(dataset, layer_name=None, learn_step=0.005,
             X_train_batch, L_train_batch = train_iter.next()
             L_train_batch = L_train_batch.astype(_FLOATX)
 
+            # h prediction
+            X_pred_batch = fcn_fn(X_train_batch)
+
             # Training step
-            cost_train = train_fn(X_train_batch, L_train_batch)
+            cost_train = train_fn(X_pred_batch, L_train_batch)
             cost_train_tot += cost_train
 
         err_train += [cost_train_tot/n_batches_train]
@@ -132,8 +139,11 @@ def train(dataset, layer_name=None, learn_step=0.005,
             X_val_batch, L_val_batch = val_iter.next()
             L_val_batch = L_val_batch.astype(_FLOATX)
 
+            # h prediction
+            X_pred_batch = fcn_fn(X_val_batch)
+
             # Validation step
-            cost_val = val_fn(X_val_batch, L_val_batch)
+            cost_val = val_fn(X_pred_batch, L_val_batch)
             cost_val_tot += cost_val
 
         err_valid += [cost_val_tot/n_batches_val]
@@ -177,7 +187,7 @@ def main():
                         default='input',
                         help='Layer name.')
     parser.add_argument('-learning_rate',
-                        default=0.0001,
+                        default=0.00001,
                         help='Learning rate')
     parser.add_argument('-weight_decay',
                         default=.0,
@@ -195,7 +205,7 @@ def main():
                         help='Optional. Int to indicate the max'
                         'patience.')
     parser.add_argument('-epsilon',
-                        default=1.,
+                        default=0.,
                         help='Entropy weight')
     parser.add_argument('-optimizer',
                         type=str,
@@ -205,13 +215,16 @@ def main():
                         type=str,
                         default='squared_error',
                         help='Optional. Training loss')
-
+    parser.add_argument('-layer_h',
+                        type=str,
+                        default='pool5',
+                        help='layer_h')
     args = parser.parse_args()
 
     train(args.dataset, args.layer_name, float(args.learning_rate),
           float(args.weight_decay), int(args.num_epochs),
           int(args.max_patience), float(args.epsilon),
-          args.optimizer, args.training_loss)
+          args.optimizer, args.training_loss, args.layer_h)
 
 
 if __name__ == "__main__":

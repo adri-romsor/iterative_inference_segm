@@ -17,16 +17,16 @@ _FLOATX = config.floatX
 
 
 def train(dataset, learn_step=0.005,
-          weight_decay=1e-4, num_epochs=500, padding=0,
-          savepath="/Tmp/romerosa/itinf/models/",
-          max_patience=100):
+          weight_decay=1e-4, num_epochs=500,
+          max_patience=100,
+          savepath="/Tmp/romerosa/itinf/models/"):
 
     # Define symbolic variables
     input_var = T.tensor4('input_var')
     target_var = T.ivector('target_var')
 
     # Build dataset iterator
-    train_iter, val_iter, test_iter = load_data(dataset)
+    train_iter, val_iter, test_iter = load_data(dataset, one_hot=False)
 
     n_batches_train = train_iter.get_n_batches()
     n_batches_val = val_iter.get_n_batches()
@@ -36,7 +36,7 @@ def train(dataset, learn_step=0.005,
 
     # Build convolutional model and load pre-trained parameters
     convmodel = buildFCN8(3, input_var=input_var, trainable=True,
-                          n_classes=n_classes)
+                          n_classes=n_classes, load_weights=True, pascal=True)
 
     # Define required theano functions and compile them
     print "Defining and compiling training functions"
@@ -124,7 +124,7 @@ def train(dataset, learn_step=0.005,
                              time.time()-start_time)
         print out_str
 
-        with open(savepath + "output.log", "a") as f:
+        with open(savepath + "fcn8_new_output.log", "a") as f:
             f.write(out_str + "\n")
 
         # Early stopping and saving stuff
@@ -133,9 +133,9 @@ def train(dataset, learn_step=0.005,
         elif epoch > 1 and jacc_valid[epoch] > best_jacc_val:
             best_jacc_val = jacc_valid[epoch]
             patience = 0
-            np.savez(savepath + 'model.npz',
+            np.savez(savepath + 'fcn8_new_model.npz',
                      *lasagne.layers.get_all_param_values(convmodel))
-            np.savez(savepath + "errors.npz",
+            np.savez(savepath + "fcn8_new_errors.npz",
                      err_valid, err_train, acc_valid,
                      jacc_valid)
         else:
@@ -145,7 +145,7 @@ def train(dataset, learn_step=0.005,
         # reached
         if patience == max_patience or epoch == num_epochs-1:
             # Load best model weights
-            with np.load(savepath + 'model.npz',) as f:
+            with np.load(savepath + 'fcn8_new_model.npz',) as f:
                 param_values = [f['arr_%d' % i]
                                 for i in range(len(f.files))]
             nlayers = len(lasagne.layers.get_all_params(convmodel))
@@ -203,15 +203,15 @@ def main():
                         default=1000,
                         help='Optional. Int to indicate the max'
                         'number of epochs.')
-    parser.add_argument('-padding',
+    parser.add_argument('-max_patience',
                         type=int,
-                        default=92,
-                        help='Padding to be added to he images')
+                        default=100,
+                        help='Max patience')
 
     args = parser.parse_args()
 
-    train(args.model, args.dataset, float(args.learning_rate),
-          float(args.penal_cst), int(args.num_epochs), int(args.padding))
+    train(args.dataset, float(args.learning_rate),
+          float(args.penal_cst), int(args.num_epochs), int(args.max_patience))
 
 if __name__ == "__main__":
     main()

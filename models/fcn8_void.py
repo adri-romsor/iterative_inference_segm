@@ -17,7 +17,7 @@ def buildFCN8(nb_in_channels, input_var,
               path_weights='/Tmp/romerosa/itinf/models/' +
               'camvid/fcn8_model.npz',
               n_classes=21, load_weights=True,
-              void_labels=[], trainable=False):
+              void_labels=[], trainable=False, layer='probs_dimshuffle'):
 
     '''
     Build fcn8 model (generator)
@@ -152,4 +152,4 @@ def buildFCN8(nb_in_channels, input_var,
     net['probs_dimshuffle'] = DimshuffleLayer(net['probs_reshape'],
                                               (0, 3, 1, 2))
 
-    return net['probs_dimshuffle']
+    return net[layer]
