@@ -10,7 +10,7 @@ import lasagne
 
 from data_loader import load_data
 from metrics import accuracy, jaccard
-from models.DAE import buildDAE
+from models.DAE_h import buildDAE
 from models.fcn8_void import buildFCN8
 from helpers import save_img
 
@@ -21,24 +21,18 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
               savepath=None):
 
     # Define symbolic variables
-    input_fcn_var = T.tensor4('input_fcn_var')
+    input_x_var = T.tensor4('input_x_var')
+    input_h_var = T.tensor4('input_repr_var')
+    y_hat_var = T.tensor4('pred_y_var')
     input_dae_mask_var = T.tensor4('input_dae_mask_var')
-    infer_out_var = T.tensor4('infer_out_var')
     target_var = T.ivector('target_var')
 
     # Build dataset iterator
-    train_iter, val_iter, test_iter = load_data(dataset)
+    _, _, test_iter = load_data(dataset, train_crop_size=None, one_hot=True)
 
     n_batches_test = test_iter.get_n_batches()
-    n_classes = train_iter.get_n_classes()
-    void_labels = train_iter.get_void_label()
-
-    # Compute number of input channels of DAE
-    if layer_name == 'input':
-        n_input_dae = 3
-        n_classes_dae = n_classes + (1 if void_labels else 0)
-    else:
-        raise ValueError('unknown input layer')
+    n_classes = test_iter.get_n_classes()
+    void_labels = test_iter.get_void_label()
 
     # Prepare saving directory
     savepath = savepath + dataset + "/"
@@ -46,44 +40,55 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
         os.makedirs(savepath)
 
     print 'Building networks'
-    # Build FCN8 with pre-trained weights
-    fcn = buildFCN8(3, input_var=input_fcn_var,
-                    n_classes=n_classes,
-                    void_labels=void_labels,
-                    trainable=False, load_weights=True)
+    # Build FCN8 with pre-trained weights (network to initialize
+    # inference)
+    fcn_y = buildFCN8(3, input_var=input_x_var,
+                      n_classes=n_classes,
+                      void_labels=void_labels,
+                      trainable=False, load_weights=True)
+
+    # Build FCN8  with pre-trained weights up to layer_name (that one will
+    # be used as input to the DAE)
+    fcn_h = buildFCN8(3, input_var=input_x_var,
+                      n_classes=n_classes,
+                      void_labels=void_labels,
+                      trainable=False, load_weights=True,
+                      layer=layer_name)
 
     # Build DAE with pre-trained weights
-    dae = buildDAE(input_fcn_var, input_dae_mask_var,
-                   n_input_dae, n_classes_dae, filter_size=[64],
-                   kernel_size=[3], trainable=False, load_weights=True)
+    dae = buildDAE(input_h_var, input_dae_mask_var,
+                   n_classes, layer_h=layer_name, filter_size=[4096],
+                   kernel_size=[3], trainable=False, load_weights=True,
+                   void_labels=void_labels)
 
     print "Defining and compiling theano functions"
     # Define required theano functions and compile them
     # predictions of fcn and dae
-    pred_fcn = lasagne.layers.get_output(fcn, deterministic=True)
+    pred_fcn_y = lasagne.layers.get_output(fcn_y, deterministic=True)
+    pred_fcn_h = lasagne.layers.get_output(fcn_h, deterministic=True)
     pred_dae = lasagne.layers.get_output(dae, deterministic=True)
 
-    # function to compute output of fcn
-    pred_fcn_fn = theano.function([input_fcn_var], pred_fcn)
+    # function to compute output of fcn_y and fcn_h
+    pred_fcn_y_fn = theano.function([input_x_var], pred_fcn_y)
+    pred_fcn_h_fn = theano.function([input_x_var], pred_fcn_h)
 
     # Reshape iterative inference output to b,01c
-    infer_out_dimshuffle = infer_out_var.dimshuffle((0, 2, 3, 1))
-    sh = infer_out_dimshuffle.shape
-    infer_out_metrics = infer_out_dimshuffle.reshape((T.prod(sh[:3]), sh[3]))
+    y_hat_dimshuffle = y_hat_var.dimshuffle((0, 2, 3, 1))
+    sh = y_hat_dimshuffle.shape
+    y_hat_2D = y_hat_dimshuffle.reshape((T.prod(sh[:3]), sh[3]))
 
     # derivative of energy wrt input
-    de = - (pred_dae - pred_fcn)
+    de = - (pred_dae - pred_fcn_y)
 
     # function to compute de
-    de_fn = theano.function([input_fcn_var,
-                             input_dae_mask_var], de)
+    de_fn = theano.function([input_h_var, input_dae_mask_var, input_x_var], de)
 
     # metrics to evaluate iterative inference
-    test_acc = accuracy(infer_out_metrics, target_var, void_labels)
-    test_jacc = jaccard(infer_out_metrics, target_var, n_classes)
+    test_acc = accuracy(y_hat_2D, target_var, void_labels)
+    test_jacc = jaccard(y_hat_2D, target_var, n_classes)
 
     # functions to compute metrics
-    val_fn = theano.function([infer_out_var, target_var],
+    val_fn = theano.function([y_hat_var, target_var],
                              [test_acc, test_jacc])
 
     print 'Start infering'
@@ -102,33 +107,36 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
                                    np.prod(L_test_target.shape))
         L_test_target = L_test_target.astype('int32')
 
-        # Compute fcn prediction
-        pred = pred_fcn_fn(X_test_batch)
+        # Compute fcn prediction y and h
+        Y_test_batch = pred_fcn_y_fn(X_test_batch)
+        H_test_batch = pred_fcn_h_fn(X_test_batch)
 
         # Compute metrics before iterative inference
-        acc_old, jacc_old = val_fn(pred, L_test_target)
+        acc_old, jacc_old = val_fn(Y_test_batch, L_test_target)
         acc_tot_old += acc_old
         jacc_tot_old += jacc_tot
-        pred_old = pred
+        Y_test_batch_old = Y_test_batch
 
         # Iterative inference
         for it in range(num_iter):
-            grad = de_fn(X_test_batch, L_test_batch.astype(_FLOATX))
+            grad = de_fn(H_test_batch, L_test_batch.astype(_FLOATX),
+                         X_test_batch)
 
-            pred = pred - learn_step * grad
+            Y_test_batch = Y_test_batch - learn_step * grad
 
             if grad.min() == 0 and grad.max() == 0:
                 break
 
         # Compute metrics
-        acc, jacc = val_fn(pred, L_test_target)
+        acc, jacc = val_fn(Y_test_batch, L_test_target)
 
         acc_tot += acc
         jacc_tot += jacc
 
         # Save images
-        save_img(X_test_batch, L_test_batch.argmax(1), pred, pred_old,
-                 savepath, n_classes, 'batch' + str(i), void_labels)
+        save_img(X_test_batch, L_test_batch.argmax(1), Y_test_batch,
+                 Y_test_batch_old, savepath, n_classes,
+                 'batch' + str(i), void_labels)
 
     acc_test = acc_tot/n_batches_test
     jacc_test = np.mean(jacc_tot[0, :] / jacc_tot[1, :])
@@ -147,10 +155,10 @@ def main():
                         default='camvid',
                         help='Dataset.')
     parser.add_argument('-layer_name',
-                        default='input',
+                        default='pool5',
                         help='Dataset.')
     parser.add_argument('-learning_rate',
-                        default=0.0001,
+                        default=0.001,
                         help='Learning Rate')
     parser.add_argument('-penal_cst',
                         default=0.0,

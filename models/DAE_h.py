@@ -83,10 +83,10 @@ def buildDAE(input_repr_var, input_mask_var, n_classes,
         with np.load(path_weights) as f:
             param_values = [f['arr_%d' % i] for i in range(len(f.files))]
 
-        lasagne.layers.set_all_param_values(dae, param_values)
+        lasagne.layers.set_all_param_values(dae['probs_dimshuffle'], param_values)
 
     # Do not train
     if not trainable:
-        model_helpers.freezeParameters(dae, single=False)
+        model_helpers.freezeParameters(dae['probs_dimshuffle'], single=False)
 
     return dae['probs_dimshuffle']

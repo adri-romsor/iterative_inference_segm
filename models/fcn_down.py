@@ -22,6 +22,9 @@ def buildFCN_down(input_var, n_classes=21, layer='pool5'):
     # Noise
     net['noisy_input'] = lasagne.layers.GaussianNoiseLayer(net['input'])
 
+    if layer == 'input':
+        return
+
     # pool 1
     net['conv1_1'] = ConvLayer(
         net['noisy_input'], 64, 3, pad=100, flip_filters=False)
