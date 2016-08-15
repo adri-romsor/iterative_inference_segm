@@ -1,6 +1,7 @@
 import argparse
 import os
 import numpy as np
+from copy import deepcopy
 
 import theano
 import theano.tensor as T
@@ -9,7 +10,7 @@ from theano import config
 import lasagne
 
 from data_loader import load_data
-from metrics import accuracy, jaccard
+from metrics2 import accuracy, jaccard
 from models.DAE_h import buildDAE
 from models.fcn8_void import buildFCN8
 from helpers import save_img
@@ -114,7 +115,7 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
         # Compute metrics before iterative inference
         acc_old, jacc_old = val_fn(Y_test_batch, L_test_target)
         acc_tot_old += acc_old
-        jacc_tot_old += jacc_tot
+        jacc_tot_old += jacc_old
         Y_test_batch_old = Y_test_batch
 
         # Iterative inference

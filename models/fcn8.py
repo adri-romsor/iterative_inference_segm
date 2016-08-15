@@ -87,7 +87,7 @@ def buildFCN8(nb_in_channels, input_var=None,
     net['score2'] = DeconvLayer(net['score_fr'], n_classes, 4, stride=2,
                                 crop='valid', nonlinearity=linear)
     net['score_pool4'] = ConvLayer(net['pool4'], n_classes, 1,
-                                   pad='same', nonlinearity=linear)
+                                   pad='same')
     net['score_fused'] = ElemwiseSumLayer((net['score2'],
                                            net['score_pool4']),
                                           cropping=[None, None, 'center',
@@ -97,7 +97,7 @@ def buildFCN8(nb_in_channels, input_var=None,
     net['score4'] = DeconvLayer(net['score_fused'], n_classes, 4,
                                 stride=2, crop='valid', nonlinearity=linear)
     net['score_pool3'] = ConvLayer(net['pool3'], n_classes, 1,
-                                   pad='valid', nonlinearity=linear)
+                                   pad='valid')
     net['score_final'] = ElemwiseSumLayer((net['score4'],
                                            net['score_pool3']),
                                           cropping=[None, None, 'center',
