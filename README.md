@@ -35,9 +35,23 @@ Pre-trained models for semantic segmentation and pre-trained DAE for iterative i
 - [ ] Add possibility of having several intermediate layers as input
 - [ ] Add training DAE training from the output of FCN8 instead of GT.
 - [ ] Code CRF (M)
-- [ ] Experiments on CamVid
-- [ ] Experiments on PascalVOC
-- [ ] Experiments on polyps
+- [ ] Add BFGS optimization
+
+### TODO experiments
+**Camvid:**
+- [x] FCN-8 baseline
+- [x] FCN-8 + DAE (x,y) shallow
+- [x] FCN-8 + DAE (h, y) shallow
+- [ ] FCN-8 + DAE (h1, h2, ..., y) shallow 
+- [ ] FCN-8 + CRF (baseline)
+- [ ] FCN-8 + DAE (x, y) deep
+- [ ] FCN-8 + DAE (h, y) deep
+- [ ] FCN-8 + DAE (h1, h2, ..., y) deep 
+
+**Future datasets:**
+- [ ] PascalVOC
+- [ ] Polyps 
+- [ ] Nerve ultrasound?
 
 ## Some results
 ### CamVid
