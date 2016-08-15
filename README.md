@@ -61,7 +61,7 @@ Pre-trained models for semantic segmentation and pre-trained DAE for iterative i
 | FCN-8 + DAE (input, 64)     |88.55|57.75|
 | FCN-8 + DAE (input, 4096)     |||
 | FCN-8 + DAE (pool3, 4096)     |||
-| FCN-8 + DAE (pool5, 4096)     |89.30|58.59|
+| FCN-8 + DAE (pool5, 4096)     |89.30|58.60|
 | FCN-8 + DAE (fc7, 4096)     |||
 
 
