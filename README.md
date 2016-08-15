@@ -43,7 +43,7 @@ Pre-trained models for semantic segmentation and pre-trained DAE for iterative i
 ### CamVid
 | **Ours** | Gl. Accuracy | Jaccard Ind. |
 |-------------------|--------------|--------------|
-| FCN-8 baseline     |88.0|57.0|
+| FCN-8 baseline     |88.44|57.41|
 | FCN-8 + DAE (64)     |88.55|57.75|
 | FCN-8 + DAE (pool5, 4096)     |89.30|58.59|
 
