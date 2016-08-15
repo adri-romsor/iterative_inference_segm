@@ -26,8 +26,11 @@ def train(dataset, learn_step=0.005,
 
     # Define symbolic variables
     input_x_var = T.tensor4('input_x_var')
-    input_repr_var = T.tensor4('input_repr_var')
     input_mask_var = T.tensor4('input_mask_var')
+
+    input_repr_var = []
+    for l in layer_name:
+        input_repr_var += [T.tensor4()]
 
     # Build dataset iterator
     train_iter, val_iter, _ = load_data(dataset, train_crop_size=None,

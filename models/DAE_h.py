@@ -1,6 +1,5 @@
 import numpy as np
 import lasagne
-from lasagne.layers import InputLayer, ConcatLayer
 from lasagne.layers import Conv2DLayer as ConvLayer
 from lasagne.layers import Pool2DLayer as PoolLayer
 from lasagne.nonlinearities import linear, sigmoid
@@ -11,7 +10,7 @@ from fcn_down import buildFCN_down
 
 
 def buildDAE(input_repr_var, input_mask_var, n_classes,
-             layer_h='input', filter_size=[], kernel_size=[],
+             layer_h=['input'], filter_size=[], kernel_size=[],
              void_labels=[],
              path_weights='/Tmp/romerosa/itinf/models/',
              model_name='dae_model.npz',
@@ -25,27 +24,10 @@ def buildDAE(input_repr_var, input_mask_var, n_classes,
     n_classes = n_classes + (1 if void_labels else 0)
 
     # Build fcn to extract representation from y
-    fcn_down = buildFCN_down(input_mask_var, n_classes=n_classes,
-                             layer=layer_h)
+    fcn_down = buildFCN_down(input_mask_var, input_repr_var,
+                             n_classes=n_classes, concat_layers=layer_h)
 
     dae = fcn_down
-
-    # Number of representation channels
-    if layer_h == 'input':
-        layer_h = 'noisy_input'
-        nb_repr_channels = 3
-    else:
-        nb_repr_channels = fcn_down[layer_h].input_shape[1]
-
-    input_repr_size = (None, nb_repr_channels, None, None)
-
-    # 2 input layers to the energy function (h, y)
-    dae['input_repr'] = InputLayer(input_repr_size,
-                                   input_repr_var)
-
-    # Concatenate the 2 inputs (h, h_y)
-    dae['concat'] = ConcatLayer((dae['input_repr'], fcn_down[layer_h]),
-                                axis=1, cropping=None)
 
     # Stack encoder on top of concatenation
     l_enc = 0
@@ -63,7 +45,8 @@ def buildDAE(input_repr_var, input_mask_var, n_classes,
                      lasagne.layers.get_all_layers(dae['concat'])])
 
     # Stack decoder
-    filter_size[0] = n_classes if unpool == 0 else nb_repr_channels
+    filter_size[0] = n_classes if unpool == 0 else \
+        fcn_down[layer_h[-1]].input_shape[1]
     l_dec = 0
     for f, k in list(reversed(zip(filter_size, kernel_size))):
         dae['decoder' + str(l_dec)] = \
