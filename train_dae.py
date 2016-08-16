@@ -21,8 +21,8 @@ _FLOATX = config.floatX
 def train(dataset, learn_step=0.005,
           weight_decay=1e-4, num_epochs=500, max_patience=100,
           epsilon=.0, optimizer='rmsprop', training_loss='squared_error',
-          layer_h='pool5', num_filters=[64], filter_size=[3],
-          savepath='/Tmp/romerosa/itinf/models/'):
+          layer_h='pool5', num_filters=[512], filter_size=[3],
+          savepath='/Tmp/romerosa/itinf/models/', resume=False):
 
     # Define symbolic variables
     input_x_var = T.tensor4('input_x_var')
@@ -38,6 +38,12 @@ def train(dataset, learn_step=0.005,
     n_classes = train_iter.get_n_classes()
     void_labels = train_iter.get_void_label()
 
+    # Prepare saving directory
+    savepath = savepath + dataset + "/"
+    if not os.path.exists(savepath):
+        os.makedirs(savepath)
+    name = '_' + layer_h
+
     # Build FCN
     print ' Building FCN network'
     fcn = buildFCN8(3, input_x_var, n_classes=n_classes,
@@ -48,7 +54,8 @@ def train(dataset, learn_step=0.005,
     print ' Building DAE network'
     dae = buildDAE(input_repr_var, input_mask_var, n_classes,
                    layer_h, num_filters, filter_size, trainable=True,
-                   load_weights=False, void_labels=void_labels)
+                   load_weights=resume, void_labels=void_labels,
+                   model_name=dataset+'/dae_model'+name+'.npz')
 
     # Define required theano functions for training and compile them
     print "Defining and compiling training functions"
@@ -101,12 +108,6 @@ def train(dataset, learn_step=0.005,
 
     # functions
     val_fn = theano.function([input_repr_var, input_mask_var], test_loss)
-
-    # Prepare saving directory
-    savepath = savepath + dataset + "/"
-    if not os.path.exists(savepath):
-        os.makedirs(savepath)
-    name = '_' + layer_h
 
     err_train = []
     err_valid = []
@@ -216,14 +217,14 @@ def main():
                         help='Optional. Training loss')
     parser.add_argument('-layer_h',
                         type=str,
-                        default='fc7',
+                        default='pool1',
                         help='layer_h')
     args = parser.parse_args()
 
     train(args.dataset, float(args.learning_rate),
           float(args.weight_decay), int(args.num_epochs),
           int(args.max_patience), float(args.epsilon),
-          args.optimizer, args.training_loss, args.layer_h)
+          args.optimizer, args.training_loss, args.layer_h, resume=True)
 
 
 if __name__ == "__main__":

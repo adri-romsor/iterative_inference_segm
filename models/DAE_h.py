@@ -13,8 +13,7 @@ from fcn_down import buildFCN_down
 def buildDAE(input_repr_var, input_mask_var, n_classes,
              layer_h='input', filter_size=[], kernel_size=[],
              void_labels=[],
-             path_weights='/Tmp/romerosa/itinf/models/' +
-             'camvid/',
+             path_weights='/Tmp/romerosa/itinf/models/',
              model_name='dae_model.npz',
              trainable=False, load_weights=False):
 
