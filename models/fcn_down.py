@@ -14,7 +14,7 @@ def concatenate(net, in1, concat_layers, concat_vars, pos):
     else:
         out = in1
 
-    return net, pos, out
+    return pos, out
 
 
 def buildFCN_down(input_var, concat_vars,
@@ -37,8 +37,8 @@ def buildFCN_down(input_var, concat_vars,
     # Noise
     net['noisy_input'] = GaussianNoiseLayer(net['input'])
 
-    net, pos, out = concatenate(net, 'noisy_input', concat_layers,
-                                concat_vars, pos)
+    pos, out = concatenate(net, 'noisy_input', concat_layers, concat_vars, pos)
+
     if concat_layers[-1] == 'noisy_input':
         return net
 
@@ -50,7 +50,7 @@ def buildFCN_down(input_var, concat_vars,
         net['conv1_1'], 64, 3, pad='same', flip_filters=False)
     net['pool1'] = PoolLayer(net['conv1_2'], 2)
 
-    net, pos, out = concatenate(net, 'pool1', concat_layers, concat_vars, pos)
+    pos, out = concatenate(net, 'pool1', concat_layers, concat_vars, pos)
     if concat_layers[-1] == 'pool1':
         return net
 
@@ -61,7 +61,7 @@ def buildFCN_down(input_var, concat_vars,
         net['conv2_1'], 128, 3, pad='same', flip_filters=False)
     net['pool2'] = PoolLayer(net['conv2_2'], 2)
 
-    net, pos, out = concatenate(net, 'pool2', concat_layers, concat_vars, pos)
+    pos, out = concatenate(net, 'pool2', concat_layers, concat_vars, pos)
     if concat_layers[-1] == 'pool2':
         return net
 
@@ -74,7 +74,7 @@ def buildFCN_down(input_var, concat_vars,
         net['conv3_2'], 256, 3, pad='same', flip_filters=False)
     net['pool3'] = PoolLayer(net['conv3_3'], 2)
 
-    net, pos, out = concatenate(net, 'pool3', concat_layers, concat_vars, pos)
+    pos, out = concatenate(net, 'pool3', concat_layers, concat_vars, pos)
     if concat_layers[-1] == 'pool3':
         return net
 
@@ -87,7 +87,7 @@ def buildFCN_down(input_var, concat_vars,
         net['conv4_2'], 512, 3, pad='same', flip_filters=False)
     net['pool4'] = PoolLayer(net['conv4_3'], 2)
 
-    net, pos, out = concatenate(net, 'pool4', concat_layers, concat_vars, pos)
+    pos, out = concatenate(net, 'pool4', concat_layers, concat_vars, pos)
     if concat_layers[-1] == 'pool4':
         return net
 
@@ -100,7 +100,7 @@ def buildFCN_down(input_var, concat_vars,
         net['conv5_2'], 512, 3, pad='same', flip_filters=False)
     net['pool5'] = PoolLayer(net['conv5_3'], 2)
 
-    net, pos, out = concatenate(net, 'pool5', concat_layers, concat_vars, pos)
+    pos, out = concatenate(net, 'pool5', concat_layers, concat_vars, pos)
     if concat_layers[-1] == 'pool5':
         return net
 
@@ -109,7 +109,7 @@ def buildFCN_down(input_var, concat_vars,
         net[out], 4096, 7, pad='valid', flip_filters=False)
     net['fc6_dropout'] = DropoutLayer(net['fc6'])
 
-    net, pos, out = concatenate(net, 'fc6_dropout',
+    pos, out = concatenate(net, 'fc6_dropout',
                                 concat_layers, concat_vars, pos)
     if concat_layers[-1] == 'fc6':
         return net
@@ -119,7 +119,7 @@ def buildFCN_down(input_var, concat_vars,
         net[out], 4096, 1, pad='valid', flip_filters=False)
     net['fc7_dropout'] = DropoutLayer(net['fc7'], p=0.5)
 
-    net, pos, out = concatenate(net, 'fc7_dropout',
+    pos, out = concatenate(net, 'fc7_dropout',
                                 concat_layers, concat_vars, pos)
     if concat_layers[-1] == 'fc7':
         return net
