@@ -29,8 +29,10 @@ def train(dataset, learn_step=0.005,
     input_mask_var = T.tensor4('input_mask_var')
 
     input_repr_var = []
+    name = ''
     for l in layer_h:
         input_repr_var += [T.tensor4()]
+        name += ('_'+l)
 
     # Build dataset iterator
     train_iter, val_iter, _ = load_data(dataset, train_crop_size=None,
@@ -94,7 +96,7 @@ def train(dataset, learn_step=0.005,
         raise ValueError('Unknown optimizer')
 
     # functions
-    train_fn = theano.function([input_repr_var, input_mask_var],
+    train_fn = theano.function(input_repr_var+[input_mask_var],
                                loss, updates=updates)
     fcn_fn = theano.function([input_x_var], fcn_prediction)
 
@@ -110,7 +112,7 @@ def train(dataset, learn_step=0.005,
         raise ValueError('Unknown training loss')
 
     # functions
-    val_fn = theano.function([input_repr_var, input_mask_var], test_loss)
+    val_fn = theano.function(input_repr_var+[input_mask_var], test_loss)
 
     err_train = []
     err_valid = []

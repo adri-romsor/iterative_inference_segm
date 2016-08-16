@@ -10,7 +10,7 @@ def concatenate(net, in1, concat_layers, concat_vars, pos):
         net[in1 + '_concat'] = ConcatLayer((net[in1 + '_h'],
                                             net[in1]), axis=1, cropping=None)
         pos += 1
-        out = in1 + '_h'
+        out = in1 + '_concat'
     else:
         out = in1
 
