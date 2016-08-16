@@ -47,7 +47,6 @@ def train(dataset, learn_step=0.005,
     savepath = savepath + dataset + "/"
     if not os.path.exists(savepath):
         os.makedirs(savepath)
-    name = '_' + layer_h
 
     # Build FCN
     print ' Building FCN network'
@@ -135,7 +134,7 @@ def train(dataset, learn_step=0.005,
             X_pred_batch = fcn_fn(X_train_batch)
 
             # Training step
-            cost_train = train_fn(X_pred_batch, L_train_batch)
+            cost_train = train_fn(*(X_pred_batch+[L_train_batch]))
             cost_train_tot += cost_train
 
         err_train += [cost_train_tot/n_batches_train]
@@ -151,7 +150,7 @@ def train(dataset, learn_step=0.005,
             X_pred_batch = fcn_fn(X_val_batch)
 
             # Validation step
-            cost_val = val_fn(X_pred_batch, L_val_batch)
+            cost_val = val_fn(*(X_pred_batch+[L_val_batch]))
             cost_val_tot += cost_val
 
         err_valid += [cost_val_tot/n_batches_val]
@@ -229,7 +228,7 @@ def main():
     train(args.dataset, float(args.learning_rate),
           float(args.weight_decay), int(args.num_epochs),
           int(args.max_patience), float(args.epsilon),
-          args.optimizer, args.training_loss, args.layer_h, resume=True)
+          args.optimizer, args.training_loss, args.layer_h, resume=False)
 
 
 if __name__ == "__main__":
