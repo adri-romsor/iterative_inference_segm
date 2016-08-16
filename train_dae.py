@@ -21,7 +21,7 @@ _FLOATX = config.floatX
 def train(dataset, learn_step=0.005,
           weight_decay=1e-4, num_epochs=500, max_patience=100,
           epsilon=.0, optimizer='rmsprop', training_loss='squared_error',
-          layer_h='pool5', num_filters=[1024], filter_size=[3],
+          layer_h='pool5', num_filters=[64], filter_size=[3],
           savepath='/Tmp/romerosa/itinf/models/'):
 
     # Define symbolic variables
@@ -216,7 +216,7 @@ def main():
                         help='Optional. Training loss')
     parser.add_argument('-layer_h',
                         type=str,
-                        default='pool3',
+                        default='fc7',
                         help='layer_h')
     args = parser.parse_args()
 

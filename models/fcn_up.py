@@ -21,6 +21,8 @@ def buildFCN_up(incoming_net, incoming_layer, unpool, n_classes=21):
     net['score'] = ConvLayer(incoming_net[incoming_layer], n_classes, 1,
                              pad='valid', flip_filters=False)
 
+    p = 0
+
     for p in range(unpool, 0, -1):
         # Unpool
         net['up'+str(p)] = \
@@ -36,7 +38,8 @@ def buildFCN_up(incoming_net, incoming_layer, unpool, n_classes=21):
                                deconv, cropping=[None, None,
                                                  'center', 'center'])
     # Final dimshuffle, reshape and softmax
-    net['final_dimshuffle'] = DimshuffleLayer(net['up'+str(p)+'_crop'],
+    net['final_dimshuffle'] = DimshuffleLayer(net['up'+str(p)+'_crop' if
+                                                  unpool > 0 else 'score'],
                                               (0, 2, 3, 1))
     laySize = lasagne.layers.get_output(net['final_dimshuffle']).shape
     net['final_reshape'] = ReshapeLayer(net['final_dimshuffle'],
