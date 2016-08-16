@@ -152,4 +152,4 @@ def buildFCN8(nb_in_channels, input_var,
     net['probs_dimshuffle'] = DimshuffleLayer(net['probs_reshape'],
                                               (0, 3, 1, 2))
 
-    return net[layer]  # [net[el] for el in layer]
+    return [net[el] for el in layer]

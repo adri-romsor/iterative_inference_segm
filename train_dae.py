@@ -29,7 +29,7 @@ def train(dataset, learn_step=0.005,
     input_mask_var = T.tensor4('input_mask_var')
 
     input_repr_var = []
-    for l in layer_name:
+    for l in layer_h:
         input_repr_var += [T.tensor4()]
 
     # Build dataset iterator
@@ -219,8 +219,8 @@ def main():
                         default='squared_error',
                         help='Optional. Training loss')
     parser.add_argument('-layer_h',
-                        type=str,
-                        default='pool1',
+                        type=list,
+                        default=['pool1', 'pool3'],
                         help='layer_h')
     args = parser.parse_args()
 
