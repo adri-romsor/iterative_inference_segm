@@ -32,17 +32,18 @@ def buildDAE(input_repr_var, input_mask_var, n_classes,
     # Stack encoder on top of concatenation
     l_enc = 0
     for f, k in zip(filter_size, kernel_size):
-        dae['encoder' + str(l_enc)] = ConvLayer(dae['concat' if l_enc == 0 else
-                                                'encoder' + str(l_enc-1)],
-                                                f, k, flip_filters=False,
-                                                pad='same',
-                                                nonlinearity=sigmoid)
+        dae['encoder' + str(l_enc)] = \
+            ConvLayer(dae[layer_h[-1]+'_concat' if l_enc == 0 else
+                          'encoder' + str(l_enc-1)],
+                      f, k, flip_filters=False, pad='same',
+                      nonlinearity=sigmoid)
         l_enc += 1
 
     # Count the number of pooling layers to know how many upsamplings we
     # should perform
     unpool = np.sum([isinstance(el, PoolLayer) for el in
-                     lasagne.layers.get_all_layers(dae['concat'])])
+                     lasagne.layers.get_all_layers(dae[layer_h[-1] +
+                                                       '_concat'])])
 
     # Stack decoder
     filter_size[0] = n_classes if unpool == 0 else \
