@@ -10,7 +10,7 @@ from theano import config
 import lasagne
 
 from data_loader import load_data
-from metrics2 import accuracy, jaccard
+from metrics import accuracy, jaccard
 from models.DAE_h import buildDAE
 from models.fcn8_void import buildFCN8
 from helpers import save_img
@@ -19,6 +19,7 @@ _FLOATX = config.floatX
 
 
 def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
+              num_filters=[4096], filter_size=[3],
               savepath=None):
 
     # Define symbolic variables
@@ -39,6 +40,7 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
     savepath = savepath + dataset + "/"
     if not os.path.exists(savepath):
         os.makedirs(savepath)
+    name = 'dae_model_' + layer_name + '.npz'
 
     print 'Building networks'
     # Build FCN8 with pre-trained weights (network to initialize
@@ -58,9 +60,10 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
 
     # Build DAE with pre-trained weights
     dae = buildDAE(input_h_var, input_dae_mask_var,
-                   n_classes, layer_h=layer_name, filter_size=[4096],
-                   kernel_size=[3], trainable=False, load_weights=True,
-                   void_labels=void_labels)
+                   n_classes, layer_h=layer_name, filter_size=num_filters,
+                   kernel_size=filter_size, trainable=False, load_weights=True,
+                   void_labels=void_labels,
+                   model_name=name)
 
     print "Defining and compiling theano functions"
     # Define required theano functions and compile them

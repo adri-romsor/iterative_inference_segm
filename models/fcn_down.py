@@ -11,12 +11,12 @@ def buildFCN_down(input_var, n_classes=21, layer='pool5'):
     '''
 
     assert layer in ['pool1', 'pool2', 'pool3', 'pool4', 'pool5', 'fc6',
-                     'fc7']
+                     'fc7', 'input']
 
     net = {}
 
     # Contracting path
-    net['input'] = InputLayer((None, n_classes, 360, 480),
+    net['input'] = InputLayer((None, n_classes, None, None),
                               input_var)
 
     # Noise

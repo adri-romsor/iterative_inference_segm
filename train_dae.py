@@ -18,10 +18,11 @@ from models.fcn8_void import buildFCN8
 _FLOATX = config.floatX
 
 
-def train(dataset, layer_name=None, learn_step=0.005,
+def train(dataset, learn_step=0.005,
           weight_decay=1e-4, num_epochs=500, max_patience=100,
           epsilon=.0, optimizer='rmsprop', training_loss='squared_error',
-          layer_h='pool5', savepath='/Tmp/romerosa/itinf/models/'):
+          layer_h='pool5', num_filters=[1024], filter_size=[3],
+          savepath='/Tmp/romerosa/itinf/models/'):
 
     # Define symbolic variables
     input_x_var = T.tensor4('input_x_var')
@@ -46,7 +47,7 @@ def train(dataset, layer_name=None, learn_step=0.005,
     # Build DAE network
     print ' Building DAE network'
     dae = buildDAE(input_repr_var, input_mask_var, n_classes,
-                   layer_h, [4096], [3], trainable=True,
+                   layer_h, num_filters, filter_size, trainable=True,
                    load_weights=False, void_labels=void_labels)
 
     # Define required theano functions for training and compile them
@@ -105,6 +106,7 @@ def train(dataset, layer_name=None, learn_step=0.005,
     savepath = savepath + dataset + "/"
     if not os.path.exists(savepath):
         os.makedirs(savepath)
+    name = '_' + layer_h
 
     err_train = []
     err_valid = []
@@ -155,7 +157,7 @@ def train(dataset, layer_name=None, learn_step=0.005,
                              time.time()-start_time)
         print out_str
 
-        with open(savepath + "output.log", "a") as f:
+        with open(savepath + "output" + name + ".log", "a") as f:
             f.write(out_str + "\n")
 
         # Early stopping and saving stuff
@@ -164,9 +166,9 @@ def train(dataset, layer_name=None, learn_step=0.005,
         elif epoch > 1 and err_valid[epoch] < best_err_val:
             best_err_val = err_valid[epoch]
             patience = 0
-            np.savez(savepath + 'dae_model.npz',
+            np.savez(savepath + 'dae_model' + name + '.npz',
                      *lasagne.layers.get_all_param_values(dae))
-            np.savez(savepath + "dae_errors.npz",
+            np.savez(savepath + 'dae_errors' + name + '.npz',
                      err_valid, err_train)
         else:
             patience += 1
@@ -183,9 +185,6 @@ def main():
     parser.add_argument('-dataset',
                         default='camvid',
                         help='Dataset.')
-    parser.add_argument('-layer_name',
-                        default='input',
-                        help='Layer name.')
     parser.add_argument('-learning_rate',
                         default=0.00001,
                         help='Learning rate')
@@ -217,11 +216,11 @@ def main():
                         help='Optional. Training loss')
     parser.add_argument('-layer_h',
                         type=str,
-                        default='pool5',
+                        default='pool3',
                         help='layer_h')
     args = parser.parse_args()
 
-    train(args.dataset, args.layer_name, float(args.learning_rate),
+    train(args.dataset, float(args.learning_rate),
           float(args.weight_decay), int(args.num_epochs),
           int(args.max_patience), float(args.epsilon),
           args.optimizer, args.training_loss, args.layer_h)

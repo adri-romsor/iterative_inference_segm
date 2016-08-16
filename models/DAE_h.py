@@ -14,7 +14,8 @@ def buildDAE(input_repr_var, input_mask_var, n_classes,
              layer_h='input', filter_size=[], kernel_size=[],
              void_labels=[],
              path_weights='/Tmp/romerosa/itinf/models/' +
-             'camvid/dae_model.npz',
+             'camvid/',
+             model_name='dae_model.npz',
              trainable=False, load_weights=False):
 
     '''
@@ -25,7 +26,8 @@ def buildDAE(input_repr_var, input_mask_var, n_classes,
     n_classes = n_classes + (1 if void_labels else 0)
 
     # Build fcn to extract representation from y
-    fcn_down = buildFCN_down(input_mask_var, n_classes=n_classes)
+    fcn_down = buildFCN_down(input_mask_var, n_classes=n_classes,
+                             layer=layer_h)
 
     dae = fcn_down
 
@@ -36,7 +38,7 @@ def buildDAE(input_repr_var, input_mask_var, n_classes,
     else:
         nb_repr_channels = fcn_down[layer_h].input_shape[1]
 
-    input_repr_size = (None, nb_repr_channels, 17, 21)
+    input_repr_size = (None, nb_repr_channels, None, None)
 
     # 2 input layers to the energy function (h, y)
     dae['input_repr'] = InputLayer(input_repr_size,
@@ -80,10 +82,11 @@ def buildDAE(input_repr_var, input_mask_var, n_classes,
 
     # Load weights
     if load_weights:
-        with np.load(path_weights) as f:
+        with np.load(path_weights + model_name) as f:
             param_values = [f['arr_%d' % i] for i in range(len(f.files))]
 
-        lasagne.layers.set_all_param_values(dae['probs_dimshuffle'], param_values)
+        lasagne.layers.set_all_param_values(dae['probs_dimshuffle'],
+                                            param_values)
 
     # Do not train
     if not trainable:
