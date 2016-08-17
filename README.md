@@ -33,6 +33,7 @@ Pre-trained models for semantic segmentation and pre-trained DAE for iterative i
 - [x] Add entropy
 - [x] Add possibility of having an intermediate layer as input (not only x)
 - [ ] Add possibility of having several intermediate layers as input
+- [ ] Add skip connections in DAE
 - [ ] Add training DAE training from the output of FCN8 instead of GT.
 - [ ] Code CRF (M)
 - [ ] Add BFGS optimization
