@@ -4,9 +4,13 @@ from lasagne.layers import Conv2DLayer as ConvLayer
 
 
 def concatenate(net, in1, concat_layers, concat_vars, pos):
+    if concat_layers[pos] == 'input':
+        concat_layers[pos] = 'noisy_input'
+
     if in1 in concat_layers:
-        net[in1 + '_h'] = InputLayer((None, net[in1].input_shape[1], None,
-                                     None), concat_vars[pos])
+        net[in1 + '_h'] = InputLayer((None, net[in1].input_shape[1] if
+                                      concat_layers[pos] != 'noisy_input' else 3,
+                                      None, None), concat_vars[pos])
         net[in1 + '_concat'] = ConcatLayer((net[in1 + '_h'],
                                             net[in1]), axis=1, cropping=None)
         pos += 1
@@ -25,7 +29,7 @@ def buildFCN_down(input_var, concat_vars,
     '''
 
     assert all([el in ['pool1', 'pool2', 'pool3', 'pool4', 'pool5', 'fc6',
-                       'fc7', 'noisy_input'] for el in concat_layers])
+                       'fc7', 'input'] for el in concat_layers])
 
     net = {}
     pos = 0
