@@ -59,8 +59,7 @@ Pre-trained models for semantic segmentation and pre-trained DAE for iterative i
 |-------------------|--------------|--------------|
 | FCN-8 baseline     |88.41|57.41|
 | FCN-8 + CRF     |||
-| FCN-8 + DAE (input, 64)     |||
-| FCN-8 + DAE (input, 512)     |||
+| FCN-8 + DAE (input, 256)     |||
 | FCN-8 + DAE (pool1, 512)     |||
 | FCN-8 + DAE (pool3, 1024)     |||
 | FCN-8 + DAE (pool5, 4096)     |||
