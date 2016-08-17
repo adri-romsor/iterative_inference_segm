@@ -19,7 +19,7 @@ _FLOATX = config.floatX
 
 def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
               savepath=None,
-              num_filters=[1024], filter_size=[3]):
+              num_filters=[512], filter_size=[3]):
 
     # Define symbolic variables
     input_x_var = T.tensor4('input_x_var')
@@ -122,7 +122,7 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
 
         # Iterative inference
         for it in range(num_iter):
-            grad = de_fn(H_test_batch, L_test_batch.astype(_FLOATX),
+            grad = de_fn(H_test_batch, Y_test_batch.astype(_FLOATX),
                          X_test_batch)
 
             Y_test_batch = Y_test_batch - learn_step * grad
@@ -158,7 +158,7 @@ def main():
                         default='camvid',
                         help='Dataset.')
     parser.add_argument('-layer_name',
-                        default='pool3',
+                        default='pool1',
                         help='Dataset.')
     parser.add_argument('-learning_rate',
                         default=0.001,
@@ -169,7 +169,7 @@ def main():
     parser.add_argument('--num_iter',
                         '-nit',
                         type=int,
-                        default=200,
+                        default=500,
                         help='Optional. Int to indicate the max'
                         'number of epochs.')
     parser.add_argument('--savepath',
