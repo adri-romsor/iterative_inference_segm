@@ -1,7 +1,6 @@
 import argparse
 import os
 import numpy as np
-from copy import deepcopy
 
 import theano
 import theano.tensor as T
@@ -19,8 +18,8 @@ _FLOATX = config.floatX
 
 
 def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
-              num_filters=[4096], filter_size=[3],
-              savepath=None):
+              savepath=None,
+              num_filters=[1024], filter_size=[3]):
 
     # Define symbolic variables
     input_x_var = T.tensor4('input_x_var')
@@ -63,7 +62,7 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
                    n_classes, layer_h=layer_name, filter_size=num_filters,
                    kernel_size=filter_size, trainable=False, load_weights=True,
                    void_labels=void_labels,
-                   model_name=name)
+                   model_name=dataset+'/'+name)
 
     print "Defining and compiling theano functions"
     # Define required theano functions and compile them
@@ -159,7 +158,7 @@ def main():
                         default='camvid',
                         help='Dataset.')
     parser.add_argument('-layer_name',
-                        default='pool5',
+                        default='pool3',
                         help='Dataset.')
     parser.add_argument('-learning_rate',
                         default=0.001,
