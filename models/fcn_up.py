@@ -1,14 +1,15 @@
 import theano.tensor as T
 import lasagne
 from lasagne.layers import ReshapeLayer
-from lasagne.layers import NonlinearityLayer, DimshuffleLayer
+from lasagne.layers import NonlinearityLayer, DimshuffleLayer, ElemwiseSumLayer
 from layers.mylayers import ElemwiseMergeLayer
 from lasagne.layers import Deconv2DLayer as DeconvLayer
 from lasagne.layers import Conv2DLayer as ConvLayer
 from lasagne.nonlinearities import softmax, linear
 
 
-def buildFCN_up(incoming_net, incoming_layer, unpool, n_classes=21):
+def buildFCN_up(incoming_net, incoming_layer, unpool,
+                skip=False, n_classes=21):
 
     '''
     Build fcn decontracting path
@@ -27,18 +28,32 @@ def buildFCN_up(incoming_net, incoming_layer, unpool, n_classes=21):
         # Unpool
         net['up'+str(p)] = \
             DeconvLayer(net['score'] if p == unpool else
-                        net['up' + str(p+1)+'_crop'],
+                        net['fused_up' + str(p+1)],
                         n_classes, 4, stride=2,
                         crop='valid', nonlinearity=linear)
-        net['up'+str(p)+'_crop'] = \
-            ElemwiseMergeLayer((incoming_net['pool'+str(p-1) if p >
-                                             1 else 'input'],
-                                net['up'+str(p)]),
-                               merge_function=lambda input, deconv:
-                               deconv, cropping=[None, None,
-                                                 'center', 'center'])
+        if skip and p > 1:
+            # Conv to reduce dimensionality of incoming layer
+            net['score_pool'+str(p-1)] = \
+                ConvLayer(incoming_net['pool'+str(p-1)],
+                          n_classes, 1, pad='same')
+
+            # Merge and crop
+            net['fused_up'+str(p)] = \
+                ElemwiseSumLayer((net['up'+str(p)],
+                                  net['score_pool'+str(p-1)]),
+                                 cropping=[None, None, 'center', 'center'])
+        else:
+            # Crop
+            net['fused_up'+str(p)] = \
+                ElemwiseMergeLayer((incoming_net['pool'+str(p-1) if p >
+                                                 1 else 'input'],
+                                    net['up'+str(p)]),
+                                   merge_function=lambda input, deconv:
+                                   deconv, cropping=[None, None,
+                                                     'center', 'center'])
+
     # Final dimshuffle, reshape and softmax
-    net['final_dimshuffle'] = DimshuffleLayer(net['up'+str(p)+'_crop' if
+    net['final_dimshuffle'] = DimshuffleLayer(net['fused_up'+str(p) if
                                                   unpool > 0 else 'score'],
                                               (0, 2, 3, 1))
     laySize = lasagne.layers.get_output(net['final_dimshuffle']).shape

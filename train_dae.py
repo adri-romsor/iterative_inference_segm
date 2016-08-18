@@ -21,7 +21,7 @@ _FLOATX = config.floatX
 def train(dataset, learn_step=0.005,
           weight_decay=1e-4, num_epochs=500, max_patience=100,
           epsilon=.0, optimizer='rmsprop', training_loss='squared_error',
-          layer_h='pool5', num_filters=[4096], filter_size=[3],
+          layer_h='pool5', num_filters=[4096], skip=False, filter_size=[3],
           savepath='/Tmp/romerosa/itinf/models/', resume=False):
 
     # Define symbolic variables
@@ -58,7 +58,7 @@ def train(dataset, learn_step=0.005,
     print ' Building DAE network'
     dae = buildDAE(input_repr_var, input_mask_var, n_classes,
                    layer_h, num_filters, filter_size, trainable=True,
-                   load_weights=resume, void_labels=void_labels,
+                   load_weights=resume, void_labels=void_labels, skip=skip,
                    model_name=dataset+'/dae_model'+name+'.npz')
 
     # Define required theano functions for training and compile them
@@ -186,49 +186,60 @@ def train(dataset, learn_step=0.005,
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Unet model training')
+    parser = argparse.ArgumentParser(description='DAE training')
     parser.add_argument('-dataset',
+                        type=str,
                         default='camvid',
                         help='Dataset.')
     parser.add_argument('-learning_rate',
-                        default=0.00001,
+                        type=float,
+                        default=0.0001,
                         help='Learning rate')
     parser.add_argument('-weight_decay',
+                        type=float,
                         default=.0,
                         help='Weight decay')
     parser.add_argument('--num_epochs',
                         '-ne',
                         type=int,
                         default=2000,
-                        help='Optional. Int to indicate the max'
-                        'number of epochs.')
+                        help='Max number of epochs')
     parser.add_argument('--max_patience',
                         '-mp',
                         type=int,
                         default=100,
-                        help='Optional. Int to indicate the max'
-                        'patience.')
+                        help='Max patience')
     parser.add_argument('-epsilon',
+                        type=float,
                         default=0.,
                         help='Entropy weight')
     parser.add_argument('-optimizer',
                         type=str,
-                        default='adam',
-                        help='Optional. Optimizer (adam or rmsprop)')
+                        default='rmsprop',
+                        help='Optimizer (adam or rmsprop)')
     parser.add_argument('-training_loss',
                         type=str,
                         default='squared_error',
-                        help='Optional. Training loss')
+                        help='Training loss')
     parser.add_argument('-layer_h',
                         type=list,
-                        default=['pool1', 'pool3', 'pool5'],
-                        help='layer_h')
+                        default=['pool5'],
+                        help='All h to introduce to the DAE')
+    parser.add_argument('-num_filters',
+                        type=list,
+                        default=[4096],
+                        help='Nb of filters per encoder layer')
+    parser.add_argument('-skip',
+                        type=bool,
+                        default=True,
+                        help='Whether to skip connections in DAE')
     args = parser.parse_args()
 
     train(args.dataset, float(args.learning_rate),
           float(args.weight_decay), int(args.num_epochs),
           int(args.max_patience), float(args.epsilon),
-          args.optimizer, args.training_loss, args.layer_h, resume=False)
+          args.optimizer, args.training_loss, args.layer_h,
+          args.num_filters, args.skip, resume=False)
 
 
 if __name__ == "__main__":

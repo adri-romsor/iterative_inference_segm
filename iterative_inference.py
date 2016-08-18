@@ -18,8 +18,7 @@ _FLOATX = config.floatX
 
 
 def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
-              savepath=None,
-              num_filters=[256], filter_size=[3]):
+              num_filters=[256], skip=False, filter_size=[3], savepath=None):
 
     # Define symbolic variables
     input_x_var = T.tensor4('input_x_var')
@@ -64,7 +63,7 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
     dae = buildDAE(input_h_var, input_dae_mask_var,
                    n_classes, layer_h=layer_name, filter_size=num_filters,
                    kernel_size=filter_size, trainable=False, load_weights=True,
-                   void_labels=void_labels,
+                   void_labels=void_labels, skip=skip,
                    model_name=dataset+'/dae_model'+name+'.npz')
 
     print "Defining and compiling theano functions"
@@ -157,24 +156,30 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
 def main():
     parser = argparse.ArgumentParser(description='Unet model training')
     parser.add_argument('-dataset',
+                        type=str,
                         default='camvid',
                         help='Dataset.')
     parser.add_argument('-layer_name',
                         type=list,
                         default=['input'],
-                        help='Dataset.')
-    parser.add_argument('-learning_rate',
+                        help='All h to introduce to the DAE.')
+    parser.add_argument('-step',
+                        type=float,
                         default=0.001,
-                        help='Learning Rate')
-    parser.add_argument('-penal_cst',
-                        default=0.0,
-                        help='regularization constant')
+                        help='Step')
     parser.add_argument('--num_iter',
                         '-nit',
                         type=int,
                         default=500,
-                        help='Optional. Int to indicate the max'
-                        'number of epochs.')
+                        help='Max number of iterations.')
+    parser.add_argument('-num_filters',
+                        type=list,
+                        default=[4096],
+                        help='All h to introduce to the DAE.')
+    parser.add_argument('-skip',
+                        type=bool,
+                        default=False,
+                        help='Whether to skip connections in the DAE.')
     parser.add_argument('--savepath',
                         '-sp',
                         type=str,
@@ -183,8 +188,9 @@ def main():
 
     args = parser.parse_args()
 
-    inference(args.dataset, args.layer_name, float(args.learning_rate),
-              int(args.num_iter), args.savepath)
+    inference(args.dataset, args.layer_name, float(args.step),
+              int(args.num_iter), args.num_filters, args.skip,
+              savepath=args.savepath)
 
 if __name__ == "__main__":
     main()
