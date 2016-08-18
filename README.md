@@ -64,9 +64,8 @@ Pre-trained models for semantic segmentation and pre-trained DAE for iterative i
 | FCN-8 + DAE (pool1, 512)     |88.55|57.60|
 | FCN-8 + DAE (pool3, 1024)     |88.81|58.09|
 | FCN-8 + DAE (pool5, 4096)     |||
-| FCN-8 + DAE (fc7, ??)     |||
 | FCN-8 + DAE (pool1, pool3, 1024)     |||
-| FCN-8 + DAE (input, pool1, pool3, pool5, fc7, ??)     |||
+| FCN-8 + DAE (pool1, pool3, pool5, 4096)     |||
 
 
 | **SOTA methods** | Gl. Accuracy | Jaccard Ind. |
