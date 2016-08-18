@@ -6,6 +6,8 @@ from lasagne.layers import Conv2DLayer as ConvLayer
 def concatenate(net, in1, concat_layers, concat_vars, pos):
     if concat_layers[pos] == 'input':
         concat_layers[pos] = 'noisy_input'
+    elif concat_layers[pos] == 'fc6' or concat_layers[pos] == 'fc7':
+        concat_layers[pos] += '_dropout'
 
     if in1 in concat_layers:
         net[in1 + '_h'] = InputLayer((None, net[in1].input_shape[1] if
@@ -115,7 +117,7 @@ def buildFCN_down(input_var, concat_vars,
 
     pos, out = concatenate(net, 'fc6_dropout',
                                 concat_layers, concat_vars, pos)
-    if concat_layers[-1] == 'fc6':
+    if concat_layers[-1] == 'fc6_dropout':
         return net
 
     # fc7
@@ -125,5 +127,5 @@ def buildFCN_down(input_var, concat_vars,
 
     pos, out = concatenate(net, 'fc7_dropout',
                                 concat_layers, concat_vars, pos)
-    if concat_layers[-1] == 'fc7':
+    if concat_layers[-1] == 'fc7_dropout':
         return net

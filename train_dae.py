@@ -221,7 +221,7 @@ def main():
                         help='Optional. Training loss')
     parser.add_argument('-layer_h',
                         type=list,
-                        default=['pool5'],
+                        default=['pool1', 'pool3', 'pool5'],
                         help='layer_h')
     args = parser.parse_args()
 
