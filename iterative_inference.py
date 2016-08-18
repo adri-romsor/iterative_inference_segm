@@ -19,11 +19,15 @@ _FLOATX = config.floatX
 
 def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
               savepath=None,
-              num_filters=[512], filter_size=[3]):
+              num_filters=[256], filter_size=[3]):
 
     # Define symbolic variables
     input_x_var = T.tensor4('input_x_var')
-    input_h_var = T.tensor4('input_repr_var')
+    input_h_var = []
+    name = ''
+    for l in layer_name:
+        input_h_var += [T.tensor4()]
+        name += ('_'+l)
     y_hat_var = T.tensor4('pred_y_var')
     input_dae_mask_var = T.tensor4('input_dae_mask_var')
     target_var = T.ivector('target_var')
@@ -39,7 +43,6 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
     savepath = savepath + dataset + "/"
     if not os.path.exists(savepath):
         os.makedirs(savepath)
-    name = 'dae_model_' + layer_name + '.npz'
 
     print 'Building networks'
     # Build FCN8 with pre-trained weights (network to initialize
@@ -62,12 +65,12 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
                    n_classes, layer_h=layer_name, filter_size=num_filters,
                    kernel_size=filter_size, trainable=False, load_weights=True,
                    void_labels=void_labels,
-                   model_name=dataset+'/'+name)
+                   model_name=dataset+'/dae_model'+name+'.npz')
 
     print "Defining and compiling theano functions"
     # Define required theano functions and compile them
     # predictions of fcn and dae
-    pred_fcn_y = lasagne.layers.get_output(fcn_y, deterministic=True)
+    pred_fcn_y = lasagne.layers.get_output(fcn_y, deterministic=True)[0]
     pred_fcn_h = lasagne.layers.get_output(fcn_h, deterministic=True)
     pred_dae = lasagne.layers.get_output(dae, deterministic=True)
 
@@ -84,7 +87,7 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
     de = - (pred_dae - pred_fcn_y)
 
     # function to compute de
-    de_fn = theano.function([input_h_var, input_dae_mask_var, input_x_var], de)
+    de_fn = theano.function(input_h_var+[input_dae_mask_var, input_x_var], de)
 
     # metrics to evaluate iterative inference
     test_acc = accuracy(y_hat_2D, target_var, void_labels)
@@ -122,8 +125,7 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
 
         # Iterative inference
         for it in range(num_iter):
-            grad = de_fn(H_test_batch, Y_test_batch.astype(_FLOATX),
-                         X_test_batch)
+            grad = de_fn(*(H_test_batch+[Y_test_batch, X_test_batch]))
 
             Y_test_batch = Y_test_batch - learn_step * grad
 
@@ -158,7 +160,8 @@ def main():
                         default='camvid',
                         help='Dataset.')
     parser.add_argument('-layer_name',
-                        default='pool1',
+                        type=list,
+                        default=['input'],
                         help='Dataset.')
     parser.add_argument('-learning_rate',
                         default=0.001,
