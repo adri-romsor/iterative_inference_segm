@@ -2,12 +2,13 @@ from dataset_loaders.videos.colonoscopyVideos import PolypVideoDataset
 from dataset_loaders.images.camvid import CamvidDataset
 
 
-def load_data(dataset, train_crop_size=(224, 224), one_hot=False):
+def load_data(dataset, train_crop_size=(224, 224), one_hot=False,
+        batch_size=[10, 10, 10]):
 
     # Build dataset iterator
     if dataset == 'polyp_videos':
         train_iter = PolypVideoDataset(which_set='train',
-                                       batch_size=10,
+                                       batch_size=batch_size[0],
                                        seq_per_video=0,
                                        seq_length=0,
                                        crop_size=train_crop_size,
@@ -16,7 +17,7 @@ def load_data(dataset, train_crop_size=(224, 224), one_hot=False):
                                        get_01c=False,
                                        use_threads=True)
         val_iter = PolypVideoDataset(which_set='val',
-                                     batch_size=1,
+                                     batch_size=batch_size[1],
                                      seq_per_video=0,
                                      seq_length=0,
                                      crop_size=None,
@@ -25,7 +26,7 @@ def load_data(dataset, train_crop_size=(224, 224), one_hot=False):
                                      get_01c=False,
                                      use_threads=True)
         test_iter = PolypVideoDataset(which_set='test',
-                                      batch_size=1,
+                                      batch_size=batch_size[2],
                                       seq_per_video=0,
                                       seq_length=0,
                                       crop_size=None,
@@ -35,7 +36,7 @@ def load_data(dataset, train_crop_size=(224, 224), one_hot=False):
 
     elif dataset == 'camvid':
         train_iter = CamvidDataset(which_set='train',
-                                   batch_size=10,
+                                   batch_size=batch_size[0],
                                    seq_per_video=0,
                                    seq_length=0,
                                    crop_size=train_crop_size,
@@ -43,7 +44,7 @@ def load_data(dataset, train_crop_size=(224, 224), one_hot=False):
                                    get_01c=False,
                                    use_threads=True)
         val_iter = CamvidDataset(which_set='val',
-                                 batch_size=10,
+                                 batch_size=batch_size[1],
                                  seq_per_video=0,
                                  seq_length=0,
                                  crop_size=None,
@@ -51,7 +52,7 @@ def load_data(dataset, train_crop_size=(224, 224), one_hot=False):
                                  get_01c=False,
                                  use_threads=True)
         test_iter = CamvidDataset(which_set='test',
-                                  batch_size=10,
+                                  batch_size=batch_size[2],
                                   seq_per_video=0,
                                   seq_length=0,
                                   crop_size=None,

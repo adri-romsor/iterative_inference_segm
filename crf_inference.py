@@ -24,7 +24,7 @@ from pydensecrf.utils import compute_unary, create_pairwise_bilateral,\
 _FLOATX = config.floatX
 
 
-def inference(dataset, layer_name=None, learn_step=0.005, num_iter=5,
+def inference(dataset, layer_name=None, learn_step=0.005, num_iter=5, Bilateral=True,
               num_filters=[256], skip=False, filter_size=[3], savepath=None):
 
     # Define symbolic variables
@@ -114,12 +114,17 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=5,
         img = (255 * img).astype('uint8')
         img2 = np.zeros(img.shape).astype('uint8')
         img2 = img2 + img
+        # set unary potentials (neg log probability)
         d.setUnaryEnergy(softmax_to_unary(sm))
+        # This adds the color-independent term, features are the locations only.
         d.addPairwiseGaussian(sxy=(3, 3), compat=3, kernel=dcrf.DIAG_KERNEL,
                               normalization=dcrf.NORMALIZE_SYMMETRIC)
-        d.addPairwiseBilateral(sxy=(80, 80),srgb=(13, 13, 13), 
-                               rgbim=img2, compat=10, kernel=dcrf.DIAG_KERNEL,
-                               normalization=dcrf.NORMALIZE_SYMMETRIC)
+        # This adds the color-dependent term, i.e. features are (x,y,r,g,b).
+        # im is an image-array, e.g. im.dtype == np.uint8 and im.shape == (640,480,3)
+        if Bilateral:
+            d.addPairwiseBilateral(sxy=(80, 80),srgb=(13, 13, 13), 
+                                   rgbim=img2, compat=10, kernel=dcrf.DIAG_KERNEL,
+                                   normalization=dcrf.NORMALIZE_SYMMETRIC)
         Q = d.inference(num_iter)
         Q = np.reshape(Q, (n_classes, Y_test_batch.shape[2], Y_test_batch.shape[3]))
         Y_test_batch = np.expand_dims(Q, axis=0)
