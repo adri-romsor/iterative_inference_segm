@@ -223,7 +223,7 @@ def main():
                         help='Training loss')
     parser.add_argument('-layer_h',
                         type=list,
-                        default=['pool5'],
+                        default=['pool3'],
                         help='All h to introduce to the DAE')
     parser.add_argument('-num_filters',
                         type=list,

@@ -11,7 +11,7 @@ from fcn_down import buildFCN_down
 
 def buildDAE(input_repr_var, input_mask_var, n_classes,
              layer_h=['input'], filter_size=[], kernel_size=[],
-             void_labels=[],
+             void_labels=[], skip=False,
              path_weights='/Tmp/romerosa/itinf/models/',
              model_name='dae_model.npz',
              trainable=False, load_weights=False):
@@ -58,7 +58,7 @@ def buildDAE(input_repr_var, input_mask_var, n_classes,
         l_dec += 1
 
     # Unpooling
-    fcn_up = buildFCN_up(dae, 'decoder'+str(l_dec-1), unpool,
+    fcn_up = buildFCN_up(dae, 'decoder'+str(l_dec-1), unpool, skip=skip,
                          n_classes=n_classes)
 
     dae.update(fcn_up)
