@@ -161,7 +161,7 @@ def main():
                         help='Dataset.')
     parser.add_argument('-layer_name',
                         type=list,
-                        default=['pool1', 'pool3'],
+                        default=['pool5'],
                         help='All h to introduce to the DAE.')
     parser.add_argument('-step',
                         type=float,
@@ -174,11 +174,11 @@ def main():
                         help='Max number of iterations.')
     parser.add_argument('-num_filters',
                         type=list,
-                        default=[512],
+                        default=[4096],
                         help='All h to introduce to the DAE.')
     parser.add_argument('-skip',
                         type=bool,
-                        default=False,
+                        default=True,
                         help='Whether to skip connections in the DAE.')
     parser.add_argument('--savepath',
                         '-sp',

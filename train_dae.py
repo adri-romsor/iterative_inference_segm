@@ -68,8 +68,19 @@ def train(dataset, learn_step=0.005,
     fcn_prediction = lasagne.layers.get_output(fcn, deterministic=True)
 
     prediction = lasagne.layers.get_output(dae)
+
     if training_loss == 'crossentropy':
-        loss = crossentropy(prediction, input_mask_var, void_labels)
+        # Convert DAE prediction to 2D
+        prediction_2D = prediction.dimshuffle((0, 2, 3, 1))
+        sh = prediction_2D.shape
+        prediction_2D = prediction_2D.reshape((T.prod(sh[:3]), sh[3]))
+        # Convert target to 2D
+        input_mask_var_2D = input_mask_var.dimshuffle((0, 2, 3, 1))
+        sh = input_mask_var_2D.shape
+        input_mask_var_2D = input_mask_var_2D.reshape((T.prod(sh[:3]), sh[3]))
+        input_mask_var_2D = T.argmax(input_mask_var_2D, axis=1)
+        # Compute loss
+        loss = crossentropy(prediction_2D, input_mask_var_2D, void_labels)
     elif training_loss == 'squared_error':
         loss = squared_error(prediction, input_mask_var).mean()
     else:
@@ -104,7 +115,14 @@ def train(dataset, learn_step=0.005,
     # prediction and loss
     test_prediction = lasagne.layers.get_output(dae, deterministic=True)
     if training_loss == 'crossentropy':
-        test_loss = crossentropy(test_prediction, input_mask_var, void_labels)
+        # Convert DAE prediction to 2D
+        test_prediction_2D = test_prediction.dimshuffle((0, 2, 3, 1))
+        sh = test_prediction_2D.shape
+        test_prediction_2D = test_prediction_2D.reshape((T.prod(sh[:3]),
+                                                         sh[3]))
+        # Compute loss
+        test_loss = crossentropy(test_prediction_2D, input_mask_var_2D,
+                                 void_labels)
     elif training_loss == 'squared_error':
         test_loss = squared_error(test_prediction, input_mask_var).mean()
     else:
@@ -219,11 +237,11 @@ def main():
                         help='Optimizer (adam or rmsprop)')
     parser.add_argument('-training_loss',
                         type=str,
-                        default='squared_error',
+                        default='crossentropy',
                         help='Training loss')
     parser.add_argument('-layer_h',
                         type=list,
-                        default=['pool3'],
+                        default=['pool5'],
                         help='All h to introduce to the DAE')
     parser.add_argument('-num_filters',
                         type=list,
