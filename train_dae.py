@@ -2,7 +2,6 @@ import os
 import argparse
 import time
 from getpass import getuser
-
 import numpy as np
 import theano
 import theano.tensor as T
@@ -21,28 +20,32 @@ if getuser() == 'romerosa':
     SAVEPATH = '/Tmp/romerosa/itinf/models/'
     WEIGHTS_PATH = '/Tmp/romerosa/itinf/models/camvid/fcn8_model.npz',
 elif getuser() == 'jegousim':
-    SAVEPATH = '/data/lisatmp4/jegousim/iterative_inference'
+    SAVEPATH = '/data/lisatmp4/jegousim/iterative_inference/'
     WEIGHTS_PATH = '/data/lisatmp4/romerosa/rnncnn/fcn8_model.npz'
 else:
-    raise ValueError, 'Unknown user : {}'.format(getuser())
-print('Saving directory : ' + SAVEPATH)
-print('Weights of FCN8 loaded from : ' + WEIGHTS_PATH)
+    raise ValueError('Unknown user : {}'.format(getuser()))
 
 
 def train(dataset, learn_step=0.005,
           weight_decay=1e-4, num_epochs=500, max_patience=100,
           epsilon=.0, optimizer='rmsprop', training_loss='squared_error',
-          layer_h='pool5', num_filters=[4096], skip=False, filter_size=[3],
-          savepath=SAVEPATH, resume=False):
+          layer_h=['pool5'], num_filters=[4096], skip=False, filter_size=[3],
+          savepath=SAVEPATH, exp_name=None, resume=False):
+
+    # Prepare saving directory
+    if exp_name is None:
+        exp_name = '_'.join(layer_h)
+
+    savepath = os.path.join(savepath, dataset, exp_name)
+    if not os.path.exists(savepath):
+        os.makedirs(savepath)
+    print('Saving directory : ' + savepath)
+    np.savez(os.path.join(savepath, 'config'), locals())
+
     # Define symbolic variables
     input_x_var = T.tensor4('input_x_var')
     input_mask_var = T.tensor4('input_mask_var')
-
-    input_repr_var = []
-    name = ''
-    for l in layer_h:
-        input_repr_var += [T.tensor4()]
-        name += ('_' + l)
+    input_repr_var = [T.tensor4()] * len(layer_h)
 
     # Build dataset iterator
     train_iter, val_iter, _ = load_data(dataset, train_crop_size=None,
@@ -53,12 +56,8 @@ def train(dataset, learn_step=0.005,
     n_classes = train_iter.get_n_classes()
     void_labels = train_iter.get_void_label()
 
-    # Prepare saving directory
-    savepath = savepath + dataset + "/"
-    if not os.path.exists(savepath):
-        os.makedirs(savepath)
-
     # Build FCN
+    print('Weights of FCN8 will be loaded from : ' + WEIGHTS_PATH)
     print ' Building FCN network'
     fcn = buildFCN8(3, input_x_var, n_classes=n_classes,
                     void_labels=void_labels, path_weights=WEIGHTS_PATH,
@@ -69,7 +68,8 @@ def train(dataset, learn_step=0.005,
     dae = buildDAE(input_repr_var, input_mask_var, n_classes,
                    layer_h, num_filters, filter_size, trainable=True,
                    load_weights=resume, void_labels=void_labels, skip=skip,
-                   model_name=dataset + '/dae_model' + name + '.npz')
+                   # model_name=dataset + '/dae_model' + name + '.npz')
+                   model_name=os.path.join(savepath, 'dae_model.npz'))
 
     # Define required theano functions for training and compile them
     print "Defining and compiling training functions"
@@ -190,7 +190,7 @@ def train(dataset, learn_step=0.005,
                              time.time() - start_time)
         print out_str
 
-        with open(savepath + "output" + name + ".log", "a") as f:
+        with open(os.path.join(savepath, "output.log"), "a") as f:
             f.write(out_str + "\n")
 
         # Early stopping and saving stuff
@@ -199,9 +199,9 @@ def train(dataset, learn_step=0.005,
         elif epoch > 1 and err_valid[epoch] < best_err_val:
             best_err_val = err_valid[epoch]
             patience = 0
-            np.savez(savepath + 'dae_model' + name + '.npz',
+            np.savez(os.path.join(savepath, 'dae_model.npz'),
                      *lasagne.layers.get_all_param_values(dae))
-            np.savez(savepath + 'dae_errors' + name + '.npz',
+            np.savez(os.path.join(savepath, 'dae_errors.npz'),
                      err_valid, err_train)
         else:
             patience += 1
@@ -230,7 +230,7 @@ def main():
     parser.add_argument('--num_epochs',
                         '-ne',
                         type=int,
-                        default=2000,
+                        default=3,
                         help='Max number of epochs')
     parser.add_argument('--max_patience',
                         '-mp',
@@ -261,13 +261,17 @@ def main():
                         type=bool,
                         default=True,
                         help='Whether to skip connections in DAE')
+    parser.add_argument('-e', '--exp_name',
+                        type=str,
+                        default=None,
+                        help='Name of the experiment')
     args = parser.parse_args()
 
     train(args.dataset, float(args.learning_rate),
           float(args.weight_decay), int(args.num_epochs),
           int(args.max_patience), float(args.epsilon),
           args.optimizer, args.training_loss, args.layer_h,
-          args.num_filters, args.skip, resume=False)
+          args.num_filters, args.skip, exp_name=args.exp_name, resume=False)
 
 
 if __name__ == "__main__":
