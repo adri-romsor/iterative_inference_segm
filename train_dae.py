@@ -1,6 +1,7 @@
 import os
 import argparse
 import time
+from getpass import getuser
 
 import numpy as np
 import theano
@@ -16,14 +17,20 @@ from models.DAE_h import buildDAE
 from models.fcn8_void import buildFCN8
 
 _FLOATX = config.floatX
+if getuser() == 'romerosa':
+    SAVEPATH = '/Tmp/romerosa/itinf/models/'
+elif getuser() == 'jegousim':
+    SAVEPATH = '/data/lisatmp4/jegousim/iterative_inference'
+else:
+    raise ValueError, 'Unknown user : {}'.format(getuser())
+print('Saving directory : ' + SAVEPATH)
 
 
 def train(dataset, learn_step=0.005,
           weight_decay=1e-4, num_epochs=500, max_patience=100,
           epsilon=.0, optimizer='rmsprop', training_loss='squared_error',
           layer_h='pool5', num_filters=[4096], skip=False, filter_size=[3],
-          savepath='/Tmp/romerosa/itinf/models/', resume=False):
-
+          savepath=SAVEPATH, resume=False):
     # Define symbolic variables
     input_x_var = T.tensor4('input_x_var')
     input_mask_var = T.tensor4('input_mask_var')
@@ -32,7 +39,7 @@ def train(dataset, learn_step=0.005,
     name = ''
     for l in layer_h:
         input_repr_var += [T.tensor4()]
-        name += ('_'+l)
+        name += ('_' + l)
 
     # Build dataset iterator
     train_iter, val_iter, _ = load_data(dataset, train_crop_size=None,
@@ -59,7 +66,7 @@ def train(dataset, learn_step=0.005,
     dae = buildDAE(input_repr_var, input_mask_var, n_classes,
                    layer_h, num_filters, filter_size, trainable=True,
                    load_weights=resume, void_labels=void_labels, skip=skip,
-                   model_name=dataset+'/dae_model'+name+'.npz')
+                   model_name=dataset + '/dae_model' + name + '.npz')
 
     # Define required theano functions for training and compile them
     print "Defining and compiling training functions"
@@ -86,7 +93,7 @@ def train(dataset, learn_step=0.005,
     else:
         raise ValueError('Unknown training loss')
 
-    loss += epsilon*entropy(prediction)
+    loss += epsilon * entropy(prediction)
 
     # regularizers
     weightsl2 = regularize_network_params(
@@ -106,7 +113,7 @@ def train(dataset, learn_step=0.005,
         raise ValueError('Unknown optimizer')
 
     # functions
-    train_fn = theano.function(input_repr_var+[input_mask_var],
+    train_fn = theano.function(input_repr_var + [input_mask_var],
                                loss, updates=updates)
     fcn_fn = theano.function([input_x_var], fcn_prediction)
 
@@ -129,7 +136,7 @@ def train(dataset, learn_step=0.005,
         raise ValueError('Unknown training loss')
 
     # functions
-    val_fn = theano.function(input_repr_var+[input_mask_var], test_loss)
+    val_fn = theano.function(input_repr_var + [input_mask_var], test_loss)
 
     err_train = []
     err_valid = []
@@ -152,10 +159,10 @@ def train(dataset, learn_step=0.005,
             X_pred_batch = fcn_fn(X_train_batch)
 
             # Training step
-            cost_train = train_fn(*(X_pred_batch+[L_train_batch]))
+            cost_train = train_fn(*(X_pred_batch + [L_train_batch]))
             cost_train_tot += cost_train
 
-        err_train += [cost_train_tot/n_batches_train]
+        err_train += [cost_train_tot / n_batches_train]
 
         # Validation
         cost_val_tot = 0
@@ -168,16 +175,16 @@ def train(dataset, learn_step=0.005,
             X_pred_batch = fcn_fn(X_val_batch)
 
             # Validation step
-            cost_val = val_fn(*(X_pred_batch+[L_val_batch]))
+            cost_val = val_fn(*(X_pred_batch + [L_val_batch]))
             cost_val_tot += cost_val
 
-        err_valid += [cost_val_tot/n_batches_val]
+        err_valid += [cost_val_tot / n_batches_val]
 
-        out_str = "EPOCH %i: Avg epoch training cost train %f, cost val %f" +\
-            " took %f s"
+        out_str = "EPOCH %i: Avg epoch training cost train %f, cost val %f" + \
+                  " took %f s"
         out_str = out_str % (epoch, err_train[epoch],
                              err_valid[epoch],
-                             time.time()-start_time)
+                             time.time() - start_time)
         print out_str
 
         with open(savepath + "output" + name + ".log", "a") as f:
@@ -198,7 +205,7 @@ def train(dataset, learn_step=0.005,
 
         # Finish training if patience has expired or max nber of epochs
         # reached
-        if patience == max_patience or epoch == num_epochs-1:
+        if patience == max_patience or epoch == num_epochs - 1:
             # End
             return
 

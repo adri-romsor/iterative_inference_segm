@@ -1,6 +1,7 @@
 import os
 import argparse
 import time
+from getpass import getuser
 
 import numpy as np
 import theano
@@ -15,11 +16,16 @@ from metrics import jaccard, accuracy, crossentropy
 
 _FLOATX = config.floatX
 
+if getuser() == 'romerosa':
+    SAVEPATH = '/Tmp/romerosa/itinf/models/'
+else:
+    SAVEPATH = '/data/lisatmp4/romerosa/rnncn/fcn8_model.npz'
+print('Pretrained FCN8 loaded from ' + SAVEPATH)
 
 def train(dataset, learn_step=0.005,
           weight_decay=1e-4, num_epochs=500,
           max_patience=100,
-          savepath="/Tmp/romerosa/itinf/models/"):
+          savepath=SAVEPATH):
 
     # Define symbolic variables
     input_var = T.tensor4('input_var')
