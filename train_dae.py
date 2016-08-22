@@ -19,11 +19,14 @@ from models.fcn8_void import buildFCN8
 _FLOATX = config.floatX
 if getuser() == 'romerosa':
     SAVEPATH = '/Tmp/romerosa/itinf/models/'
+    WEIGHTS_PATH = '/Tmp/romerosa/itinf/models/camvid/fcn8_model.npz',
 elif getuser() == 'jegousim':
     SAVEPATH = '/data/lisatmp4/jegousim/iterative_inference'
+    WEIGHTS_PATH = '/data/lisatmp4/romerosa/rnncnn/fcn8_model.npz'
 else:
     raise ValueError, 'Unknown user : {}'.format(getuser())
 print('Saving directory : ' + SAVEPATH)
+print('Weights of FCN8 loaded from : ' + WEIGHTS_PATH)
 
 
 def train(dataset, learn_step=0.005,
@@ -58,7 +61,7 @@ def train(dataset, learn_step=0.005,
     # Build FCN
     print ' Building FCN network'
     fcn = buildFCN8(3, input_x_var, n_classes=n_classes,
-                    void_labels=void_labels,
+                    void_labels=void_labels, path_weights=WEIGHTS_PATH,
                     trainable=True, load_weights=True, layer=layer_h)
 
     # Build DAE network
