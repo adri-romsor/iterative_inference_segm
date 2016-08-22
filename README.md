@@ -26,6 +26,13 @@ Pre-trained models for semantic segmentation and pre-trained DAE for iterative i
 ```
 /data/lisatmp4/romerosa/itinf/
 ```
+
+## Relevant papers
+* [Augmenting Supervised Neural Networks with Unsupervised Objectives
+for Large-scale Image Classification](http://web.eecs.umich.edu/~honglak/icml2016-CNNdec.pdf)
+* [Efficient Inference in Fully Connected CRFs with
+Gaussian Edge Potentials](https://graphics.stanford.edu/projects/densecrf/densecrf.pdf)
+
 ## TODO list
 - [x] Code fcn8 model and script to train the model
 - [x] Code DAE model and script to train the model
