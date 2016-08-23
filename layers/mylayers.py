@@ -50,8 +50,8 @@ class ElemwiseMergeLayer(MergeLayer):
         return output
 
 class DePool2D(Upscale2DLayer):
-   ''' Code taken from:
-   https://github.com/nanopony/keras-convautoencoder/blob/master/autoencoder_layers.py
+    ''' Code taken from:
+    https://github.com/nanopony/keras-convautoencoder/blob/master/autoencoder_layers.py
 
     Simplar to Upscale2DLayer, yet traverse only maxpooled elements
     # Input shape
@@ -68,9 +68,10 @@ class DePool2D(Upscale2DLayer):
         size: tuple of 2 integers. The upsampling factors for rows and columns.
     '''
 
-    def __init__(self, incoming, scale_factor, **kwargs):
+    def __init__(self, incoming, scale_factor, pool2d_layer, **kwargs):
         super(Upscale2DLayer, self).__init__(incoming, **kwargs)
         self.scale_factor = as_tuple(scale_factor, 2)
+        self.pool2d_layer = pool2d_layer
         if self.scale_factor[0] < 1 or self.scale_factor[1] < 1:
             raise ValueError('Scale factor must be >= 1, not {0}'.format(
                 self.scale_factor))    
@@ -82,7 +83,7 @@ class DePool2D(Upscale2DLayer):
             upscaled = T.extra_ops.repeat(upscaled, b, 3)
         if a > 1:
             upscaled = T.extra_ops.repeat(upscaled, a, 2)
-        f = T.grad(T.sum(inputs.output(train)),
-                wrt=inputs.input(train)) * upscaled
+        f = T.grad(T.sum(self.pool2d_layer.output(train)),
+                wrt=self.pool2d_layer.input(train)) * upscaled
         
         return f 
