@@ -47,7 +47,7 @@ Gaussian Edge Potentials](https://graphics.stanford.edu/projects/densecrf/densec
 - [x] Add skip connections in DAE
 - [ ] Add WWAE pooling tracking
 - [ ] Add training DAE training from the output of FCN8 instead of GT.
-- [ ] Code CRF (M)
+- [x] Code CRF (M)
 - [ ] Add BFGS optimization
 
 
