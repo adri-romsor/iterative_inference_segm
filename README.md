@@ -28,13 +28,7 @@ Pre-trained models for semantic segmentation and pre-trained DAE for iterative i
 ```
 
 ## Relevant papers
-* [Augmenting Supervised Neural Networks with Unsupervised Objectives
-for Large-scale Image Classification](http://web.eecs.umich.edu/~honglak/icml2016-CNNdec.pdf)
-* [Efficient Inference in Fully Connected CRFs with
-Gaussian Edge Potentials](https://graphics.stanford.edu/projects/densecrf/densecrf.pdf)
-* [Conditional Random Field Autoencoders for Unsupervised Structured Prediction](https://papers.nips.cc/paper/5344-conditional-random-field-autoencoders-for-unsupervised-structured-prediction.pdf)
-* [A Deep Learning Model for Structured Outputs with High-order Interaction](http://www.cs.toronto.edu/~xzhu/nipsrlco2014_submission_4_final.pdf)
-* [Structured Prediction of 3D Human Pose with Deep Neural Networks](https://infoscience.epfl.ch/record/220616/files/tekin_bmvc16.pdf)
+See wiki
 
 ## TODO list
 - [x] Code fcn8 model and script to train the model
@@ -45,6 +39,7 @@ Gaussian Edge Potentials](https://graphics.stanford.edu/projects/densecrf/densec
 - [ ] Add possibility of having only y
 - [x] Add possibility of having several intermediate layers as input
 - [x] Add skip connections in DAE
+- [ ] Add noise to skip connections
 - [ ] Add WWAE pooling tracking
 - [ ] Add training DAE training from the output of FCN8 instead of GT.
 - [x] Code CRF (M)
