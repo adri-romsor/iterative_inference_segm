@@ -32,6 +32,9 @@ Pre-trained models for semantic segmentation and pre-trained DAE for iterative i
 for Large-scale Image Classification](http://web.eecs.umich.edu/~honglak/icml2016-CNNdec.pdf)
 * [Efficient Inference in Fully Connected CRFs with
 Gaussian Edge Potentials](https://graphics.stanford.edu/projects/densecrf/densecrf.pdf)
+* [Conditional Random Field Autoencoders for Unsupervised Structured Prediction](https://papers.nips.cc/paper/5344-conditional-random-field-autoencoders-for-unsupervised-structured-prediction.pdf)
+* [A Deep Learning Model for Structured Outputs with High-order Interaction](http://www.cs.toronto.edu/~xzhu/nipsrlco2014_submission_4_final.pdf)
+* [Structured Prediction of 3D Human Pose with Deep Neural Networks](https://infoscience.epfl.ch/record/220616/files/tekin_bmvc16.pdf)
 
 ## TODO list
 - [x] Code fcn8 model and script to train the model
