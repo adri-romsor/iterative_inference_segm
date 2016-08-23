@@ -19,7 +19,7 @@ from helpers import save_img
 import sys
 import pydensecrf.densecrf as dcrf
 from pydensecrf.utils import compute_unary, create_pairwise_bilateral,\
-                             create_pairwise_gaussian, softmax_to_unary
+                             create_pairwise_gaussian, unary_from_softmax
 
 _FLOATX = config.floatX
 
@@ -115,7 +115,7 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=5, Bilateral=
         img2 = np.zeros(img.shape).astype('uint8')
         img2 = img2 + img
         # set unary potentials (neg log probability)
-        U = softmax_to_unary(sm)
+        U = unary_from_softmax(sm)
         d.setUnaryEnergy(U)
         # This adds the color-independent term, features are the
         # locations only. Smoothness kernel.
