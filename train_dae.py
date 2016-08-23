@@ -2,6 +2,7 @@ import os
 import argparse
 import time
 from getpass import getuser
+
 import numpy as np
 import theano
 import theano.tensor as T
@@ -39,8 +40,14 @@ def train(dataset, learn_step=0.005,
     savepath = os.path.join(savepath, dataset, exp_name)
     if not os.path.exists(savepath):
         os.makedirs(savepath)
+    else:
+        print('\033[93m The following folder already exists {}. '
+              'It will be overwritten in a few seconds...\033[0m'.format(savepath))
+
     print('Saving directory : ' + savepath)
-    np.savez(os.path.join(savepath, 'config'), locals())
+    with open(os.path.join(savepath, "config.txt"), "w") as f:
+        for key, value in locals().items():
+            f.write('{} = {}\n'.format(key,value))
 
     # Define symbolic variables
     input_x_var = T.tensor4('input_x_var')
