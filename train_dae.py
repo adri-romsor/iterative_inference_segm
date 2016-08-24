@@ -41,7 +41,7 @@ def train(dataset, learn_step=0.005,
     n_batches_train = train_iter.get_n_batches()
     n_batches_val = val_iter.get_n_batches()
     n_classes = train_iter.get_n_classes()
-    void_labels = train_iter.get_void_label()
+    void_labels = train_iter.get_void_labels()
 
     # Prepare saving directory
     savepath = savepath + dataset + "/"

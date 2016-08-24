@@ -32,7 +32,7 @@ def train(dataset, learn_step=0.005,
     n_batches_val = val_iter.get_n_batches()
     n_batches_test = test_iter.get_n_batches()
     n_classes = train_iter.get_n_classes()
-    void_labels = train_iter.get_void_label()
+    void_labels = train_iter.get_void_labels()
 
     # Build convolutional model and load pre-trained parameters
     convmodel = buildFCN8(3, input_var=input_var, trainable=True,

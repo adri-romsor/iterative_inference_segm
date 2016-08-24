@@ -41,7 +41,7 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=5, Bilateral=
 
     n_batches_test = test_iter.get_n_batches()
     n_classes = test_iter.get_n_classes()
-    void_labels = test_iter.get_void_label()
+    void_labels = test_iter.get_void_labels()
 
     # Prepare saving directory
     savepath = savepath + dataset + "/"
@@ -122,7 +122,7 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=5, Bilateral=
         # This adds the color-dependent term, i.e. features are (x,y,r,g,b).
         # im is an image-array, e.g. im.dtype == np.uint8 and im.shape == (640,480,3)
         if Bilateral:
-            d.addPairwiseBilateral(sxy=(80, 80),srgb=(13, 13, 13), 
+            d.addPairwiseBilateral(sxy=(80, 80),srgb=(13, 13, 13),
                                    rgbim=img2, compat=10, kernel=dcrf.DIAG_KERNEL,
                                    normalization=dcrf.NORMALIZE_SYMMETRIC)
         Q = d.inference(num_iter)
