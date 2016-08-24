@@ -32,7 +32,8 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
     target_var = T.ivector('target_var')
 
     # Build dataset iterator
-    _, _, test_iter = load_data(dataset, train_crop_size=None, one_hot=True)
+    _, _, test_iter = load_data(dataset, train_crop_size=None, one_hot=True,
+                                batch_size=[10, 10, 10])
 
     n_batches_test = test_iter.get_n_batches()
     n_classes = test_iter.get_n_classes()

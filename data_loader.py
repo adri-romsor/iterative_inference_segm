@@ -3,7 +3,7 @@ from dataset_loaders.images.camvid import CamvidDataset
 
 
 def load_data(dataset, train_crop_size=(224, 224), one_hot=False,
-        batch_size=[10, 10, 10]):
+              batch_size=[10, 10, 10]):
 
     # Build dataset iterator
     if dataset == 'polyp_videos':
@@ -15,6 +15,7 @@ def load_data(dataset, train_crop_size=(224, 224), one_hot=False,
                                        split=.75,
                                        get_one_hot=one_hot,
                                        get_01c=False,
+                                       overlap=0,
                                        use_threads=True)
         val_iter = PolypVideoDataset(which_set='val',
                                      batch_size=batch_size[1],
@@ -24,6 +25,7 @@ def load_data(dataset, train_crop_size=(224, 224), one_hot=False,
                                      split=.75,
                                      get_one_hot=one_hot,
                                      get_01c=False,
+                                     overlap=0,
                                      use_threads=True)
         test_iter = PolypVideoDataset(which_set='test',
                                       batch_size=batch_size[2],
@@ -32,6 +34,7 @@ def load_data(dataset, train_crop_size=(224, 224), one_hot=False,
                                       crop_size=None,
                                       get_one_hot=one_hot,
                                       get_01c=False,
+                                      overlap=0,
                                       use_threads=True)
 
     elif dataset == 'camvid':
@@ -42,6 +45,7 @@ def load_data(dataset, train_crop_size=(224, 224), one_hot=False,
                                    crop_size=train_crop_size,
                                    get_one_hot=one_hot,
                                    get_01c=False,
+                                   overlap=0,
                                    use_threads=True)
         val_iter = CamvidDataset(which_set='val',
                                  batch_size=batch_size[1],
@@ -50,6 +54,7 @@ def load_data(dataset, train_crop_size=(224, 224), one_hot=False,
                                  crop_size=None,
                                  get_one_hot=one_hot,
                                  get_01c=False,
+                                 overlap=0,
                                  use_threads=True)
         test_iter = CamvidDataset(which_set='test',
                                   batch_size=batch_size[2],
@@ -58,6 +63,7 @@ def load_data(dataset, train_crop_size=(224, 224), one_hot=False,
                                   crop_size=None,
                                   get_one_hot=one_hot,
                                   get_01c=False,
+                                  overlap=0,
                                   use_threads=True)
     else:
         raise NotImplementedError
