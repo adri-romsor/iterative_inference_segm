@@ -26,18 +26,25 @@ Pre-trained models for semantic segmentation and pre-trained DAE for iterative i
 ```
 /data/lisatmp4/romerosa/itinf/
 ```
+
+## Relevant papers
+See wiki
+
 ## TODO list
 - [x] Code fcn8 model and script to train the model
 - [x] Code DAE model and script to train the model
 - [x] Code to perform iterative inference
 - [x] Add entropy
 - [x] Add possibility of having an intermediate layer as input (not only x)
+- [ ] Add possibility of having only y
 - [x] Add possibility of having several intermediate layers as input
 - [x] Add skip connections in DAE
+- [ ] Add noise to skip connections
 - [ ] Add WWAE pooling tracking
 - [ ] Add training DAE training from the output of FCN8 instead of GT.
-- [ ] Code CRF (M)
+- [x] Code CRF (M)
 - [ ] Add BFGS optimization
+
 
 ### TODO experiments
 **Camvid:**

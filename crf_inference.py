@@ -19,7 +19,7 @@ from helpers import save_img
 import sys
 import pydensecrf.densecrf as dcrf
 from pydensecrf.utils import compute_unary, create_pairwise_bilateral,\
-                             create_pairwise_gaussian, softmax_to_unary
+                             create_pairwise_gaussian, unary_from_softmax
 
 _FLOATX = config.floatX
 
@@ -115,14 +115,24 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=5, Bilateral=
         img2 = np.zeros(img.shape).astype('uint8')
         img2 = img2 + img
         # set unary potentials (neg log probability)
-        d.setUnaryEnergy(softmax_to_unary(sm))
-        # This adds the color-independent term, features are the locations only.
+        U = unary_from_softmax(sm)
+        d.setUnaryEnergy(U)
+        # This adds the color-independent term, features are the
+        # locations only. Smoothness kernel.
+        # sxy: gaussian x, y std
+        # compat: ways to weight contributions, a number for potts compatibility, 
+        #     vector for diagonal compatibility, an array for matrix compatibility
+        # kernel: kernel used, CONST_KERNEL, FULL_KERNEL, DIAG_KERNEL
+        # normalization: NORMALIZE_AFTER, NORMALIZE_BEFORE,
+        #     NO_NORMALIZAITION, NORMALIZE_SYMMETRIC
         d.addPairwiseGaussian(sxy=(3, 3), compat=3, kernel=dcrf.DIAG_KERNEL,
                               normalization=dcrf.NORMALIZE_SYMMETRIC)
-        # This adds the color-dependent term, i.e. features are (x,y,r,g,b).
+        # Appearance kernel. This adds the color-dependent term, i.e. features 
+        # are (x,y,r,g,b).
         # im is an image-array, e.g. im.dtype == np.uint8 and im.shape == (640,480,3)
+        # to set sxy and srgb perform grid search on validation set
         if Bilateral:
-            d.addPairwiseBilateral(sxy=(80, 80),srgb=(13, 13, 13),
+            d.addPairwiseBilateral(sxy=(3, 3), srgb=(13, 13, 13), 
                                    rgbim=img2, compat=10, kernel=dcrf.DIAG_KERNEL,
                                    normalization=dcrf.NORMALIZE_SYMMETRIC)
         Q = d.inference(num_iter)
@@ -167,7 +177,7 @@ def main():
     parser.add_argument('--num_iter',
                         '-nit',
                         type=int,
-                        default=50,
+                        default=10,
                         help='Max number of iterations.')
     parser.add_argument('-num_filters',
                         type=list,
