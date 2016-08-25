@@ -1,4 +1,5 @@
 import numpy as np
+import os
 import lasagne
 from lasagne.layers import Conv2DLayer as ConvLayer
 from lasagne.layers import Pool2DLayer as PoolLayer
@@ -65,7 +66,7 @@ def buildDAE(input_repr_var, input_mask_var, n_classes,
 
     # Load weights
     if load_weights:
-        with np.load(path_weights + model_name) as f:
+        with np.load(os.path.join(path_weights, model_name)) as f:
             param_values = [f['arr_%d' % i] for i in range(len(f.files))]
 
         lasagne.layers.set_all_param_values(dae['probs_dimshuffle'],
