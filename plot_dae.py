@@ -1,22 +1,36 @@
+import os
 import matplotlib.pyplot as plt
 import numpy as np
 import argparse
+from getpass import getuser
+
+if getuser() == 'romerosa':
+    LOADPATH = '/data/lisatmp4/romerosa/itinf/models/'
+elif getuser() == 'jegousim':
+    LOADPATH = '/data/lisatmp4/jegousim/iterative_inference/'
+else:
+    raise ValueError('Unknown user : {}'.format(getuser()))
 
 
-def plot(error_path='/data/lisatmp4/romerosa/itinf/errors/',
-         error_file=['errors_earlyjacc.npz'],
+def plot(dataset,
+         model_path=None,
+         models=None,
          colors=None):
 
-    for (f, c) in zip(error_file, colors):
-        error_var = np.load(error_path + f)
+    for (m, c) in zip(models, colors):
+        file_path = os.path.join(model_path, dataset, m)
+        if not os.path.exists(file_path):
+            raise ValueError('The path to {} does not exist'.format(file_path))
+
+        error_var = np.load(os.path.join(file_path, 'dae_errors.npz'))
         train_err = error_var['arr_1']
         val_err = error_var['arr_0']
 
         max_epoch = len(train_err)
         epochs = range(max_epoch)
 
-        plt.plot(epochs, train_err, '-'+c, label='train: '+f[:-4])
-        plt.plot(epochs, val_err, '--'+c, label='val: '+f[:-4])
+        plt.plot(epochs, train_err, '-'+c, label='train: '+m)
+        plt.plot(epochs, val_err, '--'+c, label='val: '+m)
 
     plt.legend()
     plt.show()
@@ -24,21 +38,23 @@ def plot(error_path='/data/lisatmp4/romerosa/itinf/errors/',
 
 def main():
     parser = argparse.ArgumentParser(description='plot errors')
+    parser.add_argument('-dataset',
+                        default='camvid',
+                        help='Dataset')
     parser.add_argument('-path',
-                        default='/data/lisatmp4/romerosa/itinf/errors/',
+                        default='/data/lisatmp4/romerosa/itinf/models/',
                         help='Path to errors file')
-    parser.add_argument('-file',
+    parser.add_argument('-models',
                         type=list,
-                        default=['dae_errors_pool1.npz',
-                                 'dae_errors_pool3.npz'],
-                        help='Errors file.')
+                        default=['pool3_squared_error_skip'],
+                        help='List of model names.')
     parser.add_argument('-colors',
                         type=list,
-                        default=['r', 'g'],
-                        help='Errors file.')
+                        default=['r'],
+                        help='Colors to plot curves.')
     args = parser.parse_args()
 
-    plot(args.path, args.file, args.colors)
+    plot(args.dataset, args.path, args.models, args.colors)
 
 if __name__ == "__main__":
     main()
