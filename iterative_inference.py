@@ -18,7 +18,8 @@ _FLOATX = config.floatX
 
 
 def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
-              num_filters=[256], skip=False, filter_size=[3], savepath=None):
+              num_filters=[256], skip=False, filter_size=[3], savepath=None,
+              loadpath=None):
 
     # Define symbolic variables
     input_x_var = T.tensor4('input_x_var')
@@ -65,7 +66,8 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
                    n_classes, layer_h=layer_name, filter_size=num_filters,
                    kernel_size=filter_size, trainable=False, load_weights=True,
                    void_labels=void_labels, skip=skip,
-                   model_name=dataset+'/dae_model'+name+'.npz')
+                   model_name='dae_model'+name+'.npz',
+                   path_weights=loadpath)
 
     print "Defining and compiling theano functions"
     # Define required theano functions and compile them
@@ -162,7 +164,7 @@ def main():
                         help='Dataset.')
     parser.add_argument('-layer_name',
                         type=list,
-                        default=['pool5'],
+                        default=['pool3'],
                         help='All h to introduce to the DAE.')
     parser.add_argument('-step',
                         type=float,
@@ -175,7 +177,7 @@ def main():
                         help='Max number of iterations.')
     parser.add_argument('-num_filters',
                         type=list,
-                        default=[4096],
+                        default=[512],
                         help='All h to introduce to the DAE.')
     parser.add_argument('-skip',
                         type=bool,
@@ -186,12 +188,17 @@ def main():
                         type=str,
                         default='/Tmp/romerosa/itinf/img_plots/',
                         help='Path to save images')
+    parser.add_argument('--loadpath',
+                        '-lp',
+                        type=str,
+                        default='/data/lisatmp4/romerosa/itinf/models/camvid/crossentropy/',
+                        help='Path to save images')
 
     args = parser.parse_args()
 
     inference(args.dataset, args.layer_name, float(args.step),
               int(args.num_iter), args.num_filters, args.skip,
-              savepath=args.savepath)
+              savepath=args.savepath, loadpath=args.loadpath)
 
 if __name__ == "__main__":
     main()
