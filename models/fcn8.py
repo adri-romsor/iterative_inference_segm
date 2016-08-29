@@ -2,7 +2,8 @@ import numpy as np
 import scipy.io as sio
 import theano.tensor as T
 import lasagne
-from lasagne.layers import InputLayer, DropoutLayer
+from lasagne.layers import InputLayer, DropoutLayer, ReshapeLayer,\
+    DimshuffleLayer
 from lasagne.layers import Pool2DLayer as PoolLayer
 from lasagne.layers import Conv2DLayer as ConvLayer
 from lasagne.layers import ElemwiseSumLayer, ElemwiseMergeLayer
@@ -12,11 +13,12 @@ from lasagne.nonlinearities import softmax, linear
 import model_helpers
 
 
-def buildFCN8(nb_in_channels, input_var=None,
-              path_weights='/Tmp/romerosa/contextual_predictions/models/' +
-              'camvid/model_earlyjacc.npz',
-              n_classes=21, trainable=False, load_weights=True, pascal=False):
-
+def buildFCN8(nb_in_channels, input_var,
+              path_weights='/Tmp/romerosa/itinf/models/' +
+              'camvid/fcn8_model.npz',
+              n_classes=21, load_weights=True,
+              void_labels=[], trainable=False,
+              layer=['probs_dimshuffle'], pascal=False):
     '''
     Build fcn8 model
     '''
@@ -180,4 +182,11 @@ def buildFCN8(nb_in_channels, input_var=None,
     if not trainable:
         model_helpers.freezeParameters(net['probs'])
 
-    return net['probs']
+    # Go back to 4D
+    net['probs_reshape'] = ReshapeLayer(net['probs'], (laySize[0], laySize[1],
+                                                       laySize[2], n_classes))
+
+    net['probs_dimshuffle'] = DimshuffleLayer(net['probs_reshape'],
+                                              (0, 3, 1, 2))
+
+    return [net[el] for el in layer]

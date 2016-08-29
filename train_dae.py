@@ -9,13 +9,13 @@ import theano
 import theano.tensor as T
 from theano import config
 import lasagne
-from lasagne.objectives import squared_error
+from lasagne.objectives import squared_error, aggregate
 from lasagne.regularization import regularize_network_params
 
 from data_loader import load_data
 from metrics import crossentropy, entropy
 from models.DAE_h import buildDAE
-from models.fcn8_void import buildFCN8
+from models.fcn8 import buildFCN8
 
 _FLOATX = config.floatX
 if getuser() == 'romerosa':
@@ -36,7 +36,8 @@ else:
 def train(dataset, learn_step=0.005,
           weight_decay=1e-4, num_epochs=500, max_patience=100,
           epsilon=.0, optimizer='rmsprop', training_loss='squared_error',
-          layer_h=['pool5'], num_filters=[4096], skip=False, filter_size=[3],
+          layer_h=['pool5'], num_filters=[4096], skip=False,
+          unpool_type='standard', filter_size=[3],
           savepath=None, loadpath=None, exp_name=None, resume=False):
 
     #
@@ -98,7 +99,7 @@ def train(dataset, learn_step=0.005,
     dae = buildDAE(input_repr_var, input_mask_var, n_classes,
                    layer_h, num_filters, filter_size, trainable=True,
                    load_weights=resume, void_labels=void_labels, skip=skip,
-                   # model_name=dataset + '/dae_model' + name + '.npz')
+                   unpool_type=unpool_type,
                    path_weights=savepath, model_name='dae_model.npz')
 
     #
@@ -126,7 +127,9 @@ def train(dataset, learn_step=0.005,
         # Compute loss
         loss = crossentropy(prediction_2D, input_mask_var_2D, void_labels)
     elif training_loss == 'squared_error':
-        loss = squared_error(prediction, input_mask_var).mean()
+        loss = squared_error(prediction, input_mask_var).mean(axis=1)
+        loss = aggregate(loss, T.eq(0., input_mask_var.sum(axis=1)),
+                         mode='mean')
     else:
         raise ValueError('Unknown training loss')
 
@@ -168,7 +171,9 @@ def train(dataset, learn_step=0.005,
         test_loss = crossentropy(test_prediction_2D, input_mask_var_2D,
                                  void_labels)
     elif training_loss == 'squared_error':
-        test_loss = squared_error(test_prediction, input_mask_var).mean()
+        test_loss = squared_error(test_prediction, input_mask_var).mean(axis=1)
+        test_loss = aggregate(test_loss, T.eq(0., input_mask_var.sum(axis=1)),
+                              mode='mean')
     else:
         raise ValueError('Unknown training loss')
 
@@ -195,6 +200,7 @@ def train(dataset, learn_step=0.005,
             # Get minibatch
             X_train_batch, L_train_batch = train_iter.next()
             L_train_batch = L_train_batch.astype(_FLOATX)
+            L_train_batch = L_train_batch[:, :-1, :, :]
 
             # h prediction
             X_pred_batch = fcn_fn(X_train_batch)
@@ -211,6 +217,7 @@ def train(dataset, learn_step=0.005,
             # Get minibatch
             X_val_batch, L_val_batch = val_iter.next()
             L_val_batch = L_val_batch.astype(_FLOATX)
+            L_val_batch = L_val_batch[:, :-1, :, :]
 
             # h prediction
             X_pred_batch = fcn_fn(X_val_batch)
@@ -273,12 +280,12 @@ def main():
     parser.add_argument('--num_epochs',
                         '-ne',
                         type=int,
-                        default=2000,
+                        default=1000,
                         help='Max number of epochs')
     parser.add_argument('--max_patience',
                         '-mp',
                         type=int,
-                        default=100,
+                        default=50,
                         help='Max patience')
     parser.add_argument('-epsilon',
                         type=float,
@@ -294,16 +301,20 @@ def main():
                         help='Training loss')
     parser.add_argument('-layer_h',
                         type=list,
-                        default=['pool5'],
+                        default=['pool3'],
                         help='All h to introduce to the DAE')
     parser.add_argument('-num_filters',
                         type=list,
-                        default=[4096],
+                        default=[256],
                         help='Nb of filters per encoder layer')
     parser.add_argument('-skip',
                         type=bool,
                         default=True,
                         help='Whether to skip connections in DAE')
+    parser.add_argument('-unpool_type',
+                        type=str,
+                        default='standard',
+                        help='Unpooling type - standard or trackind')
     parser.add_argument('-e', '--exp_name',
                         type=str,
                         default=None,
@@ -314,7 +325,8 @@ def main():
           float(args.weight_decay), int(args.num_epochs),
           int(args.max_patience), float(args.epsilon),
           args.optimizer, args.training_loss, args.layer_h,
-          args.num_filters, args.skip, exp_name=args.exp_name, resume=False,
+          args.num_filters, args.skip, args.unpool_type,
+          exp_name=args.exp_name, resume=False,
           savepath=SAVEPATH, loadpath=LOADPATH)
 
 

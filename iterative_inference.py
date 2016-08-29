@@ -33,8 +33,8 @@ _EPSILON = 1e-3
 
 
 def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
-              num_filters=[256], skip=False, filter_size=[3], savepath=None,
-              loadpath=None, exp_name=None,
+              num_filters=[256], skip=False, unpool_type='standard',
+              filter_size=[3], savepath=None, loadpath=None, exp_name=None,
               training_loss='squared_error'):
 
     #
@@ -107,7 +107,7 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
     dae = buildDAE(input_h_var, input_dae_mask_var,
                    n_classes, layer_h=layer_name, filter_size=num_filters,
                    kernel_size=filter_size, trainable=False, load_weights=True,
-                   void_labels=void_labels, skip=skip,
+                   void_labels=void_labels, skip=skip, unpool_type=unpool_type,
                    model_name='dae_model.npz',
                    path_weights=loadpath)
 
@@ -243,6 +243,10 @@ def main():
                         type=bool,
                         default=True,
                         help='Whether to skip connections in the DAE.')
+    parser.add_argument('-unpool_type',
+                        type=str,
+                        default='standard',
+                        help='Unpool type - standard or trackind.')
     parser.add_argument('-training_loss',
                         type=str,
                         default='squared_error',
@@ -262,8 +266,8 @@ def main():
 
     inference(args.dataset, args.layer_name, float(args.step),
               int(args.num_iter), args.num_filters, args.skip,
-              savepath=args.savepath, loadpath=args.loadpath,
-              training_loss=args.training_loss)
+              args.unpool_type, savepath=args.savepath,
+              loadpath=args.loadpath, training_loss=args.training_loss)
 
 if __name__ == "__main__":
     main()
