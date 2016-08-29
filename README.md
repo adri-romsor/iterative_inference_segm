@@ -36,13 +36,13 @@ See wiki
 - [x] Code to perform iterative inference
 - [x] Add entropy
 - [x] Add possibility of having an intermediate layer as input (not only x)
-- [ ] Add possibility of having only y
 - [x] Add possibility of having several intermediate layers as input
 - [x] Add skip connections in DAE
-- [ ] Add noise to skip connections
-- [ ] Add WWAE pooling tracking
+- [x] Add WWAE pooling tracking
+- [x] Code CRF
+- [ ] Add possibility of having only y
 - [ ] Add training DAE training from the output of FCN8 instead of GT.
-- [x] Code CRF (M)
+- [ ] Add noise to skip connections
 - [ ] Add BFGS optimization
 
 
