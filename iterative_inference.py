@@ -29,6 +29,8 @@ elif getuser() == 'jegousim':
 else:
     raise ValueError('Unknown user : {}'.format(getuser()))
 
+_EPSILON = 1e-3
+
 
 def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
               num_filters=[256], skip=False, filter_size=[3], savepath=None,
@@ -52,7 +54,7 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
     # Build dataset iterator
     #
     _, _, test_iter = load_data(dataset, train_crop_size=None, one_hot=True,
-                                batch_size=[10, 10, 10])
+                                batch_size=[10, 10, 1])
 
     n_batches_test = test_iter.get_n_batches()
     n_classes = test_iter.get_n_classes()
@@ -177,7 +179,7 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
 
             Y_test_batch = Y_test_batch - learn_step * grad
 
-            if grad.min() == 0 and grad.max() == 0:
+            if np.linalg.norm(grad) < _EPSILON:
                 break
 
         # Compute metrics
@@ -185,6 +187,13 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
 
         acc_tot += acc
         jacc_tot += jacc
+
+        info_str = "    old acc %f, new acc %f, old jacc %f, new jacc %f"
+        info_str = info_str % (acc_tot_old,
+                               acc_tot,
+                               np.mean(jacc_tot_old[0, :]/jacc_tot_old[1, :]),
+                               np.mean(jacc_tot[0, :] / jacc_tot[1, :]))
+        print info_str
 
         # Save images
         save_img(X_test_batch, L_test_batch.argmax(1), Y_test_batch,
@@ -219,12 +228,12 @@ def main():
                         help='All h to introduce to the DAE.')
     parser.add_argument('-step',
                         type=float,
-                        default=0.001,
+                        default=.001,
                         help='Step')
     parser.add_argument('--num_iter',
                         '-nit',
                         type=int,
-                        default=500,
+                        default=100,
                         help='Max number of iterations.')
     parser.add_argument('-num_filters',
                         type=list,

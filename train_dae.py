@@ -291,11 +291,11 @@ def main():
                         help='Training loss')
     parser.add_argument('-layer_h',
                         type=list,
-                        default=['pool3'],
+                        default=['pool5'],
                         help='All h to introduce to the DAE')
     parser.add_argument('-num_filters',
                         type=list,
-                        default=[1024],
+                        default=[4096],
                         help='Nb of filters per encoder layer')
     parser.add_argument('-skip',
                         type=bool,
