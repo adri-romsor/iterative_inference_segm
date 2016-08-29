@@ -127,9 +127,10 @@ def train(dataset, learn_step=0.005,
         # Compute loss
         loss = crossentropy(prediction_2D, input_mask_var_2D, void_labels)
     elif training_loss == 'squared_error':
-        loss = squared_error(prediction, input_mask_var).mean()
-        # loss = aggregate(loss, T.eq(0., input_mask_var.sum(axis=1)),
-        #                  mode='mean')
+        loss = squared_error(prediction, input_mask_var).mean(axis=1)
+        mask = input_mask_var.sum(axis=1)
+        loss = loss * mask
+        loss = loss.sum()/mask.sum()
     else:
         raise ValueError('Unknown training loss')
 
@@ -171,9 +172,10 @@ def train(dataset, learn_step=0.005,
         test_loss = crossentropy(test_prediction_2D, input_mask_var_2D,
                                  void_labels)
     elif training_loss == 'squared_error':
-        test_loss = squared_error(test_prediction, input_mask_var).mean()
-        # test_loss = aggregate(test_loss, T.eq(0., input_mask_var.sum(axis=1)),
-        #                       mode='mean')
+        test_loss = squared_error(test_prediction, input_mask_var).mean(axis=1)
+        mask = input_mask_var.sum(axis=1)
+        loss = loss * mask
+        loss = loss.sum()/mask.sum()
     else:
         raise ValueError('Unknown training loss')
 
