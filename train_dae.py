@@ -26,6 +26,9 @@ elif getuser() == 'jegousim':
     SAVEPATH = '/data/lisatmp4/jegousim/iterative_inference/'
     LOADPATH = '/data/lisatmp4/jegousim/iterative_inference/'
     WEIGHTS_PATH = '/data/lisatmp4/romerosa/rnncnn/fcn8_model.npz'
+elif getuser() == 'michal':
+    SAVEPATH = '/home/michal/Experiments/iter_inf/'
+    WEIGHTS_PATH = '/home/michal/model_earlyjacc.npz'
 else:
     raise ValueError('Unknown user : {}'.format(getuser()))
 

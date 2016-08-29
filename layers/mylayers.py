@@ -3,9 +3,9 @@ from lasagne.layers.merge import autocrop, autocrop_array_shapes
 from lasagne.layers.pool import Upscale2DLayer
 import theano.tensor as T
 from lasagne.utils import as_tuple
+import lasagne
 
-
-class ElemwiseMergeLayer(MergeLayer):
+class CroppingLayer(MergeLayer):
     """
     This layer performs an elementwise merge of its input layers.
     It requires all input layers to have the same output shape.
@@ -27,7 +27,7 @@ class ElemwiseMergeLayer(MergeLayer):
     """
 
     def __init__(self, incomings, merge_function, cropping=None, **kwargs):
-        super(ElemwiseMergeLayer, self).__init__(incomings, **kwargs)
+        super(CroppingLayer, self).__init__(incomings, **kwargs)
         self.merge_function = merge_function
         self.cropping = cropping
 
@@ -68,22 +68,41 @@ class DePool2D(Upscale2DLayer):
         size: tuple of 2 integers. The upsampling factors for rows and columns.
     '''
 
-    def __init__(self, incoming, scale_factor, pool2d_layer, **kwargs):
+    def __init__(self, incoming, scale_factor, pool2d_layer,
+            pool2d_layer_in, **kwargs):
         super(Upscale2DLayer, self).__init__(incoming, **kwargs)
         self.scale_factor = as_tuple(scale_factor, 2)
         self.pool2d_layer = pool2d_layer
+        self.pool2d_layer_in = pool2d_layer_in
         if self.scale_factor[0] < 1 or self.scale_factor[1] < 1:
             raise ValueError('Scale factor must be >= 1, not {0}'.format(
                 self.scale_factor))    
 
-    def get_output_for(self, inputs, train=False, **kwargs):
+    def get_output_for(self, upscaled, **kwargs):
         a, b = self.scale_factor
-        upscaled = inputs.output(train)
+        # get output for pooling and pre-pooling layer
+        inp, out =\
+                lasagne.layers.get_output([self.pool2d_layer_in, 
+                                           self.pool2d_layer]) 
+        # upscale the input feature map by scale_factor
         if b > 1:
             upscaled = T.extra_ops.repeat(upscaled, b, 3)
         if a > 1:
             upscaled = T.extra_ops.repeat(upscaled, a, 2)
-        f = T.grad(T.sum(self.pool2d_layer.output(train)),
-                wrt=self.pool2d_layer.input(train)) * upscaled
+        # get the shapes for pre-pooling layer and upscaled layer
+        sh_pool2d_in = T.shape(inp)
+        sh_upscaled = T.shape(upscaled)
+        # in case the shape is different left-bottom-pad with zero
+        tmp = T.zeros(sh_pool2d_in)
+        indx = (slice(None),
+                slice(None),
+                slice(0, sh_upscaled[2]),
+                slice(0, sh_upscaled[3])) 
+        upscaled = T.set_subtensor(tmp[indx], upscaled)
+        # get max pool indices
+        indices_pool = T.grad(None, wrt=inp, 
+                known_grads={out: T.ones_like(out)})
+        # mask values using indices_pool
+        f = indices_pool * upscaled
         
         return f 
