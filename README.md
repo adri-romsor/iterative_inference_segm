@@ -39,10 +39,10 @@ See wiki
 - [ ] Add possibility of having only y
 - [x] Add possibility of having several intermediate layers as input
 - [x] Add skip connections in DAE
-- [ ] Add noise to skip connections
-- [ ] Add WWAE pooling tracking
+- [x] Add WWAE pooling tracking
+- [x] Code CRF
 - [ ] Add training DAE training from the output of FCN8 instead of GT.
-- [x] Code CRF (M)
+- [ ] Add noise to skip connections
 - [ ] Add BFGS optimization
 
 
