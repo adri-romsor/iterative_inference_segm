@@ -37,7 +37,7 @@ def train(dataset, learn_step=0.005,
           weight_decay=1e-4, num_epochs=500, max_patience=100,
           epsilon=.0, optimizer='rmsprop', training_loss='squared_error',
           layer_h=['pool5'], num_filters=[4096], skip=False,
-          unpool_type='standard', filter_size=[7],
+          unpool_type='standard', filter_size=[3],
           savepath=None, loadpath=None, exp_name=None, resume=False):
 
     #
@@ -174,8 +174,8 @@ def train(dataset, learn_step=0.005,
     elif training_loss == 'squared_error':
         test_loss = squared_error(test_prediction, input_mask_var).mean(axis=1)
         mask = input_mask_var.sum(axis=1)
-        loss = loss * mask
-        loss = loss.sum()/mask.sum()
+        test_loss = test_loss * mask
+        test_loss = test_loss.sum()/mask.sum()
     else:
         raise ValueError('Unknown training loss')
 
@@ -282,12 +282,12 @@ def main():
     parser.add_argument('--num_epochs',
                         '-ne',
                         type=int,
-                        default=1000,
+                        default=500,
                         help='Max number of epochs')
     parser.add_argument('--max_patience',
                         '-mp',
                         type=int,
-                        default=50,
+                        default=100,
                         help='Max patience')
     parser.add_argument('-epsilon',
                         type=float,
@@ -303,11 +303,11 @@ def main():
                         help='Training loss')
     parser.add_argument('-layer_h',
                         type=list,
-                        default=['pool3'],
+                        default=['pool5'],
                         help='All h to introduce to the DAE')
     parser.add_argument('-num_filters',
                         type=list,
-                        default=[512],
+                        default=[2048],
                         help='Nb of filters per encoder layer')
     parser.add_argument('-skip',
                         type=bool,
