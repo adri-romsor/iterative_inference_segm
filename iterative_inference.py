@@ -13,7 +13,7 @@ import lasagne
 from data_loader import load_data
 from metrics import accuracy, jaccard
 from models.DAE_h import buildDAE
-from models.fcn8_void import buildFCN8
+from models.fcn8 import buildFCN8
 from helpers import save_img
 
 _FLOATX = config.floatX

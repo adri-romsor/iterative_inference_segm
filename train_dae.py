@@ -37,7 +37,7 @@ def train(dataset, learn_step=0.005,
           weight_decay=1e-4, num_epochs=500, max_patience=100,
           epsilon=.0, optimizer='rmsprop', training_loss='squared_error',
           layer_h=['pool5'], num_filters=[4096], skip=False,
-          unpool_type='standard', filter_size=[3],
+          unpool_type='standard', filter_size=[7],
           savepath=None, loadpath=None, exp_name=None, resume=False):
 
     #
@@ -127,9 +127,9 @@ def train(dataset, learn_step=0.005,
         # Compute loss
         loss = crossentropy(prediction_2D, input_mask_var_2D, void_labels)
     elif training_loss == 'squared_error':
-        loss = squared_error(prediction, input_mask_var).mean(axis=1)
-        loss = aggregate(loss, T.eq(0., input_mask_var.sum(axis=1)),
-                         mode='mean')
+        loss = squared_error(prediction, input_mask_var).mean()
+        # loss = aggregate(loss, T.eq(0., input_mask_var.sum(axis=1)),
+        #                  mode='mean')
     else:
         raise ValueError('Unknown training loss')
 
@@ -171,9 +171,9 @@ def train(dataset, learn_step=0.005,
         test_loss = crossentropy(test_prediction_2D, input_mask_var_2D,
                                  void_labels)
     elif training_loss == 'squared_error':
-        test_loss = squared_error(test_prediction, input_mask_var).mean(axis=1)
-        test_loss = aggregate(test_loss, T.eq(0., input_mask_var.sum(axis=1)),
-                              mode='mean')
+        test_loss = squared_error(test_prediction, input_mask_var).mean()
+        # test_loss = aggregate(test_loss, T.eq(0., input_mask_var.sum(axis=1)),
+        #                       mode='mean')
     else:
         raise ValueError('Unknown training loss')
 
@@ -305,7 +305,7 @@ def main():
                         help='All h to introduce to the DAE')
     parser.add_argument('-num_filters',
                         type=list,
-                        default=[256],
+                        default=[512],
                         help='Nb of filters per encoder layer')
     parser.add_argument('-skip',
                         type=bool,
