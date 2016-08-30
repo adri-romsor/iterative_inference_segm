@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import scipy
 from skimage.color import rgb2gray, gray2rgb
@@ -52,7 +53,8 @@ def save_img(image_batch, mask_batch, output, output_old, out_images_folder,
 
         combined_image = np.concatenate((img, mask_on_img, label_out_old,
                                          label_out, pred_on_img), axis=1)
-        out_name = out_images_folder + tag + '_img' + str(j) + '.png'
+        out_name = os.path.join(out_images_folder, tag + '_img' + str(j) +
+                                '.png')
         scipy.misc.toimage(combined_image).save(out_name)
         images.append(combined_image)
     return images

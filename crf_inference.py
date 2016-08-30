@@ -41,7 +41,7 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=5, Bilateral=
 
     n_batches_test = test_iter.get_n_batches()
     n_classes = test_iter.get_n_classes()
-    void_labels = test_iter.get_void_label()
+    void_labels = test_iter.get_void_labels()
 
     # Prepare saving directory
     savepath = savepath + dataset + "/"

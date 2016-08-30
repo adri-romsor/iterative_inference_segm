@@ -8,30 +8,30 @@ from lasagne.layers import Conv2DLayer as ConvLayer
 from lasagne.nonlinearities import softmax, linear
 
 
-def UnpoolNet(incoming_net, net, p, unpool, n_classes,
-              incoming_layer, skip, unpool_type='standard'):
-    # pdb.set_trace()
-    if p == 1:
-        n_cl = n_classes
-    else:
-        laySize = incoming_net['pool'+str(p-1)].input_shape
-        n_cl = laySize[1]
-    print('Number of feature maps (out):', n_cl)
+def UnpoolNet(incoming_net, net, p, unpool, n_classes, skip,
+              unpool_type='standard'):
 
     if unpool_type == 'standard':
         # Unpool
         # pdb.set_trace()
         net['up'+str(p)] = \
-                DeconvLayer(incoming_net[incoming_layer] if p == unpool else
+                DeconvLayer(net['score'] if p == unpool else
                             net['fused_up' + str(p+1)],
-                            n_cl, 4, stride=2,
+                            n_classes, 4, stride=2,
                             crop='valid', nonlinearity=linear)
+
         if skip and p > 1:
+            # Conv to reduce dimensionality of incoming layer
+            net['score_pool'+str(p-1)] = \
+                ConvLayer(incoming_net['pool'+str(p-1)],
+                          n_classes, 1, pad='same')
+
             # Merge
             net['fused_up'+str(p)] = \
                 ElemwiseSumLayer((net['up'+str(p)],
-                                  incoming_net['pool'+str(p-1)]),
+                                  net['score_pool'+str(p-1)]),
                                  cropping=[None, None, 'center', 'center'])
+
         else:
             # Crop
             net['fused_up'+str(p)] = \
@@ -42,40 +42,21 @@ def UnpoolNet(incoming_net, net, p, unpool, n_classes,
                               deconv, cropping=[None, None,
                                                 'center', 'center'])
     elif unpool_type == 'trackind':
-        # Depool
         net['up'+str(p)] = \
-                DePool2D(incoming_net[incoming_layer] if p == unpool else
+                DePool2D(net['score'] if p == unpool else
                          net['fused_up'+str(p+1)],
                          2, incoming_net['pool'+str(p)],
                          incoming_net['pool'+str(p)].input_layer)
-        # Convolve
-        net['up_conv'+str(p)] = \
-            ConvLayer(net['up'+str(p)], n_cl, 3,
+
+        net['fused_up'+str(p)] = \
+            ConvLayer(net['up'+str(p)], n_classes, 3,
                       pad='valid', flip_filters=False)
-
-        if skip and p > 1:
-            # Merge
-            net['fused_up'+str(p)] = \
-                ElemwiseSumLayer((net['up_conv'+str(p)],
-                                  incoming_net['pool'+str(p-1)]),
-                                 cropping=[None, None, 'center', 'center'])
-
-        else:
-            # Crop
-            net['fused_up'+str(p)] = \
-                    CroppingLayer((incoming_net['pool'+str(p-1) if p >
-                                                1 else 'input'],
-                                   net['up_conv'+str(p)]),
-                                  merge_function=lambda input, deconv:
-                                  deconv, cropping=[None, None,
-                                                    'center', 'center'])
     else:
-        raise ValueError('Unkown unpool type')
+        raise ValueError('Unknown unpool type.')
 
 
 def buildFCN_up(incoming_net, incoming_layer, unpool,
-                skip=False, unpool_type='standard',
-                n_classes=21):
+                skip=False, unpool_type='standard', n_classes=21):
 
     '''
     Build fcn decontracting path
@@ -83,15 +64,15 @@ def buildFCN_up(incoming_net, incoming_layer, unpool,
     net = {}
     # Upsampling path
 
-    # net['score'] = ConvLayer(incoming_net[incoming_layer], n_classes, 1,
-    #                          pad='valid', flip_filters=True)
+    net['score'] = ConvLayer(incoming_net[incoming_layer], n_classes, 1,
+                             pad='valid', flip_filters=True)
 
     p = 0
 
     for p in range(unpool, 0, -1):
         # Unpool and Crop if unpool_type='standard' or Depool and Conv
         UnpoolNet(incoming_net, net, p, unpool, n_classes,
-                  incoming_layer, skip, unpool_type=unpool_type)
+                  unpool_type=unpool_type)
 
     # Final dimshuffle, reshape and softmax
     net['final_dimshuffle'] = DimshuffleLayer(net['fused_up'+str(p) if
@@ -110,6 +91,6 @@ def buildFCN_up(incoming_net, incoming_layer, unpool,
 
     net['probs_dimshuffle'] = DimshuffleLayer(net['probs_reshape'],
                                               (0, 3, 1, 2))
-    # print('Input to last layer: ', net['probs_dimshuffle'].input_shape)
+
     print(net.keys())
     return net

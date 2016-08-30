@@ -28,7 +28,7 @@ def test(convmodel_name, dataset, padding=0,
 
     n_batches_test = test_iter.get_n_batches()
     n_classes = test_iter.get_n_classes()
-    void_labels = test_iter.get_void_label()
+    void_labels = test_iter.get_void_labels()
 
     # Build convolutional model
     if convmodel_name == "fcn8":

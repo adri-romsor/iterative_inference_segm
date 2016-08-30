@@ -1,7 +1,9 @@
 import argparse
 import os
-import numpy as np
+from getpass import getuser
+from distutils.dir_util import copy_tree
 
+import numpy as np
 import theano
 import theano.tensor as T
 from theano import config
@@ -11,16 +13,33 @@ import lasagne
 from data_loader import load_data
 from metrics import accuracy, jaccard
 from models.DAE_h import buildDAE
-from models.fcn8_void import buildFCN8
+from models.fcn8 import buildFCN8
 from helpers import save_img
 
 _FLOATX = config.floatX
 
+if getuser() == 'romerosa':
+    SAVEPATH = '/Tmp/romerosa/itinf/models/'
+    LOADPATH = '/data/lisatmp4/romerosa/itinf/models/'
+    WEIGHTS_PATH = '/Tmp/romerosa/itinf/models/camvid/fcn8_model.npz'
+elif getuser() == 'jegousim':
+    SAVEPATH = '/data/lisatmp4/jegousim/iterative_inference/'
+    LOADPATH = '/data/lisatmp4/jegousim/iterative_inference/'
+    WEIGHTS_PATH = '/data/lisatmp4/romerosa/rnncnn/fcn8_model.npz'
+else:
+    raise ValueError('Unknown user : {}'.format(getuser()))
+
+_EPSILON = 1e-3
+
 
 def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
-              num_filters=[256], skip=False, filter_size=[3], savepath=None):
+              num_filters=[256], skip=False, unpool_type='standard',
+              filter_size=[3], savepath=None, loadpath=None, exp_name=None,
+              training_loss='squared_error'):
 
+    #
     # Define symbolic variables
+    #
     input_x_var = T.tensor4('input_x_var')
     input_h_var = []
     name = ''
@@ -31,18 +50,43 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
     input_dae_mask_var = T.tensor4('input_dae_mask_var')
     target_var = T.ivector('target_var')
 
+    #
     # Build dataset iterator
-    _, _, test_iter = load_data(dataset, train_crop_size=None, one_hot=True)
+    #
+    _, _, test_iter = load_data(dataset, train_crop_size=None, one_hot=True,
+                                batch_size=[10, 10, 1])
 
     n_batches_test = test_iter.get_n_batches()
     n_classes = test_iter.get_n_classes()
-    void_labels = test_iter.get_void_label()
+    void_labels = test_iter.get_void_labels()
 
-    # Prepare saving directory
-    savepath = savepath + dataset + "/"
+    #
+    # Prepare load/save directories
+    #
+    if exp_name is None:
+        exp_name = '_'.join(layer_name)
+        exp_name += '_' + training_loss + ('_skip' if skip else '')
+
+    if savepath is None:
+        raise ValueError('A saving directory must be specified')
+
+    savepath = os.path.join(savepath, dataset, exp_name, 'img_plots')
+    loadpath = os.path.join(loadpath, dataset, exp_name)
     if not os.path.exists(savepath):
         os.makedirs(savepath)
+    else:
+        print('\033[93m The following folder already exists {}. '
+              'It will be overwritten in a few seconds...\033[0m'.format(
+                  savepath))
 
+    print('Saving directory : ' + savepath)
+    with open(os.path.join(savepath, "config.txt"), "w") as f:
+        for key, value in locals().items():
+            f.write('{} = {}\n'.format(key, value))
+
+    #
+    # Build networks
+    #
     print 'Building networks'
     # Build FCN8 with pre-trained weights (network to initialize
     # inference)
@@ -63,9 +107,13 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
     dae = buildDAE(input_h_var, input_dae_mask_var,
                    n_classes, layer_h=layer_name, filter_size=num_filters,
                    kernel_size=filter_size, trainable=False, load_weights=True,
-                   void_labels=void_labels, skip=skip,
-                   model_name=dataset+'/dae_model'+name+'.npz')
+                   void_labels=void_labels, skip=skip, unpool_type=unpool_type,
+                   model_name='dae_model.npz',
+                   path_weights=loadpath)
 
+    #
+    # Define and compile theano functions
+    #
     print "Defining and compiling theano functions"
     # Define required theano functions and compile them
     # predictions of fcn and dae
@@ -96,6 +144,9 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
     val_fn = theano.function([y_hat_var, target_var],
                              [test_acc, test_jacc])
 
+    #
+    # Infer
+    #
     print 'Start infering'
     acc_tot = 0
     acc_tot_old = 0
@@ -128,7 +179,7 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
 
             Y_test_batch = Y_test_batch - learn_step * grad
 
-            if grad.min() == 0 and grad.max() == 0:
+            if np.linalg.norm(grad) < _EPSILON:
                 break
 
         # Compute metrics
@@ -136,6 +187,13 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
 
         acc_tot += acc
         jacc_tot += jacc
+
+        info_str = "    old acc %f, new acc %f, old jacc %f, new jacc %f"
+        info_str = info_str % (acc_tot_old,
+                               acc_tot,
+                               np.mean(jacc_tot_old[0, :]/jacc_tot_old[1, :]),
+                               np.mean(jacc_tot[0, :] / jacc_tot[1, :]))
+        print info_str
 
         # Save images
         save_img(X_test_batch, L_test_batch.argmax(1), Y_test_batch,
@@ -152,6 +210,11 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
                          acc_test_old, jacc_test_old)
     print out_str
 
+    # Move segmentations
+    if savepath != loadpath:
+        print('Copying images to {}'.format(loadpath))
+        copy_tree(savepath, os.path.join(loadpath, 'img_plots'))
+
 
 def main():
     parser = argparse.ArgumentParser(description='Unet model training')
@@ -161,36 +224,50 @@ def main():
                         help='Dataset.')
     parser.add_argument('-layer_name',
                         type=list,
-                        default=['pool5'],
+                        default=['pool3'],
                         help='All h to introduce to the DAE.')
     parser.add_argument('-step',
                         type=float,
-                        default=0.001,
+                        default=.001,
                         help='Step')
     parser.add_argument('--num_iter',
                         '-nit',
                         type=int,
-                        default=500,
+                        default=100,
                         help='Max number of iterations.')
     parser.add_argument('-num_filters',
                         type=list,
-                        default=[4096],
+                        default=[1024],
                         help='All h to introduce to the DAE.')
     parser.add_argument('-skip',
                         type=bool,
                         default=True,
                         help='Whether to skip connections in the DAE.')
+    parser.add_argument('-unpool_type',
+                        type=str,
+                        default='standard',
+                        help='Unpool type - standard or trackind.')
+    parser.add_argument('-training_loss',
+                        type=str,
+                        default='squared_error',
+                        help='Training loss')
     parser.add_argument('--savepath',
                         '-sp',
                         type=str,
-                        default='/Tmp/romerosa/itinf/img_plots/',
+                        default=SAVEPATH,
+                        help='Path to save images')
+    parser.add_argument('--loadpath',
+                        '-lp',
+                        type=str,
+                        default=LOADPATH,
                         help='Path to save images')
 
     args = parser.parse_args()
 
     inference(args.dataset, args.layer_name, float(args.step),
               int(args.num_iter), args.num_filters, args.skip,
-              savepath=args.savepath)
+              args.unpool_type, savepath=args.savepath,
+              loadpath=args.loadpath, training_loss=args.training_loss)
 
 if __name__ == "__main__":
     main()

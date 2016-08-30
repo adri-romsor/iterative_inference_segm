@@ -1,4 +1,5 @@
 import numpy as np
+import os
 import lasagne
 from lasagne.layers import Conv2DLayer as ConvLayer
 from lasagne.layers import Pool2DLayer as PoolLayer
@@ -11,7 +12,7 @@ from fcn_down import buildFCN_down
 
 def buildDAE(input_repr_var, input_mask_var, n_classes,
              layer_h=['input'], filter_size=[], kernel_size=[],
-             void_labels=[], skip=False,
+             void_labels=[], skip=False, unpool_type='standard',
              path_weights='/Tmp/romerosa/itinf/models/',
              model_name='dae_model.npz',
              trainable=False, load_weights=False):
@@ -19,9 +20,6 @@ def buildDAE(input_repr_var, input_mask_var, n_classes,
     '''
     Build score model
     '''
-
-    # Compute number of output classes of the DAE and input sizes
-    n_classes = n_classes + (1 if void_labels else 0)
 
     # Build fcn to extract representation from y
     fcn_down = buildFCN_down(input_mask_var, input_repr_var,
@@ -59,13 +57,13 @@ def buildDAE(input_repr_var, input_mask_var, n_classes,
 
     # Unpooling
     fcn_up = buildFCN_up(dae, 'decoder'+str(l_dec-1), unpool, skip=skip,
-                         n_classes=n_classes)
+                         n_classes=n_classes, unpool_type=unpool_type)
 
     dae.update(fcn_up)
 
     # Load weights
     if load_weights:
-        with np.load(path_weights + model_name) as f:
+        with np.load(os.path.join(path_weights, model_name)) as f:
             param_values = [f['arr_%d' % i] for i in range(len(f.files))]
 
         lasagne.layers.set_all_param_values(dae['probs_dimshuffle'],

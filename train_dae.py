@@ -2,27 +2,33 @@ import os
 import argparse
 import time
 from getpass import getuser
+from distutils.dir_util import copy_tree
 
 import numpy as np
 import theano
 import theano.tensor as T
 from theano import config
 import lasagne
-from lasagne.objectives import squared_error
+from lasagne.objectives import squared_error, aggregate
 from lasagne.regularization import regularize_network_params
 
 from data_loader import load_data
 from metrics import crossentropy, entropy
 from models.DAE_h import buildDAE
-from models.fcn8_void import buildFCN8
+from models.fcn8 import buildFCN8
 
 _FLOATX = config.floatX
 if getuser() == 'romerosa':
     SAVEPATH = '/Tmp/romerosa/itinf/models/'
-    WEIGHTS_PATH = '/Tmp/romerosa/itinf/models/camvid/fcn8_model.npz',
+    LOADPATH = '/data/lisatmp4/romerosa/itinf/models/'
+    WEIGHTS_PATH = '/Tmp/romerosa/itinf/models/camvid/fcn8_model.npz'
 elif getuser() == 'jegousim':
     SAVEPATH = '/data/lisatmp4/jegousim/iterative_inference/'
+    LOADPATH = '/data/lisatmp4/jegousim/iterative_inference/'
     WEIGHTS_PATH = '/data/lisatmp4/romerosa/rnncnn/fcn8_model.npz'
+elif getuser() == 'michal':
+    SAVEPATH = '/home/michal/Experiments/iter_inf/'
+    WEIGHTS_PATH = '/home/michal/model_earlyjacc.npz'
 else:
     raise ValueError('Unknown user : {}'.format(getuser()))
 
@@ -30,55 +36,77 @@ else:
 def train(dataset, learn_step=0.005,
           weight_decay=1e-4, num_epochs=500, max_patience=100,
           epsilon=.0, optimizer='rmsprop', training_loss='squared_error',
-          layer_h=['pool5'], num_filters=[4096], skip=False, filter_size=[3],
-          savepath=SAVEPATH, exp_name=None, resume=False):
+          layer_h=['pool5'], num_filters=[4096], skip=False,
+          unpool_type='standard', filter_size=[3],
+          savepath=None, loadpath=None, exp_name=None, resume=False):
 
-    # Prepare saving directory
+    #
+    # Prepare load/save directories
+    #
     if exp_name is None:
         exp_name = '_'.join(layer_h)
+        exp_name += '_' + training_loss + ('_skip' if skip else '')
+
+    if savepath is None:
+        raise ValueError('A saving directory must be specified')
 
     savepath = os.path.join(savepath, dataset, exp_name)
+    loadpath = os.path.join(loadpath, dataset, exp_name)
     if not os.path.exists(savepath):
         os.makedirs(savepath)
     else:
         print('\033[93m The following folder already exists {}. '
-              'It will be overwritten in a few seconds...\033[0m'.format(savepath))
+              'It will be overwritten in a few seconds...\033[0m'.format(
+                  savepath))
 
     print('Saving directory : ' + savepath)
     with open(os.path.join(savepath, "config.txt"), "w") as f:
         for key, value in locals().items():
-            f.write('{} = {}\n'.format(key,value))
+            f.write('{} = {}\n'.format(key, value))
 
+    #
     # Define symbolic variables
+    #
     input_x_var = T.tensor4('input_x_var')
     input_mask_var = T.tensor4('input_mask_var')
     input_repr_var = [T.tensor4()] * len(layer_h)
 
+    #
     # Build dataset iterator
+    #
     train_iter, val_iter, _ = load_data(dataset, train_crop_size=None,
-                                        one_hot=True)
+                                        one_hot=True,
+                                        batch_size=[10, 10, 10])
 
     n_batches_train = train_iter.get_n_batches()
     n_batches_val = val_iter.get_n_batches()
     n_classes = train_iter.get_n_classes()
-    void_labels = train_iter.get_void_label()
+    void_labels = train_iter.get_void_labels()
 
-    # Build FCN
+    #
+    # Build networks
+    #
+
+    # FCN
     print('Weights of FCN8 will be loaded from : ' + WEIGHTS_PATH)
     print ' Building FCN network'
     fcn = buildFCN8(3, input_x_var, n_classes=n_classes,
                     void_labels=void_labels, path_weights=WEIGHTS_PATH,
                     trainable=True, load_weights=True, layer=layer_h)
 
-    # Build DAE network
+    # DAE
     print ' Building DAE network'
     dae = buildDAE(input_repr_var, input_mask_var, n_classes,
                    layer_h, num_filters, filter_size, trainable=True,
                    load_weights=resume, void_labels=void_labels, skip=skip,
-                   # model_name=dataset + '/dae_model' + name + '.npz')
-                   model_name=os.path.join(savepath, 'dae_model.npz'))
+                   unpool_type=unpool_type,
+                   path_weights=savepath, model_name='dae_model.npz')
 
-    # Define required theano functions for training and compile them
+    #
+    # Define and compile theano functions
+    #
+
+    # training functions
     print "Defining and compiling training functions"
 
     # prediction and loss
@@ -99,7 +127,10 @@ def train(dataset, learn_step=0.005,
         # Compute loss
         loss = crossentropy(prediction_2D, input_mask_var_2D, void_labels)
     elif training_loss == 'squared_error':
-        loss = squared_error(prediction, input_mask_var).mean()
+        loss = squared_error(prediction, input_mask_var).mean(axis=1)
+        mask = input_mask_var.sum(axis=1)
+        loss = loss * mask
+        loss = loss.sum()/mask.sum()
     else:
         raise ValueError('Unknown training loss')
 
@@ -141,7 +172,10 @@ def train(dataset, learn_step=0.005,
         test_loss = crossentropy(test_prediction_2D, input_mask_var_2D,
                                  void_labels)
     elif training_loss == 'squared_error':
-        test_loss = squared_error(test_prediction, input_mask_var).mean()
+        test_loss = squared_error(test_prediction, input_mask_var).mean(axis=1)
+        mask = input_mask_var.sum(axis=1)
+        test_loss = test_loss * mask
+        test_loss = test_loss.sum()/mask.sum()
     else:
         raise ValueError('Unknown training loss')
 
@@ -151,6 +185,10 @@ def train(dataset, learn_step=0.005,
     err_train = []
     err_valid = []
     patience = 0
+
+    #
+    # Train
+    #
 
     # Training main loop
     print "Start training"
@@ -164,6 +202,7 @@ def train(dataset, learn_step=0.005,
             # Get minibatch
             X_train_batch, L_train_batch = train_iter.next()
             L_train_batch = L_train_batch.astype(_FLOATX)
+            L_train_batch = L_train_batch[:, :-1, :, :]
 
             # h prediction
             X_pred_batch = fcn_fn(X_train_batch)
@@ -180,6 +219,7 @@ def train(dataset, learn_step=0.005,
             # Get minibatch
             X_val_batch, L_val_batch = val_iter.next()
             L_val_batch = L_val_batch.astype(_FLOATX)
+            L_val_batch = L_val_batch[:, :-1, :, :]
 
             # h prediction
             X_pred_batch = fcn_fn(X_val_batch)
@@ -203,7 +243,7 @@ def train(dataset, learn_step=0.005,
         # Early stopping and saving stuff
         if epoch == 0:
             best_err_val = err_valid[epoch]
-        elif epoch > 1 and err_valid[epoch] < best_err_val:
+        elif epoch > 0 and err_valid[epoch] < best_err_val:
             best_err_val = err_valid[epoch]
             patience = 0
             np.savez(os.path.join(savepath, 'dae_model.npz'),
@@ -216,6 +256,11 @@ def train(dataset, learn_step=0.005,
         # Finish training if patience has expired or max nber of epochs
         # reached
         if patience == max_patience or epoch == num_epochs - 1:
+            # Copy files to loadpath
+            if savepath != loadpath:
+                print('Copying model and other training files to {}'.format(
+                    loadpath))
+                copy_tree(savepath, loadpath)
             # End
             return
 
@@ -228,7 +273,7 @@ def main():
                         help='Dataset.')
     parser.add_argument('-learning_rate',
                         type=float,
-                        default=0.0001,
+                        default=0.001,
                         help='Learning rate')
     parser.add_argument('-weight_decay',
                         type=float,
@@ -237,7 +282,7 @@ def main():
     parser.add_argument('--num_epochs',
                         '-ne',
                         type=int,
-                        default=3,
+                        default=500,
                         help='Max number of epochs')
     parser.add_argument('--max_patience',
                         '-mp',
@@ -254,7 +299,7 @@ def main():
                         help='Optimizer (adam or rmsprop)')
     parser.add_argument('-training_loss',
                         type=str,
-                        default='crossentropy',
+                        default='squared_error',
                         help='Training loss')
     parser.add_argument('-layer_h',
                         type=list,
@@ -262,12 +307,16 @@ def main():
                         help='All h to introduce to the DAE')
     parser.add_argument('-num_filters',
                         type=list,
-                        default=[4096],
+                        default=[2048],
                         help='Nb of filters per encoder layer')
     parser.add_argument('-skip',
                         type=bool,
                         default=True,
                         help='Whether to skip connections in DAE')
+    parser.add_argument('-unpool_type',
+                        type=str,
+                        default='standard',
+                        help='Unpooling type - standard or trackind')
     parser.add_argument('-e', '--exp_name',
                         type=str,
                         default=None,
@@ -278,7 +327,9 @@ def main():
           float(args.weight_decay), int(args.num_epochs),
           int(args.max_patience), float(args.epsilon),
           args.optimizer, args.training_loss, args.layer_h,
-          args.num_filters, args.skip, exp_name=args.exp_name, resume=False)
+          args.num_filters, args.skip, args.unpool_type,
+          exp_name=args.exp_name, resume=False,
+          savepath=SAVEPATH, loadpath=LOADPATH)
 
 
 if __name__ == "__main__":

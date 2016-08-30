@@ -36,13 +36,13 @@ See wiki
 - [x] Code to perform iterative inference
 - [x] Add entropy
 - [x] Add possibility of having an intermediate layer as input (not only x)
-- [ ] Add possibility of having only y
 - [x] Add possibility of having several intermediate layers as input
 - [x] Add skip connections in DAE
-- [ ] Add noise to skip connections
-- [ ] Add WWAE pooling tracking
+- [x] Add WWAE pooling tracking
+- [x] Code CRF
+- [ ] Add possibility of having only y
 - [ ] Add training DAE training from the output of FCN8 instead of GT.
-- [x] Code CRF (M)
+- [ ] Add noise to skip connections
 - [ ] Add BFGS optimization
 
 
@@ -66,11 +66,11 @@ See wiki
 ### CamVid
 | **Ours** | Gl. Accuracy | Jaccard Ind. |
 |-------------------|--------------|--------------|
-| FCN-8 baseline     |88.41|57.41|
+| FCN-8 baseline     |88.06|57.03|
 | FCN-8 + CRF     |||
-| FCN-8 + DAE (input, 256)     |88.49|57.33|
-| FCN-8 + DAE (pool1, 512)     |88.55|57.60|
-| FCN-8 + DAE (pool3, 1024)     |88.81|58.09|
+| FCN-8 + DAE (input, 256)     |||
+| FCN-8 + DAE (pool1, 512)     |||
+| FCN-8 + DAE (pool3, 1024)     |88.48|57.78|
 | FCN-8 + DAE (pool5, 4096)     |||
 | FCN-8 + DAE (pool1, pool3, 1024)     |||
 | FCN-8 + DAE (pool1, pool3, pool5, 4096)     |||
