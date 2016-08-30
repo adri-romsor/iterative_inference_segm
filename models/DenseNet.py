@@ -4,6 +4,7 @@ import theano.tensor as T
 from lasagne.layers import (
     InputLayer, DropoutLayer, BatchNormLayer, ConcatLayer, NonlinearityLayer, Conv2DLayer, Pool2DLayer, Deconv2DLayer,
     Upscale2DLayer, ReshapeLayer, DimshuffleLayer, get_output)
+from layers.mylayers import CroppingLayer
 from lasagne.nonlinearities import softmax, linear
 from lasagne.init import HeUniform
 
@@ -23,6 +24,7 @@ def buildDenseNet(nb_in_channels,
                   dropout_p=0.2,
                   pad_mode='same',
                   pool_mode='average',
+                  apply_dilated_after_block_index = 2,
                   upsampling_mode='upscale',
                   trainable=True):
     """
@@ -65,25 +67,36 @@ def buildDenseNet(nb_in_channels,
     def BN_ReLu_Conv(inputs, growth_rate, filter_size=filter_size):
         """
         Apply successivly BatchNormalization, ReLu nonlinearity, Convolution and Dropout
-        (if dropout_p > 0) on the inputs, to produce growth_rate new feature maps
+        (if dropout_p > 0) on the inputs
+         
+        Returns
+        -------
+        
+        growth_rate features maps
         """
 
-        l = BatchNormLayer(inputs)
-        # TODO : check parameters of BN
+        l = BatchNormLayer(inputs) #TODO : test differents parameters for BN
         l = NonlinearityLayer(l)
-        l = Conv2DLayer(l, growth_rate, filter_size, pad=pad_mode, W=init_scheme, nonlinearity=linear)
+        l = Conv2DLayer(l, growth_rate, filter_size, pad=pad_mode, W=init_scheme,
+                        nonlinearity=linear, flip_filters=False)
         if dropout_p:
             l = DropoutLayer(l, dropout_p)
         return l
 
-    def TransitionLayer(inputs):
+    def TransitionDown(inputs, n_filters, block_index):
         """
         Apply succesivly BatchNormalization, ReLu nonlinearity, Convolution (filter size = 1),
-        Dropout (if dropout_p > 0) and Pooling with a factor 2, except if pool_mode = 'atrous'
+        Dropout (if dropout_p > 0) and Pooling with a factor 2 
+        If pool_mode = 'dilated' and block_index > apply_dilated_after_block_index,
+        apply DilatedConvolution instead of pooling
         """
 
-        # TODO : what is the justification of 1x1 convolution !?
-        l = BN_ReLu_Conv(inputs, growth_rate_down, filter_size=1)
+        l = BatchNormLayer(inputs)
+        l = NonlinearityLayer(l)
+        l = Conv2DLayer(l, n_filters, 1, pad=pad_mode, W=init_scheme,
+                        nonlinearity=linear, flip_filters=False)
+        if dropout_p:
+            l = DropoutLayer(l, dropout_p)
 
         if pool_mode == 'average':
             return Pool2DLayer(l, 2, mode='average_exc_pad')
@@ -91,43 +104,43 @@ def buildDenseNet(nb_in_channels,
         elif pool_mode == 'max':
             return Pool2DLayer(l, 2, mode='max')
 
-        elif pool_mode == 'atrous':
+        elif pool_mode == 'dilated':
             raise ValueError('Not yet implemented')
 
         else:
             raise ValueError('Unknown pool_mode value : ' + pool_mode)
 
-    def UpsamplingLayer(inputs, n_filters=None, filter_size=4):
+    def TransitionUp(layer1, layer2, n_filters, block_index, filter_size=4):
         """
-        Performs upsampling on the input by a factor 2
-        If pool_mode = 'atrous' returns inputs
+        Performs upsampling on layer2 by a factor 2 and concatenate it with the layer1
+        If pool_mode = 'dilated' and  block_index < apply_dilated_after_block_index, upsampling is not performed
 
         Parameters
         ----------
-        inputs
-        n_filters : if upsampling_mode = 'deconvolution', must be equal to the number of features maps to deconvolve
         filter_size : filter_size for the deconvolution
         """
 
-        # TODO dimensions impaires
-
-        if pool_mode == 'atrous':
-            return inputs
+        if pool_mode == 'dilated':
+            #TODO insert block index condition
+            return ConcatLayer([layer1, layer2])
 
         if upsampling_mode == 'upscale':
-            return Upscale2DLayer(inputs, 2)
-            # TODO : ajout convolution
+            return ConcatLayer([layer1, Upscale2DLayer(layer2, 2)])
+            # TODO : to delete
 
         elif upsampling_mode == 'deconvolution':
-            l = Deconv2DLayer(inputs, n_filters, filter_size, stride=2,
-                                 crop='valid', W=init_scheme, nonlinearity=linear)
+            l = Deconv2DLayer(layer2, n_filters, filter_size, stride=2,
+                              crop='valid', W=init_scheme, nonlinearity=linear)
+            l = CroppingLayer(l,)  # TODO finish it
 
 
         elif upsampling_mode == 'bilinear':
             raise ValueError('Not yet implemented')
+            # TODO ask david
 
         elif upsampling_mode == 'WWAE':
             raise ValueError('Not yet implemented')
+            # TODO ask michal
 
         else:
             raise ValueError('Unknown upsampling_mode value : ' + upsampling_mode)
@@ -138,13 +151,13 @@ def buildDenseNet(nb_in_channels,
 
     inputs = InputLayer((None, nb_in_channels, None, None), input_var)
 
-    # We perform a first convolution. All the features maps wil be store in the tensor concatenation
+    # We perform a first convolution. All the features maps will be stored in the tensor concatenation
     concatenation = Conv2DLayer(inputs, n_filters_first_conv, filter_size, pad=pad_mode, W=init_scheme,
-                                nonlinearity=linear)
+                                nonlinearity=linear, flip_filters=False)
 
     n_filters = n_filters_first_conv
     skip_connections = []
-    for i in range(n_blocks):
+    for i in range(n_blocks - 1):
         for j in range(n_conv_per_block_down):
             l = BN_ReLu_Conv(concatenation, growth_rate_down)
             concatenation = ConcatLayer([concatenation, l])
@@ -154,8 +167,7 @@ def buildDenseNet(nb_in_channels,
         # store it as standard skip connections
 
         skip_connections.append(concatenation)
-        concatenation = TransitionLayer(concatenation)
-        n_filters += growth_rate_down
+        concatenation = TransitionDown(concatenation, n_filters, i)
 
     skip_connections = skip_connections[::-1]
 
@@ -171,13 +183,13 @@ def buildDenseNet(nb_in_channels,
         concatenation = ConcatLayer([concatenation, l])
         n_filters += growth_rate_down
 
-    #####################
-    #  UpsamplingLayer path  #
-    #####################
+    #######################
+    #  TransitionUp path  #
+    #######################
 
-    for i in range(n_blocks):
-        layer_to_concat = UpsamplingLayer(ConcatLayer(layers_to_upsample), n_filters)
-        concatenation = ConcatLayer([skip_connections[i], layer_to_concat])
+    for i in range(n_blocks - 1):
+        layers_to_upsample = ConcatLayer(layers_to_upsample)
+        concatenation = TransitionUp(skip_connections[i], layers_to_upsample, n_filters, i)
         layers_to_upsample = []
         for j in range(n_conv_per_block_up):
             l = BN_ReLu_Conv(concatenation, growth_rate_up)
@@ -189,21 +201,23 @@ def buildDenseNet(nb_in_channels,
     #      Softmax      #
     #####################
 
-    l = Conv2DLayer(concatenation, n_classes, 1, nonlinearity=linear, W=init_scheme, pad=pad_mode)
+    l = Conv2DLayer(concatenation, n_classes, 1, nonlinearity=linear, 
+                    W=init_scheme, pad=pad_mode, flip_filters=False)
 
     # We perform the softmax nonlinearity in 2 steps :
     #     1. Reshape from (batch_size, n_classes, n_rows, n_cols) to (batch_size  * n_rows * n_cols, n_classes)
     #     2. Apply softmax
-    # TODO : why don't we reshape again ?
 
     l = DimshuffleLayer(l, (0, 2, 3, 1))
     batch_size, n_rows, n_cols, _ = get_output(l).shape
     l = ReshapeLayer(l, (batch_size * n_rows * n_cols, n_classes))
     l = NonlinearityLayer(l, softmax)
 
-    l = ReshapeLayer(l, (batch_size, n_rows, n_cols, n_classes))
-    output_layer = DimshuffleLayer(l, (0, 3, 1, 2))
-    # output_layer = l
+    output_layer = l
+
+    # Reshape the other way
+    # l = ReshapeLayer(l, (batch_size, n_rows, n_cols, n_classes))
+    # output_layer = DimshuffleLayer(l, (0, 3, 1, 2))
 
     # Do not train
     if not trainable:
@@ -226,7 +240,7 @@ if __name__ == '__main__':
                                  n_classes=21,
                                  n_filters_first_conv=12,
                                  filter_size=3,
-                                 n_blocks=2,
+                                 n_blocks=5,
                                  growth_rate_down=12,
                                  growth_rate_up=12,
                                  n_conv_per_block_down=3,
@@ -234,6 +248,7 @@ if __name__ == '__main__':
                                  dropout_p=0.2,
                                  pad_mode='same',
                                  pool_mode='average',
+                                 apply_dilated_after_block_index = 0,
                                  upsampling_mode='upscale',
                                  trainable=True)
 
