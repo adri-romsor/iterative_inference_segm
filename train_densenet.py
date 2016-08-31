@@ -181,7 +181,7 @@ def train(cf):
                              time.time() - start_time)
         print out_str
 
-        with open(savepath + "output.log", "a") as f:
+        with open(os.path.join(savepath, "output.log", "a")) as f:
             f.write(out_str + "\n")
 
         # Early stopping and saving stuff
@@ -279,8 +279,8 @@ if __name__ == '__main__':
     cf.pool_mode = 'average'
     cf.dilated_convolution_index = None
     cf.upsampling_mode = 'deconvolution'
-    cf.deconvolution_mode = 'keep'
-    cf.upsampling_block_mode = 'classic'
+    cf.deconvolution_mode = 'reduce'
+    cf.upsampling_block_mode = 'dense'
     cf.trainable = True
 
     train(cf)

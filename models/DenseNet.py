@@ -233,6 +233,9 @@ def buildDenseNet(nb_in_channels,
 
     if upsampling_block_mode == 'classic':
         l = ConcatLayer(layers_to_upsample)
+        n_filters -= growth_rate_down * n_conv_per_block_down
+        l = BN_ReLu_Conv(l, n_filters)
+
         for i in range(n_blocks):
             l = TransitionUp(skip_connections[i], l, n_filters, i)
             for j in range(n_conv_per_block_up):
@@ -354,8 +357,8 @@ if __name__ == '__main__':
                                  pool_mode='average',
                                  dilated_convolution_index=None,
                                  upsampling_mode='deconvolution',
-                                 deconvolution_mode='reduce',
-                                 upsampling_block_mode='dense',
+                                 deconvolution_mode='keep',
+                                 upsampling_block_mode='classic',
                                  trainable=True)
 
     output_tensor = get_output(output_layer)

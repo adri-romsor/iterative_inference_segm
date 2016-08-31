@@ -2,14 +2,13 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="e599af7a-ee5f-4e8e-8bcc-e98e69e73719" name="Default" comment="">
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/train_densenet.py" />
       <change type="NEW" beforePath="" afterPath="$USER_HOME$/transcriptome/data/Exploring Data.ipynb" />
       <change type="NEW" beforePath="" afterPath="$USER_HOME$/transcriptome/data/__init__.py" />
       <change type="DELETED" beforePath="$USER_HOME$/transcriptome/data/037_screen-activity_profile.txt.gz" afterPath="" />
       <change type="DELETED" beforePath="$USER_HOME$/transcriptome/data/037_screen-gene_expression.txt.gz" afterPath="" />
       <change type="DELETED" beforePath="$USER_HOME$/transcriptome/data/037_screen-structure_fingerprint.txt.gz" afterPath="" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/.idea/workspace.xml" afterPath="$PROJECT_DIR$/.idea/workspace.xml" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/models/DenseNet.py" afterPath="$PROJECT_DIR$/models/DenseNet.py" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/train_densenet.py" afterPath="$PROJECT_DIR$/train_densenet.py" />
       <change type="MODIFICATION" beforePath="$USER_HOME$/transcriptome/.idea/workspace.xml" afterPath="$USER_HOME$/transcriptome/.idea/workspace.xml" />
       <change type="MODIFICATION" beforePath="$USER_HOME$/transcriptome/data/load_data.py" afterPath="$USER_HOME$/transcriptome/data/load_data.py" />
     </list>
@@ -34,11 +33,11 @@
     <splitter split-orientation="horizontal" split-proportion="0.5292712">
       <split-first>
         <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
-          <file leaf-file-name="train_densenet.py" pinned="false" current-in-tab="false">
+          <file leaf-file-name="train_densenet.py" pinned="false" current-in-tab="true">
             <entry file="file://$PROJECT_DIR$/train_densenet.py">
               <provider selected="true" editor-type-id="text-editor">
-                <state relative-caret-position="261">
-                  <caret line="266" column="0" selection-start-line="266" selection-start-column="0" selection-end-line="266" selection-end-column="0" />
+                <state relative-caret-position="486">
+                  <caret line="281" column="35" selection-start-line="281" selection-start-column="35" selection-end-line="281" selection-end-column="35" />
                   <folding>
                     <element signature="e#0#9#0" expanded="true" />
                   </folding>
@@ -46,7 +45,7 @@
               </provider>
             </entry>
           </file>
-          <file leaf-file-name="data_loader.py" pinned="false" current-in-tab="true">
+          <file leaf-file-name="data_loader.py" pinned="false" current-in-tab="false">
             <entry file="file://$PROJECT_DIR$/data_loader.py">
               <provider selected="true" editor-type-id="text-editor">
                 <state relative-caret-position="75">
@@ -81,8 +80,8 @@
           <file leaf-file-name="DenseNet.py" pinned="false" current-in-tab="false">
             <entry file="file://$PROJECT_DIR$/models/DenseNet.py">
               <provider selected="true" editor-type-id="text-editor">
-                <state relative-caret-position="172">
-                  <caret line="343" column="46" selection-start-line="343" selection-start-column="46" selection-end-line="343" selection-end-column="46" />
+                <state relative-caret-position="426">
+                  <caret line="359" column="56" selection-start-line="359" selection-start-column="56" selection-end-line="359" selection-end-column="56" />
                   <folding>
                     <element signature="e#0#18#0" expanded="true" />
                   </folding>
@@ -121,9 +120,9 @@
         <option value="$PROJECT_DIR$/test.py" />
         <option value="$PROJECT_DIR$/layers/mylayers.py" />
         <option value="$PROJECT_DIR$/train_fcn8.py" />
+        <option value="$PROJECT_DIR$/data_loader.py" />
         <option value="$PROJECT_DIR$/models/DenseNet.py" />
         <option value="$PROJECT_DIR$/train_densenet.py" />
-        <option value="$PROJECT_DIR$/data_loader.py" />
       </list>
     </option>
   </component>
@@ -736,31 +735,11 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/models/DenseNet.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="172">
-          <caret line="343" column="46" selection-start-line="343" selection-start-column="46" selection-end-line="343" selection-end-column="46" />
-          <folding>
-            <element signature="e#0#18#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
     <entry file="file:///Tmp/lisa/os_v5/anaconda/lib/python2.7/site-packages/numpy/lib/arraysetops.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="217">
           <caret line="95" column="11" selection-start-line="95" selection-start-column="11" selection-end-line="95" selection-end-column="11" />
           <folding />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/train_densenet.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="261">
-          <caret line="266" column="0" selection-start-line="266" selection-start-column="0" selection-end-line="266" selection-end-column="0" />
-          <folding>
-            <element signature="e#0#9#0" expanded="true" />
-          </folding>
         </state>
       </provider>
     </entry>
@@ -770,6 +749,26 @@
           <caret line="5" column="39" selection-start-line="5" selection-start-column="39" selection-end-line="5" selection-end-column="39" />
           <folding>
             <element signature="e#0#70#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/models/DenseNet.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="426">
+          <caret line="359" column="56" selection-start-line="359" selection-start-column="56" selection-end-line="359" selection-end-column="56" />
+          <folding>
+            <element signature="e#0#18#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/train_densenet.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="486">
+          <caret line="281" column="35" selection-start-line="281" selection-start-column="35" selection-end-line="281" selection-end-column="35" />
+          <folding>
+            <element signature="e#0#9#0" expanded="true" />
           </folding>
         </state>
       </provider>
