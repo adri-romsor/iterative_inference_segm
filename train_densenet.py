@@ -154,9 +154,10 @@ def train(cf):
             out_str = "cost %f" % (cost_train)
             cost_train_tot += cost_train
 
+            # Progression bar
             batch_time.append(time.time() - start_time_batch)
-            estimated_time = (100 - i + 1) * np.mean(batch_time)
-            progress = int(100 * (i / 100.))
+            estimated_time = (n_batches_train - i + 1) * np.mean(batch_time)
+            progress = int(100. * (i / float(n_batches_train)))
             sys.stdout.write(
                 '\r [' + '#' * progress + '-' * (100 - progress) + '] Time left  {} '.format(estimated_time))
 
@@ -284,15 +285,15 @@ if __name__ == '__main__':
     cf.n_blocks = 5
     cf.growth_rate_down = 12
     cf.growth_rate_up = 12
-    cf.n_conv_per_block = [5, 5, 5, 5, 5, 5, 3, 3, 3, 3, 2]
-    # cf.n_conv_per_block = 5
+    # cf.n_conv_per_block = [4, 4, 4, 4, 4, 4, 2, 2, 2, 2, 2]
+    cf.n_conv_per_block = 5
     cf.dropout_p = 0.2
     cf.pad_mode = 'same'
     cf.pool_mode = 'average'
     cf.dilated_convolution_index = None
     cf.upsampling_mode = 'deconvolution'
-    cf.deconvolution_mode = 'keep'
-    cf.upsampling_block_mode = 'classic'
+    cf.deconvolution_mode = 'reduce'
+    cf.upsampling_block_mode = 'dense'
     cf.trainable = True
 
     train(cf)
