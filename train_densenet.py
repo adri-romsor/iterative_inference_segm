@@ -3,6 +3,7 @@ import argparse
 import time
 from getpass import getuser
 from distutils.dir_util import copy_tree
+import sys
 
 import numpy as np
 import theano
@@ -42,14 +43,14 @@ def train(cf):
 
     # Save and print  configuration
     print('Saving directory : ' + savepath)
-    print('-'*75)
+    print('-' * 75)
     print('Config\n')
     with open(os.path.join(savepath, "config.txt"), "w") as f:
         for key, value in cf.__dict__.items():
             if not key.startswith('__') & key.endswith('__'):
                 f.write('{} = {}\n'.format(key, value))
                 print('{} = {}'.format(key, value))
-    print('-'*75)
+    print('-' * 75)
 
     # Define symbolic variables
     input_var = T.tensor4('input_var')
@@ -73,8 +74,8 @@ def train(cf):
     print('Building model and training functions')
     convmodel = buildDenseNet(
         cf.nb_in_channels,
-        None, # n_rows
-        None, # n_cols
+        None,  # n_rows
+        None,  # n_cols
         input_var,
         n_classes,
         cf.n_filters_first_conv,
@@ -108,7 +109,7 @@ def train(cf):
     start_time_compilation = time.time()
     train_fn = theano.function([input_var, target_var], loss, updates=updates)
 
-    print('-'*75)
+    print('-' * 75)
     print('Compilation')
     print('Train compilation took {:.3f} seconds'.format(time.time() - start_time_compilation))
 
@@ -140,9 +141,11 @@ def train(cf):
         cost_train_tot = 0
 
         # Train
-        
+
+        batch_time = []
         for i in range(n_batches_train):
             # Get minibatch
+            start_time_batch = time.time()
             X_train_batch, L_train_batch = train_iter.next()
             L_train_batch = np.reshape(L_train_batch, np.prod(L_train_batch.shape))
 
@@ -150,6 +153,12 @@ def train(cf):
             cost_train = train_fn(X_train_batch, L_train_batch)
             out_str = "cost %f" % (cost_train)
             cost_train_tot += cost_train
+
+            batch_time.append(time.time() - start_time_batch)
+            estimated_time = (100 - i + 1) * np.mean(batch_time)
+            progress = int(100 * (i / 100.))
+            sys.stdout.write(
+                '\r [' + '#' * progress + '-' * (100 - progress) + '] Time left  {} '.format(estimated_time))
 
         err_train += [cost_train_tot / n_batches_train]
 
@@ -266,7 +275,7 @@ if __name__ == '__main__':
 
     cf.nb_in_channels = 3
     cf.train_crop_size = (224, 224)
-    cf.batch_size = [10, 10, 10] # train / val / test
+    cf.batch_size = [10, 10, 10]  # train / val / test
 
     # Architecture
 

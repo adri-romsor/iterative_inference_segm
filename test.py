@@ -1,11 +1,18 @@
-# def BN_ReLu_Conv(net, inputs, growth_rate, idx_block, idx_conv):
-#
-#     id = dict((layer_name, '{}_{}_{}'.format(layer_name, idx_block, idx_conv))
-#                  for layer_name in ['bn', 'relu', 'conv', 'drop'])
-#
-#     net[id['bn']] = BatchNormLayer(inputs)
-#     net[id['relu']] = NonlinearityLayer(net[id['bn']])
-#     net[id['conv']] = Conv2DLayer(net[id['relu']], growth_rate, filter_size, pad=pad,
-#                                   W=init_scheme, nonlinearity=linear)
-#     if dropout_p:
-#         net[id['drop']] = DropoutLayer(net[id['conv']], dropout_p)
+import time
+import sys
+import numpy as np
+
+batch_time = []
+for j in range(5):
+
+    for i in range(100):
+        # Get minibatch
+        start_time_batch = time.time()
+
+        time.sleep(0.05)
+
+        batch_time.append(time.time() - start_time_batch)
+        estimated_time = (100-i+1)*np.mean(batch_time)
+        progress = int(100*(i/100.))
+        sys.stdout.write('\r [' + '#'*progress + '-'*(100 - progress) + '] Time left  {} '.format(estimated_time))
+    print('\r coucou')
