@@ -20,8 +20,7 @@ def buildDenseNet(nb_in_channels,
                   n_blocks=3,
                   growth_rate_down=12,
                   growth_rate_up=12,
-                  n_conv_per_block_down=3,
-                  n_conv_per_block_up=3,
+                  n_conv_per_block=3,
                   dropout_p=0.2,
                   pad_mode='same',
                   pool_mode='average',
@@ -67,11 +66,10 @@ def buildDenseNet(nb_in_channels,
     n_rows and n_cols = optional, number of rows and columns of the input image
     n_filters_first_conv : number of filters to use for the first convolution of the network
     filter_size : filter size of the convolutions in the Dense block
-    n_blocks : number of blocks (equivalently number of pooling we apply)
+    n_blocks : number of blocks in the downsampling path (= number of pooling we apply : if =5, to pool5)
     growth_rate_down : number of new feature maps in a Dense block during Downsampling
     growth_rate_up : number of new feature maps in a Dense block during Upsampling
-    n_conv_per_block_down : number of convolution in in a Dense block during Downsampling
-    n_conv_per_block_up : number of convolution in in a Dense block during Upsampling
+    n_conv_per_block_down : number of convolution in each block. Can be a list of size (2 * n_blocks + 1)
     dropout_p : dropout rate
     pad_mode : implemented : 'same'
     pool_mode : 'average' or 'max'
@@ -94,6 +92,11 @@ def buildDenseNet(nb_in_channels,
         dilated_convolution_index = n_blocks
     else:
         assert (0 < dilated_convolution_index < n_blocks)
+
+    if isinstance(n_conv_per_block, list):
+        assert (len(n_conv_per_block) == 2 * n_blocks + 1)
+    else:
+        n_conv_per_block = [n_conv_per_block] * (2 * n_blocks + 1)
 
     #####################
     #    Layer utils    #
@@ -202,7 +205,7 @@ def buildDenseNet(nb_in_channels,
     n_filters = n_filters_first_conv
     skip_connections = []
     for i in range(n_blocks):
-        for j in range(n_conv_per_block_down):
+        for j in range(n_conv_per_block[i]):
             l = BN_ReLu_Conv(stack, growth_rate_down)
             stack = ConcatLayer([stack, l])
             n_filters += growth_rate_down
@@ -221,7 +224,7 @@ def buildDenseNet(nb_in_channels,
 
     # We store layers we'll have to upsample in a list
     layers_to_upsample = []
-    for j in range(n_conv_per_block_down):
+    for j in range(n_conv_per_block[n_blocks]):
         l = BN_ReLu_Conv(stack, growth_rate_down)
         layers_to_upsample.append(l)
         stack = ConcatLayer([stack, l])
@@ -233,12 +236,12 @@ def buildDenseNet(nb_in_channels,
 
     if upsampling_block_mode == 'classic':
         l = ConcatLayer(layers_to_upsample)
-        n_filters -= growth_rate_down * n_conv_per_block_down
+        n_filters -= growth_rate_down * n_conv_per_block[n_blocks]
         l = BN_ReLu_Conv(l, n_filters)
 
         for i in range(n_blocks):
             l = TransitionUp(skip_connections[i], l, n_filters, i)
-            for j in range(n_conv_per_block_up):
+            for j in range(n_conv_per_block[n_blocks + i + 1]):
                 n_filters -= growth_rate_up
                 l = BN_ReLu_Conv(l, n_filters)
 
@@ -247,7 +250,7 @@ def buildDenseNet(nb_in_channels,
             layers_to_upsample = ConcatLayer(layers_to_upsample)
             stack = TransitionUp(skip_connections[i], layers_to_upsample, n_filters, n_blocks - i - 1)
             layers_to_upsample = []
-            for j in range(n_conv_per_block_up):
+            for j in range(n_conv_per_block[n_blocks + i + 1]):
                 l = BN_ReLu_Conv(stack, growth_rate_up)
                 n_filters += growth_rate_up
                 layers_to_upsample.append(l)
@@ -302,8 +305,7 @@ def summary(cf):
         cf.n_blocks,
         cf.growth_rate_down,
         cf.growth_rate_up,
-        cf.n_conv_per_block_down,
-        cf.n_conv_per_block_up,
+        cf.n_conv_per_block,
         cf.dropout_p,
         cf.pad_mode,
         cf.pool_mode,
@@ -350,8 +352,7 @@ if __name__ == '__main__':
                                  n_blocks=3,
                                  growth_rate_down=12,
                                  growth_rate_up=12,
-                                 n_conv_per_block_down=3,
-                                 n_conv_per_block_up=3,
+                                 n_conv_per_block=3,
                                  dropout_p=0.2,
                                  pad_mode='same',
                                  pool_mode='average',

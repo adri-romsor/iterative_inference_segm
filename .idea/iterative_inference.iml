@@ -6,6 +6,7 @@
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="module" module-name="ultrasound_nerve_segmentation" />
     <orderEntry type="module" module-name="transcriptome" />
+    <orderEntry type="module" module-name="raccoon" />
   </component>
   <component name="PyDocumentationSettings">
     <option name="myDocStringFormat" value="NumPy" />

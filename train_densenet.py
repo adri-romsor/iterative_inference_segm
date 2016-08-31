@@ -57,7 +57,10 @@ def train(cf):
 
     # Build dataset iterator
     print('Loading data')
-    train_iter, val_iter, test_iter = load_data(cf.dataset, train_crop_size=cf.train_crop_size, one_hot=False)
+    train_iter, val_iter, test_iter = load_data(cf.dataset,
+                                                train_crop_size=cf.train_crop_size,
+                                                batch_size=cf.batch_size,
+                                                one_hot=False)
 
     n_batches_train = train_iter.get_n_batches()
     n_batches_val = val_iter.get_n_batches()
@@ -79,8 +82,7 @@ def train(cf):
         cf.n_blocks,
         cf.growth_rate_down,
         cf.growth_rate_up,
-        cf.n_conv_per_block_down,
-        cf.n_conv_per_block_up,
+        cf.n_conv_per_block,
         cf.dropout_p,
         cf.pad_mode,
         cf.pool_mode,
@@ -138,6 +140,7 @@ def train(cf):
         cost_train_tot = 0
 
         # Train
+        
         for i in range(n_batches_train):
             # Get minibatch
             X_train_batch, L_train_batch = train_iter.next()
@@ -162,7 +165,6 @@ def train(cf):
 
             # Validation step
             cost_val, acc_val, jacc_val = val_fn(X_val_batch, L_val_batch)
-
             acc_val_tot += acc_val
             cost_val_tot += cost_val
             jacc_val_tot += jacc_val
@@ -262,8 +264,9 @@ if __name__ == '__main__':
     cf.loss_function = crossentropy
     cf.optimizer = lasagne.updates.rmsprop
 
-    cf.nb_in_channels = 3  # TODO : souldn't be here!
+    cf.nb_in_channels = 3
     cf.train_crop_size = (224, 224)
+    cf.batch_size = [10, 10, 10] # train / val / test
 
     # Architecture
 
@@ -272,15 +275,15 @@ if __name__ == '__main__':
     cf.n_blocks = 5
     cf.growth_rate_down = 12
     cf.growth_rate_up = 12
-    cf.n_conv_per_block_down = 5
-    cf.n_conv_per_block_up = 5
+    cf.n_conv_per_block = [5, 5, 5, 5, 5, 5, 3, 3, 3, 3, 2]
+    # cf.n_conv_per_block = 5
     cf.dropout_p = 0.2
     cf.pad_mode = 'same'
     cf.pool_mode = 'average'
     cf.dilated_convolution_index = None
     cf.upsampling_mode = 'deconvolution'
-    cf.deconvolution_mode = 'reduce'
-    cf.upsampling_block_mode = 'dense'
+    cf.deconvolution_mode = 'keep'
+    cf.upsampling_block_mode = 'classic'
     cf.trainable = True
 
     train(cf)
