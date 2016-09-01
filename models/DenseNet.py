@@ -18,16 +18,16 @@ def buildDenseNet(nb_in_channels,
                   n_filters_first_conv=12,
                   filter_size=3,
                   n_blocks=3,
-                  growth_rate_down=12,
-                  growth_rate_up=12,
+                  growth_rate=12,
                   n_conv_per_block=3,
                   dropout_p=0.2,
                   pad_mode='same',
                   pool_mode='average',
                   dilated_convolution_index=None,
                   upsampling_mode='deconvolution',
-                  deconvolution_mode='keep',
-                  upsampling_block_mode='classic',
+                  n_filters_deconvolution='keep',
+                  filter_size_deconvolution=4,
+                  upsampling_block_mode=('dense', 12),
                   trainable=True):
     """
     We adapt DenseNet for segmentation
@@ -50,13 +50,10 @@ def buildDenseNet(nb_in_channels,
     TransitionDown first performs a 1x1 convolution which preserves the number of features maps in the stack and then
     average pooling
 
-    TransitionUp : will perform an upsampling on the stack. Depending the upsampling_mode, the number of feature maps
-    is the stack be modified
+    TransitionUp : performs an upsampling and skip connections as in U-Net
 
-    Classic block : during upsampling, we don't stack the features maps anymore, but perform usual convolution,
-    decreasing the number of features maps by growth_rate_up at each convolution. It's more U-Net like as it permits
-    symmetry
-
+    Classic block : during upsampling, we don't stack the features maps anymore, but perform usual convolution, It's
+    more U-Net like
 
     Parameters
     ----------
@@ -67,8 +64,7 @@ def buildDenseNet(nb_in_channels,
     n_filters_first_conv : number of filters to use for the first convolution of the network
     filter_size : filter size of the convolutions in the Dense block
     n_blocks : number of blocks in the downsampling path (= number of pooling we apply : if =5, to pool5)
-    growth_rate_down : number of new feature maps in a Dense block during Downsampling
-    growth_rate_up : number of new feature maps in a Dense block during Upsampling
+    growth_rate : number of new feature maps in a Dense block during Downsampling
     n_conv_per_block_down : number of convolution in each block. Can be a list of size (2 * n_blocks + 1)
     dropout_p : dropout rate
     pad_mode : implemented : 'same'
@@ -79,14 +75,22 @@ def buildDenseNet(nb_in_channels,
         if 'deconvolution' performs deconvolution to upsample. See deconvolution_mode
         if 'upscale' ... you shouldn't use that
         To implement : bilinear upsampling and WWAE
-    deconvolution_mode :
-        if 'keep', the deconvolution will preserve the number of feature maps
-        if 'reduce', the deconvolution will output growth_rate_up feature maps
-    upsampling_block_mode :
+    n_filters_deconvolution :
+        if 'keep', the deconvolution preserves the number of feature maps
+        if int, the deconvolution outputs n_features maps. int should > n_classes
+        if list, the deconvolution outputs list[i] features maps for i-th block. len(list) must be = n_blocks
+    upsampling_block_mode : tuple(str, int or list)
+        if str = 'dense' will use Dense block in the upsampling path
+            if int : growth_rate
         if 'classic' will use Classic block in during the upsampling
-        if 'dense' will use Dense block
+            if int : number of filters for each convolution
+            if list : n_filters for each block. len(list) must be equal to n_blocks. Ex : U-Net like : [256, 128, 64]
     trainable : freeze parameters if False
     """
+
+    ##########################
+    #    Check Parameters    #
+    ##########################
 
     if dilated_convolution_index is None:
         dilated_convolution_index = n_blocks
@@ -97,6 +101,21 @@ def buildDenseNet(nb_in_channels,
         assert (len(n_conv_per_block) == 2 * n_blocks + 1)
     else:
         n_conv_per_block = [n_conv_per_block] * (2 * n_blocks + 1)
+
+    if isinstance(n_filters_deconvolution, list):
+        assert len(n_filters_deconvolution) == n_blocks
+    elif isinstance(n_filters_deconvolution, int):
+        n_filters_deconvolution = [n_filters_deconvolution] * n_blocks
+
+    assert isinstance(upsampling_block_mode, tuple)
+    if upsampling_block_mode[0] == 'dense':
+        growth_rate_up = upsampling_block_mode[1]
+    elif upsampling_block_mode[0] == 'classic':
+        if isinstance(upsampling_block_mode[1], list):
+            assert len(upsampling_block_mode[1]) == n_blocks
+            n_filters_up = upsampling_block_mode[1]
+        elif isinstance(upsampling_block_mode[1], int):
+            n_filters_up = [upsampling_block_mode[1]] * n_blocks
 
     #####################
     #    Layer utils    #
@@ -131,12 +150,7 @@ def buildDenseNet(nb_in_channels,
         apply DilatedConvolution instead of pooling
         """
 
-        l = BatchNormLayer(input_stack)
-        l = NonlinearityLayer(l)
-        l = Conv2DLayer(l, n_filters, 1, pad=pad_mode, W=init_scheme,
-                        nonlinearity=linear, flip_filters=False)
-        if dropout_p:
-            l = DropoutLayer(l, dropout_p)
+        l = BN_ReLu_Conv(input_stack, n_filters, filter_size=1)
 
         if block_index > dilated_convolution_index - 1:
             raise ValueError('Dilated convolutions not yet implemented')
@@ -147,38 +161,31 @@ def buildDenseNet(nb_in_channels,
         elif pool_mode == 'max':
             return Pool2DLayer(l, 2, mode='max')
 
-        else:
-            raise ValueError('Unknown pool_mode value : ' + pool_mode)
-
-    def TransitionUp(layer_c, layer_u, n_filters, block_index, filter_size=4):
+    def TransitionUp(skip_connection, layer_to_upsample, n_filters_keep, block_index):
         """
-        Performs upsampling on layer_u by a factor 2 and concatenate it with the layer_c
-        If pool_mode = 'dilated' and  block_index < apply_dilated_after_block_index, upsampling is not performed
-
-        Parameters
-        ----------
-        filter_size : filter_size for the deconvolution
+        Performs upsampling on layer_to_upsample by a factor 2 and concatenate it with the skip_connection
+        No upsampling if dilated convolution
         """
 
-        if block_index > dilated_convolution_index - 1:
-            print('coucou')
-            return ConcatLayer([layer_c, layer_u])
+        if n_blocks - block_index - 1 > dilated_convolution_index - 1:
+            # Dilated convolution
+            return ConcatLayer([skip_connection, layer_to_upsample])
 
         if upsampling_mode == 'upscale':
-            return ConcatLayer([layer_c, Upscale2DLayer(layer_u, 2)], cropping=[None, None, 'center', 'center'])
-            # TODO : delete it
+            return ConcatLayer([skip_connection, Upscale2DLayer(layer_to_upsample, 2)],
+                               cropping=[None, None, 'center', 'center'])
 
         elif upsampling_mode == 'deconvolution':
-            if deconvolution_mode == 'keep':
-                n_filters_out = n_filters
-            elif deconvolution_mode == 'reduce':
-                n_filters_out = growth_rate_up
+            if n_filters_deconvolution == 'keep':
+                n_filters_out = n_filters_keep
+            elif isinstance(n_filters_deconvolution, list):
+                n_filters_out = n_filters_deconvolution[block_index]
             else:
-                raise ValueError('Unknown deconvolution_mode value : ' + deconvolution_mode)
+                raise ValueError('Unknown n_filters_deconvolution value : ' + n_filters_deconvolution)
 
-            l = Deconv2DLayer(layer_u, n_filters_out, filter_size, stride=2,
+            l = Deconv2DLayer(layer_to_upsample, n_filters_out, filter_size_deconvolution, stride=2,
                               crop='valid', W=init_scheme, nonlinearity=linear)
-            l = ConcatLayer([l, layer_c], cropping=[None, None, 'center', 'center'])
+            l = ConcatLayer([l, skip_connection], cropping=[None, None, 'center', 'center'])
             return l
 
         elif upsampling_mode == 'bilinear':
@@ -206,9 +213,9 @@ def buildDenseNet(nb_in_channels,
     skip_connections = []
     for i in range(n_blocks):
         for j in range(n_conv_per_block[i]):
-            l = BN_ReLu_Conv(stack, growth_rate_down)
+            l = BN_ReLu_Conv(stack, growth_rate)
             stack = ConcatLayer([stack, l])
-            n_filters += growth_rate_down
+            n_filters += growth_rate
 
         # As stack will be downsample, we don't upsample it again in the upsampling path but instead
         # store it as standard skip connections
@@ -223,42 +230,43 @@ def buildDenseNet(nb_in_channels,
     #####################
 
     # We store layers we'll have to upsample in a list
-    layers_to_upsample = []
+    layer_to_upsample = []
     for j in range(n_conv_per_block[n_blocks]):
-        l = BN_ReLu_Conv(stack, growth_rate_down)
-        layers_to_upsample.append(l)
+        l = BN_ReLu_Conv(stack, growth_rate)
+        layer_to_upsample.append(l)
         stack = ConcatLayer([stack, l])
-        n_filters += growth_rate_down
+        n_filters += growth_rate
 
     #######################
     #   Upsampling path   #
     #######################
 
-    if upsampling_block_mode == 'classic':
-        l = ConcatLayer(layers_to_upsample)
-        n_filters -= growth_rate_down * n_conv_per_block[n_blocks]
-        l = BN_ReLu_Conv(l, n_filters)
-
+    if upsampling_block_mode[0] == 'classic':
+        l = ConcatLayer(layer_to_upsample)
+        n_filters = growth_rate * n_conv_per_block[n_blocks]
         for i in range(n_blocks):
-            l = TransitionUp(skip_connections[i], l, n_filters, i)
+            n_filters_keep = n_filters_up[i] if i > 0 else n_filters
+            l = TransitionUp(skip_connections[i], l, n_filters_keep, i)
             for j in range(n_conv_per_block[n_blocks + i + 1]):
-                n_filters -= growth_rate_up
-                l = BN_ReLu_Conv(l, n_filters)
+                l = BN_ReLu_Conv(l, n_filters_up[i])
 
-    elif upsampling_block_mode == 'dense':
+    elif upsampling_block_mode[0] == 'dense':
         for i in range(n_blocks):
-            layers_to_upsample = ConcatLayer(layers_to_upsample)
-            stack = TransitionUp(skip_connections[i], layers_to_upsample, n_filters, n_blocks - i - 1)
-            layers_to_upsample = []
+            layer_to_upsample = ConcatLayer(layer_to_upsample)
+            n_filters_keep = growth_rate * n_conv_per_block[n_blocks] if i == 0 \
+                else growth_rate_up * n_conv_per_block[n_blocks + i]
+
+            stack = TransitionUp(skip_connections[i], layer_to_upsample, n_filters_keep, i)
+            layer_to_upsample = []
             for j in range(n_conv_per_block[n_blocks + i + 1]):
                 l = BN_ReLu_Conv(stack, growth_rate_up)
                 n_filters += growth_rate_up
-                layers_to_upsample.append(l)
+                layer_to_upsample.append(l)
                 stack = ConcatLayer([stack, l])
         l = stack
 
     else:
-        raise ValueError('Unknown upsampling_block_mode value : ' + upsampling_block_mode)
+        raise ValueError('Unknown upsampling_block_mode value : ' + upsampling_block_mode[0])
 
     #####################
     #      Softmax      #
@@ -293,6 +301,7 @@ def summary(cf):
     """
     Print a summary of the network associated to the config cf
     """
+    # TODO : make this work with output_layer and image size as an input !
 
     output_layer = buildDenseNet(
         cf.nb_in_channels,
@@ -303,15 +312,15 @@ def summary(cf):
         cf.n_filters_first_conv,
         cf.filter_size,
         cf.n_blocks,
-        cf.growth_rate_down,
-        cf.growth_rate_up,
+        cf.growth_rate,
         cf.n_conv_per_block,
         cf.dropout_p,
         cf.pad_mode,
         cf.pool_mode,
         cf.dilated_convolution_index,
         cf.upsampling_mode,
-        cf.deconvolution_mode,
+        cf.n_filters_deconvolution,
+        cf.filter_size_deconvolution,
         cf.upsampling_block_mode,
         cf.trainable)
 
@@ -350,15 +359,14 @@ if __name__ == '__main__':
                                  n_filters_first_conv=12,
                                  filter_size=3,
                                  n_blocks=3,
-                                 growth_rate_down=12,
-                                 growth_rate_up=12,
+                                 growth_rate=12,
                                  n_conv_per_block=3,
                                  dropout_p=0.2,
                                  pad_mode='same',
                                  pool_mode='average',
                                  dilated_convolution_index=None,
                                  upsampling_mode='deconvolution',
-                                 deconvolution_mode='keep',
+                                 n_filters_deconvolution='keep',
                                  upsampling_block_mode='classic',
                                  trainable=True)
 

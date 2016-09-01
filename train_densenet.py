@@ -4,11 +4,13 @@ import time
 from getpass import getuser
 from distutils.dir_util import copy_tree
 import sys
+import shutil
 
 import numpy as np
 import theano
 import theano.tensor as T
 from theano import config
+from theano.tensor.shared_randomstreams import RandomStreams
 import lasagne
 from lasagne.regularization import regularize_network_params
 
@@ -18,38 +20,34 @@ from metrics import jaccard, accuracy, crossentropy
 
 _FLOATX = config.floatX
 if getuser() == 'romerosa':
-    LOCAL_SAVEPATH = '/Tmp/romerosa/itinf/models/'
-    FINAL_SAVEPATH = '/data/lisatmp4/romerosa/itinf/models/'
+    savepath = '/Tmp/romerosa/itinf/models/'
+    final_savepath = '/data/lisatmp4/romerosa/itinf/models/'
 elif getuser() == 'jegousim':
-    LOCAL_SAVEPATH = '/data/lisatmp4/jegousim/iterative_inference/'
-    FINAL_SAVEPATH = '/data/lisatmp4/jegousim/iterative_inference/'
+    # savepath = '/Tmp/jegousim/iterative_inference/'
+    savepath = '/data/lisatmp4/jegousim/iterative_inference/'
+    final_savepath = '/data/lisatmp4/jegousim/iterative_inference/'
 elif getuser() == 'michal':
-    LOCAL_SAVEPATH = '/home/michal/Experiments/iter_inf/'
+    savepath = '/home/michal/Experiments/iter_inf/'
 else:
     raise ValueError('Unknown user : {}'.format(getuser()))
 
 
 def train(cf):
-    # Prepare save directories
-    savepath = os.path.join(LOCAL_SAVEPATH, cf.dataset, cf.exp_name)  # local path
-    final_savepath = os.path.join(LOCAL_SAVEPATH, cf.dataset, cf.exp_name)  # remote path
-
-    for path in set([savepath, final_savepath]):  # in case savepath == final_savepath
-        if not os.path.exists(path):
-            os.makedirs(path)
-        else:
-            print('\033[93m The following folder already exists {}. '
-                  'It will be overwritten in a few seconds...\033[0m'.format(path))
-
-    # Save and print  configuration
-    print('Saving directory : ' + savepath)
+    # Save and print configuration
     print('-' * 75)
     print('Config\n')
+    print('Local saving directory : ' + savepath)
+    print('Final saving directory : ' + final_savepath)
     with open(os.path.join(savepath, "config.txt"), "w") as f:
         for key, value in cf.__dict__.items():
             if not key.startswith('__') & key.endswith('__'):
                 f.write('{} = {}\n'.format(key, value))
                 print('{} = {}'.format(key, value))
+
+    # We also copy the model and the training scipt to reproduce exactly the experiments
+    shutil.copy('train_densenet.py', os.path.join(savepath, 'train_densenet.py'))
+    shutil.copy('models/DenseNet.py', os.path.join(savepath, 'DenseNet.py'))
+
     print('-' * 75)
 
     # Define symbolic variables
@@ -81,21 +79,22 @@ def train(cf):
         cf.n_filters_first_conv,
         cf.filter_size,
         cf.n_blocks,
-        cf.growth_rate_down,
-        cf.growth_rate_up,
+        cf.growth_rate,
         cf.n_conv_per_block,
         cf.dropout_p,
         cf.pad_mode,
         cf.pool_mode,
         cf.dilated_convolution_index,
         cf.upsampling_mode,
-        cf.deconvolution_mode,
+        cf.n_filters_deconvolution,
+        cf.filter_size_deconvolution,
         cf.upsampling_block_mode,
         cf.trainable)
 
     summary(cf)
 
     # Compile training functions
+    print('Compilation')
 
     prediction = lasagne.layers.get_output(convmodel)
     loss = cf.loss_function(prediction, target_var, void_labels)
@@ -109,8 +108,6 @@ def train(cf):
     start_time_compilation = time.time()
     train_fn = theano.function([input_var, target_var], loss, updates=updates)
 
-    print('-' * 75)
-    print('Compilation')
     print('Train compilation took {:.3f} seconds'.format(time.time() - start_time_compilation))
 
     # Compile test functions
@@ -151,15 +148,20 @@ def train(cf):
 
             # Training step
             cost_train = train_fn(X_train_batch, L_train_batch)
-            out_str = "cost %f" % (cost_train)
             cost_train_tot += cost_train
 
-            # Progression bar
-            batch_time.append(time.time() - start_time_batch)
-            estimated_time = (n_batches_train - i + 1) * np.mean(batch_time)
-            progress = int(100. * (i / float(n_batches_train)))
-            sys.stdout.write(
-                '\r [' + '#' * progress + '-' * (100 - progress) + '] Time left  {} '.format(estimated_time))
+            # # Progression bar
+            if epoch == 0:
+                # We estimate the duration of a batch
+                batch_time.append(time.time() - start_time_batch)
+                mean_batch_time = np.mean(batch_time)
+
+            # TODO : should not exceed 74 characters ...
+            sys.stdout.write('\rEpoch {} : [{}%]. Remaining time = {} sec. Cost train = {:.4f}' \
+                             .format(epoch, int(100. * (i + 1) / n_batches_train),
+                                     int((n_batches_train - i + 1) * mean_batch_time),
+                                     cost_train_tot / (i + 1)))
+            sys.stdout.flush()
 
         err_train += [cost_train_tot / n_batches_train]
 
@@ -184,31 +186,27 @@ def train(cf):
         jacc_valid += [np.mean(jacc_val_tot[0, :] /
                                jacc_val_tot[1, :])]
 
-        out_str = "EPOCH %i: Avg epoch training cost train %f, cost val %f" + \
-                  ", acc val %f, jacc val %f took %f s"
-        out_str = out_str % (epoch, err_train[epoch],
-                             err_valid[epoch],
-                             acc_valid[epoch],
-                             jacc_valid[epoch],
-                             time.time() - start_time)
-        print out_str
-
-        with open(os.path.join(savepath, "output.log", "a")) as f:
-            f.write(out_str + "\n")
+        out_str = \
+            '\r\x1b[2Epoch {} took {} sec. Average cost train = {:.5f} | cost val = {:.5f} | ' \
+            'acc val = {:.5f} | jacc_val = {:.5f} '.format(
+                epoch, int(time.time() - start_time), err_train[-1], err_valid[-1], acc_valid[-1], jacc_valid[-1])
 
         # Early stopping and saving stuff
         if epoch == 0:
             best_jacc_val = jacc_valid[epoch]
         elif epoch > 1 and jacc_valid[epoch] > best_jacc_val:
+            out_str += '(BEST)'
             best_jacc_val = jacc_valid[epoch]
             patience = 0
-            np.savez(os.path.join(savepath, 'model.npz'),
-                     *lasagne.layers.get_all_param_values(convmodel))
-            np.savez(os.path.join(savepath, 'errors.npz'),
-                     err_valid, err_train, acc_valid,
-                     jacc_valid)
+            np.savez(os.path.join(savepath, 'model.npz'), *lasagne.layers.get_all_param_values(convmodel))
+            np.savez(os.path.join(savepath, 'errors.npz'), err_valid, err_train, acc_valid, jacc_valid)
         else:
             patience += 1
+
+        print out_str
+
+        with open(os.path.join(savepath, 'output.log'), 'a') as f:
+            f.write(out_str + "\n")
 
         # Finish training if patience has expired or max nber of epochs reached
 
@@ -265,6 +263,13 @@ if __name__ == '__main__':
                         help='Name of the experiment')
     cf = parser.parse_args()
 
+    assert cf.exp_name is not None, 'Please provide a name for the experiment using -e name in the command line'
+
+    cf.seed = 0
+    np.random.seed(cf.seed)
+    theano.tensor.shared_randomstreams.RandomStreams(cf.seed)
+    # To make experiments reproductible, use deterministic convolution in CuDNN with THEANO_FLAGS
+
     # Training
     cf.dataset = 'camvid'
     cf.learning_rate = 0.0001
@@ -276,24 +281,44 @@ if __name__ == '__main__':
 
     cf.nb_in_channels = 3
     cf.train_crop_size = (224, 224)
-    cf.batch_size = [10, 10, 10]  # train / val / test
+    cf.batch_size = [5, 5, 5]  # train / val / test
 
     # Architecture
 
     cf.n_filters_first_conv = 20
     cf.filter_size = 3
     cf.n_blocks = 5
-    cf.growth_rate_down = 12
-    cf.growth_rate_up = 12
-    # cf.n_conv_per_block = [4, 4, 4, 4, 4, 4, 2, 2, 2, 2, 2]
-    cf.n_conv_per_block = 5
+    cf.growth_rate = 12
+    cf.n_conv_per_block = [5, 7, 10, 10, 10, 10] + [5] * 5
     cf.dropout_p = 0.2
     cf.pad_mode = 'same'
     cf.pool_mode = 'average'
     cf.dilated_convolution_index = None
     cf.upsampling_mode = 'deconvolution'
-    cf.deconvolution_mode = 'reduce'
-    cf.upsampling_block_mode = 'dense'
+    cf.n_filters_deconvolution = 'keep'
+    cf.filter_size_deconvolution = 3
+    cf.upsampling_block_mode = ('classic', [256, 128, 64, 32, 16])
+    # cf.upsampling_block_mode = ('dense', 12)
     cf.trainable = True
 
-    train(cf)
+    # Prepare save directories
+    savepath = os.path.join(savepath, cf.dataset, cf.exp_name)  # local path
+    final_savepath = os.path.join(final_savepath, cf.dataset, cf.exp_name)  # remote path
+
+    for path in set([savepath, final_savepath]):  # in case savepath == final_savepath
+        if not os.path.exists(path):
+            os.makedirs(path)
+        else:
+            print('\033[93m The following folder already exists {}. '
+                  'It will be overwritten in a few seconds...\033[0m'.format(path))
+
+    try:
+        train(cf)
+    except KeyboardInterrupt:
+        # In case of early stopping, transfer the local files
+        if savepath != final_savepath:
+            do_copy = raw_input('\033[93m KeyboardInterrupt \nDo you want to transfer files to {} ? ([y]/n) \033[0m'
+                                .format(final_savepath))
+            if do_copy in ['', 'y']:
+                print('Copying model and other training files to {}'.format(final_savepath))
+                copy_tree(savepath, final_savepath)
