@@ -1,4 +1,4 @@
-from lasagne.layers import InputLayer, DropoutLayer, GaussianNoiseLayer
+from lasagne.layers import InputLayer, GaussianNoiseLayer
 from lasagne.layers import Pool2DLayer as PoolLayer, ConcatLayer
 from lasagne.layers import Conv2DLayer as ConvLayer
 
@@ -6,8 +6,6 @@ from lasagne.layers import Conv2DLayer as ConvLayer
 def concatenate(net, in1, concat_layers, concat_vars, pos):
     if concat_layers[pos] == 'input':
         concat_layers[pos] = 'noisy_input'
-    elif concat_layers[pos] == 'fc6' or concat_layers[pos] == 'fc7':
-        concat_layers[pos] += '_dropout'
 
     if in1 in concat_layers:
         net[in1 + '_h'] = InputLayer((None, net[in1].input_shape[1] if
@@ -17,21 +15,34 @@ def concatenate(net, in1, concat_layers, concat_vars, pos):
                                             net[in1]), axis=1, cropping=None)
         pos += 1
         out = in1 + '_concat'
+
+        laySize = net[out].output_shape
+        n_cl = laySize[1]
+        print('Number of feature maps (concat):', n_cl)
     else:
         out = in1
+
+    if concat_layers[pos-1] == 'noisy_input':
+        concat_layers[pos-1] = 'input'
 
     return pos, out
 
 
 def buildFCN_down(input_var, concat_vars,
-                  n_classes=21, concat_layers=['pool5']):
+                  n_classes=21, concat_layers=['pool5'], noise=0.1,
+                  n_filters=64, conv_before_pool=1, additional_pool=0):
 
     '''
     Build fcn contracting path
     '''
 
-    assert all([el in ['pool1', 'pool2', 'pool3', 'pool4', 'pool5', 'fc6',
-                       'fc7', 'input'] for el in concat_layers])
+    assert all([el in ['pool1', 'pool2', 'pool3', 'pool4', 'pool5', 'input']
+                for el in concat_layers])
+
+    if 'pool' in concat_layers[-1]:
+        n_pool = int(concat_layers[-1][-1])
+    else:
+        n_pool = 0
 
     net = {}
     pos = 0
@@ -41,91 +52,46 @@ def buildFCN_down(input_var, concat_vars,
                               input_var)
 
     # Noise
-    net['noisy_input'] = GaussianNoiseLayer(net['input'])
+    net['noisy_input'] = GaussianNoiseLayer(net['input'], sigma=noise)
 
     pos, out = concatenate(net, 'noisy_input', concat_layers, concat_vars, pos)
 
-    if concat_layers[-1] == 'noisy_input':
-        return net
+    if concat_layers[-1] == 'input' and additional_pool == 0:
+        return net, out
 
-    # pool 1
-    net['conv1_1'] = ConvLayer(
-        net[out],
-        64, 3, pad=100, flip_filters=False)
-    net['conv1_2'] = ConvLayer(
-        net['conv1_1'], 64, 3, pad='same', flip_filters=False)
-    net['pool1'] = PoolLayer(net['conv1_2'], 2)
+    for p in range(n_pool+additional_pool):
+        # add conv + pool
+        for i in range(1, conv_before_pool+1):
+            # Choose padding type: this is defined according to the
+            # layers:
+            # - if have several concats, we padding 100 in the first
+            # layer for fcn8 compatibility
+            # - if concatenation is only performed at the input, we
+            # don't pad
+            if p == 0 and i == 1 and len(concat_layers) == 1 and \
+               concat_layers[-1] != 'input':
 
-    pos, out = concatenate(net, 'pool1', concat_layers, concat_vars, pos)
-    if concat_layers[-1] == 'pool1':
-        return net
+                pad_type = 100
+            else:
+                pad_type = 'same'
 
-    # pool 2
-    net['conv2_1'] = ConvLayer(
-        net[out], 128, 3, pad='same', flip_filters=False)
-    net['conv2_2'] = ConvLayer(
-        net['conv2_1'], 128, 3, pad='same', flip_filters=False)
-    net['pool2'] = PoolLayer(net['conv2_2'], 2)
+            # Define conv
+            net['conv'+str(p+1)+'_'+str(i)] = ConvLayer(
+                net[out], n_filters*(2**p), 3,
+                pad=pad_type, flip_filters=False)
+            out = 'conv'+str(p+1)+'_'+str(i)
 
-    pos, out = concatenate(net, 'pool2', concat_layers, concat_vars, pos)
-    if concat_layers[-1] == 'pool2':
-        return net
+        # Define pool
+        net['pool'+str(p+1)] = PoolLayer(net['conv'+str(p+1)+'_'+str(i)], 2)
+        out = 'pool'+str(p+1)
+        laySize = net['pool'+str(p+1)].input_shape
+        n_cl = laySize[1]
+        print('Number of feature maps (out):', n_cl)
 
-    # pool 3
-    net['conv3_1'] = ConvLayer(
-        net[out], 256, 3, pad='same', flip_filters=False)
-    net['conv3_2'] = ConvLayer(
-        net['conv3_1'], 256, 3, pad='same', flip_filters=False)
-    net['conv3_3'] = ConvLayer(
-        net['conv3_2'], 256, 3, pad='same', flip_filters=False)
-    net['pool3'] = PoolLayer(net['conv3_3'], 2)
+        if p < n_pool:
+            pos, out = concatenate(net, 'pool'+str(p+1), concat_layers,
+                                   concat_vars, pos)
 
-    pos, out = concatenate(net, 'pool3', concat_layers, concat_vars, pos)
-    if concat_layers[-1] == 'pool3':
-        return net
+        last_layer = 'pool'+str(p+1)
 
-    # pool 4
-    net['conv4_1'] = ConvLayer(
-        net[out], 512, 3, pad='same', flip_filters=False)
-    net['conv4_2'] = ConvLayer(
-        net['conv4_1'], 512, 3, pad='same', flip_filters=False)
-    net['conv4_3'] = ConvLayer(
-        net['conv4_2'], 512, 3, pad='same', flip_filters=False)
-    net['pool4'] = PoolLayer(net['conv4_3'], 2)
-
-    pos, out = concatenate(net, 'pool4', concat_layers, concat_vars, pos)
-    if concat_layers[-1] == 'pool4':
-        return net
-
-    # pool 5
-    net['conv5_1'] = ConvLayer(
-        net[out], 512, 3, pad='same', flip_filters=False)
-    net['conv5_2'] = ConvLayer(
-        net['conv5_1'], 512, 3, pad='same', flip_filters=False)
-    net['conv5_3'] = ConvLayer(
-        net['conv5_2'], 512, 3, pad='same', flip_filters=False)
-    net['pool5'] = PoolLayer(net['conv5_3'], 2)
-
-    pos, out = concatenate(net, 'pool5', concat_layers, concat_vars, pos)
-    if concat_layers[-1] == 'pool5':
-        return net
-
-    # fc6
-    net['fc6'] = ConvLayer(
-        net[out], 4096, 7, pad='valid', flip_filters=False)
-    net['fc6_dropout'] = DropoutLayer(net['fc6'])
-
-    pos, out = concatenate(net, 'fc6_dropout',
-                                concat_layers, concat_vars, pos)
-    if concat_layers[-1] == 'fc6_dropout':
-        return net
-
-    # fc7
-    net['fc7'] = ConvLayer(
-        net[out], 4096, 1, pad='valid', flip_filters=False)
-    net['fc7_dropout'] = DropoutLayer(net['fc7'], p=0.5)
-
-    pos, out = concatenate(net, 'fc7_dropout',
-                                concat_layers, concat_vars, pos)
-    if concat_layers[-1] == 'fc7_dropout':
-        return net
+    return net, last_layer

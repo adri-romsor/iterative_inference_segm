@@ -1,9 +1,6 @@
 import numpy as np
 import os
 import lasagne
-from lasagne.layers import Conv2DLayer as ConvLayer
-from lasagne.layers import Pool2DLayer as PoolLayer
-from lasagne.nonlinearities import linear, sigmoid
 
 import model_helpers
 from fcn_up import buildFCN_up
@@ -11,7 +8,8 @@ from fcn_down import buildFCN_down
 
 
 def buildDAE(input_repr_var, input_mask_var, n_classes,
-             layer_h=['input'], filter_size=[], kernel_size=[],
+             layer_h=['input'], noise=0.1, n_filters=64,
+             conv_before_pool=1, additional_pool=0,
              void_labels=[], skip=False, unpool_type='standard',
              path_weights='/Tmp/romerosa/itinf/models/',
              model_name='dae_model.npz',
@@ -22,41 +20,25 @@ def buildDAE(input_repr_var, input_mask_var, n_classes,
     '''
 
     # Build fcn to extract representation from y
-    fcn_down = buildFCN_down(input_mask_var, input_repr_var,
-                             n_classes=n_classes, concat_layers=layer_h)
+    fcn_down, last_layer_down = buildFCN_down(
+        input_mask_var, input_repr_var,
+        n_classes=n_classes,
+        concat_layers=layer_h,
+        noise=noise, n_filters=n_filters,
+        conv_before_pool=conv_before_pool,
+        additional_pool=additional_pool)
 
     dae = fcn_down
 
-    # Stack encoder on top of concatenation
-    l_enc = 0
-    for f, k in zip(filter_size, kernel_size):
-        dae['encoder' + str(l_enc)] = \
-            ConvLayer(dae[layer_h[-1]+'_concat' if l_enc == 0 else
-                          'encoder' + str(l_enc-1)],
-                      f, k, flip_filters=False, pad='same',
-                      nonlinearity=sigmoid)
-        l_enc += 1
-
     # Count the number of pooling layers to know how many upsamplings we
     # should perform
-    unpool = np.sum([isinstance(el, PoolLayer) for el in
-                     lasagne.layers.get_all_layers(dae[layer_h[-1] +
-                                                       '_concat'])])
-
-    # Stack decoder
-    filter_size[0] = n_classes if unpool == 0 else \
-        fcn_down[layer_h[-1]].input_shape[1]
-    l_dec = 0
-    for f, k in list(reversed(zip(filter_size, kernel_size))):
-        dae['decoder' + str(l_dec)] = \
-            ConvLayer(dae['encoder'+str(l_enc-1) if l_dec == 0 else
-                          'decoder' + str(l_dec-1)],
-                      f, k, flip_filters=False, pad='same',
-                      nonlinearity=linear)
-        l_dec += 1
+    if 'pool' in layer_h[-1]:
+        n_pool = int(layer_h[-1][-1]) + additional_pool
+    else:
+        n_pool = additional_pool
 
     # Unpooling
-    fcn_up = buildFCN_up(dae, 'decoder'+str(l_dec-1), unpool, skip=skip,
+    fcn_up = buildFCN_up(dae, last_layer_down, n_pool, skip=skip,
                          n_classes=n_classes, unpool_type=unpool_type)
 
     dae.update(fcn_up)

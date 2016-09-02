@@ -9,7 +9,7 @@ import theano
 import theano.tensor as T
 from theano import config
 import lasagne
-from lasagne.objectives import squared_error, aggregate
+from lasagne.objectives import squared_error
 from lasagne.regularization import regularize_network_params
 
 from data_loader import load_data
@@ -36,16 +36,18 @@ else:
 def train(dataset, learn_step=0.005,
           weight_decay=1e-4, num_epochs=500, max_patience=100,
           epsilon=.0, optimizer='rmsprop', training_loss='squared_error',
-          layer_h=['pool5'], num_filters=[4096], skip=False,
-          unpool_type='standard', filter_size=[3],
-          savepath=None, loadpath=None, exp_name=None, resume=False):
+          layer_h=['pool5'], n_filters=64, noise=0.1, conv_before_pool=1,
+          additional_pool=0, skip=False, unpool_type='standard', from_gt=True,
+          savepath=None, loadpath=None, resume=False):
 
     #
     # Prepare load/save directories
     #
-    if exp_name is None:
-        exp_name = '_'.join(layer_h)
-        exp_name += '_' + training_loss + ('_skip' if skip else '')
+    exp_name = '_'.join(layer_h)
+    exp_name += '_f' + str(n_filters) + 'c' + str(conv_before_pool) + \
+        'p' + str(additional_pool) + '_z' + str(noise)
+    exp_name += '_' + training_loss + ('_skip' if skip else '')
+    exp_name += ('_fromgt' if from_gt else 'fromfcn8')
 
     if savepath is None:
         raise ValueError('A saving directory must be specified')
@@ -86,21 +88,21 @@ def train(dataset, learn_step=0.005,
     #
     # Build networks
     #
-
+    # DAE
+    print ' Building DAE network'
+    dae = buildDAE(input_repr_var, input_mask_var, n_classes, layer_h,
+                   noise, n_filters, conv_before_pool, additional_pool,
+                   trainable=True, void_labels=void_labels, skip=skip,
+                   unpool_type=unpool_type, load_weights=resume,
+                   path_weights=savepath, model_name='dae_model.npz')
     # FCN
     print('Weights of FCN8 will be loaded from : ' + WEIGHTS_PATH)
     print ' Building FCN network'
+    if not from_gt:
+        layer_h += ['probs_dimshuffle']
     fcn = buildFCN8(3, input_x_var, n_classes=n_classes,
                     void_labels=void_labels, path_weights=WEIGHTS_PATH,
                     trainable=True, load_weights=True, layer=layer_h)
-
-    # DAE
-    print ' Building DAE network'
-    dae = buildDAE(input_repr_var, input_mask_var, n_classes,
-                   layer_h, num_filters, filter_size, trainable=True,
-                   load_weights=resume, void_labels=void_labels, skip=skip,
-                   unpool_type=unpool_type,
-                   path_weights=savepath, model_name='dae_model.npz')
 
     #
     # Define and compile theano functions
@@ -201,11 +203,15 @@ def train(dataset, learn_step=0.005,
         for i in range(n_batches_train):
             # Get minibatch
             X_train_batch, L_train_batch = train_iter.next()
-            L_train_batch = L_train_batch.astype(_FLOATX)
-            L_train_batch = L_train_batch[:, :-1, :, :]
 
             # h prediction
             X_pred_batch = fcn_fn(X_train_batch)
+            if from_gt:
+                L_train_batch = L_train_batch.astype(_FLOATX)
+                L_train_batch = L_train_batch[:, :-1, :, :]
+            else:
+                L_train_batch = X_pred_batch[-1]
+                X_pred_batch = X_pred_batch[:-1]
 
             # Training step
             cost_train = train_fn(*(X_pred_batch + [L_train_batch]))
@@ -218,11 +224,15 @@ def train(dataset, learn_step=0.005,
         for i in range(n_batches_val):
             # Get minibatch
             X_val_batch, L_val_batch = val_iter.next()
-            L_val_batch = L_val_batch.astype(_FLOATX)
-            L_val_batch = L_val_batch[:, :-1, :, :]
 
             # h prediction
             X_pred_batch = fcn_fn(X_val_batch)
+            if from_gt:
+                L_val_batch = L_val_batch.astype(_FLOATX)
+                L_val_batch = L_val_batch[:, :-1, :, :]
+            else:
+                L_val_batch = X_pred_batch[-1]
+                X_pred_batch = X_pred_batch[:-1]
 
             # Validation step
             cost_val = val_fn(*(X_pred_batch + [L_val_batch]))
@@ -303,32 +313,49 @@ def main():
                         help='Training loss')
     parser.add_argument('-layer_h',
                         type=list,
-                        default=['pool5'],
+                        default=['pool3'],
                         help='All h to introduce to the DAE')
-    parser.add_argument('-num_filters',
-                        type=list,
-                        default=[2048],
-                        help='Nb of filters per encoder layer')
+    parser.add_argument('-noise',
+                        type=float,
+                        default=0.1,
+                        help='Noise of DAE input.')
+    parser.add_argument('-n_filters',
+                        type=int,
+                        default=64,
+                        help='Nb filters DAE (1st lay, increases pow 2')
+    parser.add_argument('-conv_before_pool',
+                        type=int,
+                        default=1,
+                        help='Conv. before pool in DAE.')
+    parser.add_argument('-additional_pool',
+                        type=int,
+                        default=2,
+                        help='Additional pool DAE')
     parser.add_argument('-skip',
                         type=bool,
-                        default=True,
+                        default=False,
                         help='Whether to skip connections in DAE')
     parser.add_argument('-unpool_type',
                         type=str,
                         default='standard',
                         help='Unpooling type - standard or trackind')
-    parser.add_argument('-e', '--exp_name',
-                        type=str,
-                        default=None,
-                        help='Name of the experiment')
+    parser.add_argument('-from_gt',
+                        type=bool,
+                        default=True,
+                        help='Whether to train from GT (true) or fcn' +
+                        'output (False)')
+
     args = parser.parse_args()
 
     train(args.dataset, float(args.learning_rate),
           float(args.weight_decay), int(args.num_epochs),
           int(args.max_patience), float(args.epsilon),
           args.optimizer, args.training_loss, args.layer_h,
-          args.num_filters, args.skip, args.unpool_type,
-          exp_name=args.exp_name, resume=False,
+          noise=args.noise, n_filters=args.n_filters,
+          conv_before_pool=args.conv_before_pool,
+          additional_pool=args.additional_pool,
+          skip=args.skip, unpool_type=args.unpool_type,
+          from_gt=args.from_gt, resume=False,
           savepath=SAVEPATH, loadpath=LOADPATH)
 
 

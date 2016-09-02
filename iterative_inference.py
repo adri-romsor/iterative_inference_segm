@@ -54,7 +54,7 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
     # Build dataset iterator
     #
     _, _, test_iter = load_data(dataset, train_crop_size=None, one_hot=True,
-                                batch_size=[10, 10, 1])
+                                batch_size=[10, 10, 10])
 
     n_batches_test = test_iter.get_n_batches()
     n_classes = test_iter.get_n_classes()
@@ -224,7 +224,7 @@ def main():
                         help='Dataset.')
     parser.add_argument('-layer_name',
                         type=list,
-                        default=['pool3'],
+                        default=['pool5'],
                         help='All h to introduce to the DAE.')
     parser.add_argument('-step',
                         type=float,
@@ -233,11 +233,11 @@ def main():
     parser.add_argument('--num_iter',
                         '-nit',
                         type=int,
-                        default=100,
+                        default=500,
                         help='Max number of iterations.')
     parser.add_argument('-num_filters',
                         type=list,
-                        default=[1024],
+                        default=[2048],
                         help='All h to introduce to the DAE.')
     parser.add_argument('-skip',
                         type=bool,
