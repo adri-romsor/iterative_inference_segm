@@ -47,7 +47,7 @@ def train(dataset, learn_step=0.005,
     exp_name += '_f' + str(n_filters) + 'c' + str(conv_before_pool) + \
         'p' + str(additional_pool) + '_z' + str(noise)
     exp_name += '_' + training_loss + ('_skip' if skip else '')
-    exp_name += ('_fromgt' if from_gt else 'fromfcn8')
+    exp_name += ('_fromgt' if from_gt else '_fromfcn8')
 
     if savepath is None:
         raise ValueError('A saving directory must be specified')
