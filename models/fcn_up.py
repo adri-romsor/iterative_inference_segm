@@ -51,7 +51,7 @@ def UnpoolNet(incoming_net, net, p, unpool, n_classes,
         # Convolve
         net['up_conv'+str(p)] = \
             ConvLayer(net['up'+str(p)], n_cl, 3,
-                      pad='valid', flip_filters=False)
+                      pad='valid', flip_filters=False, nonlinearity=linear)
 
         if skip and p > 1:
             # Merge
