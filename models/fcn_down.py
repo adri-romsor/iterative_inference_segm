@@ -36,7 +36,7 @@ def buildFCN_down(input_var, concat_vars,
     Build fcn contracting path
     '''
 
-    assert all([el in ['pool1', 'pool2', 'pool3', 'pool4', 'pool5', 'input']
+    assert all([el in ['pool1', 'pool2', 'pool3', 'pool4',  'input']
                 for el in concat_layers])
 
     if 'pool' in concat_layers[-1]:
@@ -70,7 +70,6 @@ def buildFCN_down(input_var, concat_vars,
             # don't pad
             if p == 0 and i == 1 and len(concat_layers) == 1 and \
                concat_layers[-1] != 'input':
-
                 pad_type = 100
             else:
                 pad_type = 'same'
@@ -92,6 +91,6 @@ def buildFCN_down(input_var, concat_vars,
             pos, out = concatenate(net, 'pool'+str(p+1), concat_layers,
                                    concat_vars, pos)
 
-        last_layer = 'pool'+str(p+1)
+        last_layer = out
 
     return net, last_layer
