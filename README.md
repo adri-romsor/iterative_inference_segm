@@ -48,6 +48,7 @@ See wiki
 
 ### TODO experiments
 **Camvid:**
+
 | Layer h | Extra depth | Error | Input y | Skip | Upsampling |
 |---------|-------------|-------|---------|------|------------|
 | Pool 3  | +2          | CE    | FCN8    | No   | standard   |
@@ -57,7 +58,10 @@ See wiki
 | Pool 3  | +2          | MSE   | FCN8    | Yes  | standard   |
 | Pool 4  | +1          | MSE   | GT      | No   | standard   |
 | Input   | +5          | MSE   | GT      | No   | standard   |
+| Input   | +5          | MSE   | GT      | Yes  | standard   |
 | Pool 1  | +4          | MSE   | GT      | No   | standard   |
+
+
 
 **Future datasets:**
 - [ ] PascalVOC
