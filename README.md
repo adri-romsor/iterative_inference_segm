@@ -40,22 +40,28 @@ See wiki
 - [x] Add skip connections in DAE
 - [x] Add WWAE pooling tracking
 - [x] Code CRF
+- [x] Add training DAE training from the output of FCN8 instead of GT.
 - [ ] Add possibility of having only y
-- [ ] Add training DAE training from the output of FCN8 instead of GT.
 - [ ] Add noise to skip connections
 - [ ] Add BFGS optimization
 
 
 ### TODO experiments
 **Camvid:**
-- [x] FCN-8 baseline
-- [x] FCN-8 + DAE (x,y) shallow
-- [x] FCN-8 + DAE (h, y) shallow
-- [ ] FCN-8 + DAE (h1, h2, ..., y) shallow 
-- [ ] FCN-8 + CRF (baseline)
-- [ ] FCN-8 + DAE (x, y) deep
-- [ ] FCN-8 + DAE (h, y) deep
-- [ ] FCN-8 + DAE (h1, h2, ..., y) deep 
+
+| Layer h | Extra depth | Error | Input y | Skip | Upsampling |
+|---------|-------------|-------|---------|------|------------|
+| Pool 3  | +2          | CE    | FCN8    | No   | standard   |
+| Pool 3  | +2          | MSE   | FCN8    | No   | standard   |
+| Pool 3  | +2          | MSE   | GT      | No   | standard   |
+| Pool 3  | +2          | MSE   | GT      | Yes  | standard   |
+| Pool 3  | +2          | MSE   | FCN8    | Yes  | standard   |
+| Pool 4  | +1          | MSE   | GT      | No   | standard   |
+| Input   | +5          | MSE   | GT      | No   | standard   |
+| Input   | +5          | MSE   | GT      | Yes  | standard   |
+| Pool 1  | +4          | MSE   | GT      | No   | standard   |
+
+
 
 **Future datasets:**
 - [ ] PascalVOC
