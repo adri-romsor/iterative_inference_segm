@@ -40,8 +40,8 @@ See wiki
 - [x] Add skip connections in DAE
 - [x] Add WWAE pooling tracking
 - [x] Code CRF
+- [x] Add training DAE training from the output of FCN8 instead of GT.
 - [ ] Add possibility of having only y
-- [ ] Add training DAE training from the output of FCN8 instead of GT.
 - [ ] Add noise to skip connections
 - [ ] Add BFGS optimization
 
