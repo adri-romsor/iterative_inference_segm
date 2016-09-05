@@ -32,29 +32,28 @@ else:
 _EPSILON = 1e-3
 
 
-def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
-              num_filters=[256], skip=False, unpool_type='standard',
-              filter_size=[3], savepath=None, loadpath=None, exp_name=None,
-              training_loss='squared_error'):
-
+def inference(dataset, learn_step=0.005, num_iter=500,
+              training_loss='squared_error', layer_h=['pool5'],
+              n_filters=64, noise=0.1, conv_before_pool=1, additional_pool=0,
+              skip=False, unpool_type='standard', from_gt=True,
+              save_perstep=False, savepath=None, loadpath=None):
     #
     # Define symbolic variables
     #
     input_x_var = T.tensor4('input_x_var')
     input_h_var = []
     name = ''
-    for l in layer_name:
+    for l in layer_h:
         input_h_var += [T.tensor4()]
         name += ('_'+l)
     y_hat_var = T.tensor4('pred_y_var')
-    input_dae_mask_var = T.tensor4('input_dae_mask_var')
     target_var = T.ivector('target_var')
 
     #
     # Build dataset iterator
     #
     _, _, test_iter = load_data(dataset, train_crop_size=None, one_hot=True,
-                                batch_size=[10, 10, 10])
+                                batch_size=[1, 1, 1])
 
     n_batches_test = test_iter.get_n_batches()
     n_classes = test_iter.get_n_classes()
@@ -63,9 +62,12 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
     #
     # Prepare load/save directories
     #
-    if exp_name is None:
-        exp_name = '_'.join(layer_name)
-        exp_name += '_' + training_loss + ('_skip' if skip else '')
+    exp_name = '_'.join(layer_h)
+    exp_name += '_f' + str(n_filters) + 'c' + str(conv_before_pool) + \
+        'p' + str(additional_pool) + '_z' + str(noise)
+    exp_name += '_' + training_loss + ('_skip' if skip else '')
+    exp_name += ('_fromgt' if from_gt else '_fromfcn8')
+    exp_name += ('_' + unpool_type)
 
     if savepath is None:
         raise ValueError('A saving directory must be specified')
@@ -88,28 +90,19 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
     # Build networks
     #
     print 'Building networks'
-    # Build FCN8 with pre-trained weights (network to initialize
-    # inference)
-    fcn_y = buildFCN8(3, input_var=input_x_var,
-                      n_classes=n_classes,
-                      void_labels=void_labels,
-                      trainable=False, load_weights=True)
-
-    # Build FCN8  with pre-trained weights up to layer_name (that one will
-    # be used as input to the DAE)
-    fcn_h = buildFCN8(3, input_var=input_x_var,
-                      n_classes=n_classes,
-                      void_labels=void_labels,
-                      trainable=False, load_weights=True,
-                      layer=layer_name)
+    # Build FCN8  with pre-trained weights up to layer_h + prediction
+    fcn = buildFCN8(3, input_var=input_x_var,
+                    n_classes=n_classes,
+                    void_labels=void_labels,
+                    trainable=False, load_weights=True,
+                    layer=layer_h+['probs_dimshuffle'])
 
     # Build DAE with pre-trained weights
-    dae = buildDAE(input_h_var, input_dae_mask_var,
-                   n_classes, layer_h=layer_name, filter_size=num_filters,
-                   kernel_size=filter_size, trainable=False, load_weights=True,
-                   void_labels=void_labels, skip=skip, unpool_type=unpool_type,
-                   model_name='dae_model.npz',
-                   path_weights=loadpath)
+    dae = buildDAE(input_h_var, y_hat_var, n_classes, layer_h,
+                   noise, n_filters, conv_before_pool, additional_pool,
+                   trainable=True, void_labels=void_labels, skip=skip,
+                   unpool_type=unpool_type, load_weights=True,
+                   path_weights=loadpath, model_name='dae_model.npz')
 
     #
     # Define and compile theano functions
@@ -117,13 +110,11 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
     print "Defining and compiling theano functions"
     # Define required theano functions and compile them
     # predictions of fcn and dae
-    pred_fcn_y = lasagne.layers.get_output(fcn_y, deterministic=True)[0]
-    pred_fcn_h = lasagne.layers.get_output(fcn_h, deterministic=True)
+    pred_fcn = lasagne.layers.get_output(fcn, deterministic=True)
     pred_dae = lasagne.layers.get_output(dae, deterministic=True)
 
-    # function to compute output of fcn_y and fcn_h
-    pred_fcn_y_fn = theano.function([input_x_var], pred_fcn_y)
-    pred_fcn_h_fn = theano.function([input_x_var], pred_fcn_h)
+    # function to compute outputs of fcn
+    pred_fcn_fn = theano.function([input_x_var], pred_fcn)
 
     # Reshape iterative inference output to b,01c
     y_hat_dimshuffle = y_hat_var.dimshuffle((0, 2, 3, 1))
@@ -131,10 +122,10 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
     y_hat_2D = y_hat_dimshuffle.reshape((T.prod(sh[:3]), sh[3]))
 
     # derivative of energy wrt input
-    de = - (pred_dae - pred_fcn_y)
+    de = - (pred_dae - y_hat_var)
 
     # function to compute de
-    de_fn = theano.function(input_h_var+[input_dae_mask_var, input_x_var], de)
+    de_fn = theano.function(input_h_var+[y_hat_var], de)
 
     # metrics to evaluate iterative inference
     test_acc = accuracy(y_hat_2D, target_var, void_labels)
@@ -152,7 +143,7 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
     acc_tot_old = 0
     jacc_tot = 0
     jacc_tot_old = 0
-    for i in range(n_batches_test):
+    for i in range(1):  # range(n_batches_test):
         info_str = "Batch %d out of %d" % (i, n_batches_test)
         print info_str
 
@@ -164,8 +155,9 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
         L_test_target = L_test_target.astype('int32')
 
         # Compute fcn prediction y and h
-        Y_test_batch = pred_fcn_y_fn(X_test_batch)
-        H_test_batch = pred_fcn_h_fn(X_test_batch)
+        pred_test_batch = pred_fcn_fn(X_test_batch)
+        Y_test_batch = pred_test_batch[-1]
+        H_test_batch = pred_test_batch[:-1]
 
         # Compute metrics before iterative inference
         acc_old, jacc_old = val_fn(Y_test_batch, L_test_target)
@@ -175,9 +167,16 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
 
         # Iterative inference
         for it in range(num_iter):
-            grad = de_fn(*(H_test_batch+[Y_test_batch, X_test_batch]))
+            grad = de_fn(*(H_test_batch+[Y_test_batch]))
 
             Y_test_batch = Y_test_batch - learn_step * grad
+
+            if save_perstep:
+                # Save images
+                save_img(X_test_batch, L_test_batch.argmax(1), Y_test_batch,
+                         Y_test_batch_old, savepath, n_classes,
+                         'batch' + str(i) + '_' + 'step' + str(it),
+                         void_labels)
 
             if np.linalg.norm(grad) < _EPSILON:
                 break
@@ -195,10 +194,11 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
                                np.mean(jacc_tot[0, :] / jacc_tot[1, :]))
         print info_str
 
-        # Save images
-        save_img(X_test_batch, L_test_batch.argmax(1), Y_test_batch,
-                 Y_test_batch_old, savepath, n_classes,
-                 'batch' + str(i), void_labels)
+        if not save_perstep:
+            # Save images
+            save_img(X_test_batch, L_test_batch.argmax(1), Y_test_batch,
+                     Y_test_batch_old, savepath, n_classes,
+                     'batch' + str(i), void_labels)
 
     acc_test = acc_tot/n_batches_test
     jacc_test = np.mean(jacc_tot[0, :] / jacc_tot[1, :])
@@ -217,57 +217,73 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=500,
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Unet model training')
+    parser = argparse.ArgumentParser(description='Iterative inference.')
+
     parser.add_argument('-dataset',
                         type=str,
                         default='camvid',
                         help='Dataset.')
-    parser.add_argument('-layer_name',
-                        type=list,
-                        default=['pool5'],
-                        help='All h to introduce to the DAE.')
     parser.add_argument('-step',
                         type=float,
-                        default=.001,
-                        help='Step')
+                        default=1.,
+                        help='step')
     parser.add_argument('--num_iter',
-                        '-nit',
+                        '-ne',
                         type=int,
-                        default=500,
-                        help='Max number of iterations.')
-    parser.add_argument('-num_filters',
-                        type=list,
-                        default=[2048],
-                        help='All h to introduce to the DAE.')
-    parser.add_argument('-skip',
-                        type=bool,
-                        default=True,
-                        help='Whether to skip connections in the DAE.')
-    parser.add_argument('-unpool_type',
-                        type=str,
-                        default='standard',
-                        help='Unpool type - standard or trackind.')
+                        default=100,
+                        help='Max number of iterations')
     parser.add_argument('-training_loss',
                         type=str,
                         default='squared_error',
                         help='Training loss')
-    parser.add_argument('--savepath',
-                        '-sp',
+    parser.add_argument('-layer_h',
+                        type=list,
+                        default=['pool3'],
+                        help='All h to introduce to the DAE')
+    parser.add_argument('-noise',
+                        type=float,
+                        default=0.1,
+                        help='Noise of DAE input.')
+    parser.add_argument('-n_filters',
+                        type=int,
+                        default=64,
+                        help='Nb filters DAE (1st lay, increases pow 2')
+    parser.add_argument('-conv_before_pool',
+                        type=int,
+                        default=1,
+                        help='Conv. before pool in DAE.')
+    parser.add_argument('-additional_pool',
+                        type=int,
+                        default=2,
+                        help='Additional pool DAE')
+    parser.add_argument('-skip',
+                        type=bool,
+                        default=True,
+                        help='Whether to skip connections in DAE')
+    parser.add_argument('-unpool_type',
                         type=str,
-                        default=SAVEPATH,
-                        help='Path to save images')
-    parser.add_argument('--loadpath',
-                        '-lp',
-                        type=str,
-                        default=LOADPATH,
-                        help='Path to save images')
+                        default='standard',
+                        help='Unpooling type - standard or trackind')
+    parser.add_argument('-from_gt',
+                        type=bool,
+                        default=False,
+                        help='Whether to train from GT (true) or fcn' +
+                        'output (False)')
+    parser.add_argument('-save_perstep',
+                        type=bool,
+                        default=True,
+                        help='Save new segmentations after each step update')
 
     args = parser.parse_args()
 
-    inference(args.dataset, args.layer_name, float(args.step),
-              int(args.num_iter), args.num_filters, args.skip,
-              args.unpool_type, savepath=args.savepath,
-              loadpath=args.loadpath, training_loss=args.training_loss)
+    inference(args.dataset, float(args.step), int(args.num_iter),
+              args.training_loss, args.layer_h, noise=args.noise,
+              n_filters=args.n_filters, conv_before_pool=args.conv_before_pool,
+              additional_pool=args.additional_pool, skip=args.skip,
+              unpool_type=args.unpool_type, from_gt=args.from_gt,
+              save_perstep=args.save_perstep, savepath=SAVEPATH,
+              loadpath=LOADPATH)
+
 
 if __name__ == "__main__":
     main()

@@ -46,16 +46,20 @@ def main():
                         help='Path to errors file')
     parser.add_argument('-models',
                         type=list,
-                        default=['pool3_f64c1p2_z0.1_squared_error_fromfcn8',
-                                 # 'pool3_f64c1p2_z0.1_crossentropy_fromfcn8',
-                                 'pool3_f64c1p2_z0.1_squared_error_fromgt',
-                                 'pool3_f64c1p2_z0.1_squared_error_skip_fromfcn8',
-                                 'pool3_f64c1p2_z0.1_squared_error_skip_fromgt',
-                                 'input_f64c1p5_z0.1_squared_error_fromgt'],
+                        default=['pool3_f64c1p2_z0.1_squared_error_fromfcn8_standard',
+                                 # 'pool3_f64c1p2_z0.1_crossentropy_fromfcn8_standard',
+                                 'pool3_f64c1p2_z0.1_squared_error_fromgt_standard',
+                                 'pool3_f64c1p2_z0.1_squared_error_skip_fromfcn8_standard',
+                                 'pool3_f64c1p2_z0.1_squared_error_skip_fromgt_standard',
+                                 'input_f64c1p5_z0.1_squared_error_fromgt_standard',
+                                 'input_f64c1p5_z0.1_squared_error_skip_fromgt_standard',
+                                 'pool1_f64c1p4_z0.1_squared_error_fromgt_standard'
+                                 # 'pool4_f64c1p1_z0.1_squared_error_fromgt_standard'
+                                ],
                         help='List of model names.')
     parser.add_argument('-colors',
                         type=list,
-                        default=['r', 'g', 'b', 'k', 'c', 'm'],
+                        default=['r', 'g', 'b', 'k', 'c', 'm', 'y'],
                         help='Colors to plot curves.')
     args = parser.parse_args()
 

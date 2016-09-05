@@ -48,6 +48,7 @@ def train(dataset, learn_step=0.005,
         'p' + str(additional_pool) + '_z' + str(noise)
     exp_name += '_' + training_loss + ('_skip' if skip else '')
     exp_name += ('_fromgt' if from_gt else '_fromfcn8')
+    exp_name += '_' + unpool_type
 
     if savepath is None:
         raise ValueError('A saving directory must be specified')
@@ -78,7 +79,7 @@ def train(dataset, learn_step=0.005,
     #
     train_iter, val_iter, _ = load_data(dataset, train_crop_size=None,
                                         one_hot=True,
-                                        batch_size=[10, 10, 10])
+                                        batch_size=[3, 3, 3])
 
     n_batches_train = train_iter.get_n_batches()
     n_batches_val = val_iter.get_n_batches()
@@ -333,11 +334,11 @@ def main():
                         help='Additional pool DAE')
     parser.add_argument('-skip',
                         type=bool,
-                        default=False,
+                        default=True,
                         help='Whether to skip connections in DAE')
     parser.add_argument('-unpool_type',
                         type=str,
-                        default='standard',
+                        default='trackind',
                         help='Unpooling type - standard or trackind')
     parser.add_argument('-from_gt',
                         type=bool,

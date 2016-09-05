@@ -35,7 +35,7 @@ def save_img(image_batch, mask_batch, output, output_old, out_images_folder,
     output_old[(mask_batch == void_label).nonzero()] = void_label[0]
 
     # color_map = sns.hls_palette(n_classes+1)
-    color_map = sns.color_palette("muted", n_colors=n_classes+1)
+    color_map = sns.color_palette("Set2",  n_classes+1)
 
     images = []
     for j in xrange(output.shape[0]):
