@@ -37,8 +37,9 @@ _EPSILON = 1e-3
 def inference(dataset, learn_step=0.005, num_iter=500,
               training_loss='squared_error', layer_h=['pool5'],
               n_filters=64, noise=0.1, conv_before_pool=1, additional_pool=0,
-              skip=False, unpool_type='standard', from_gt=True,
-              save_perstep=False, savepath=None, loadpath=None):
+              dropout=0., skip=False, unpool_type='standard', from_gt=True,
+              save_perstep=False, which_set='test',
+              savepath=None, loadpath=None):
     #
     # Define symbolic variables
     #
@@ -55,8 +56,15 @@ def inference(dataset, learn_step=0.005, num_iter=500,
     #
     # Build dataset iterator
     #
-    test_iter, _, _ = load_data(dataset, train_crop_size=None, one_hot=True,
-                                batch_size=[10, 10, 10])
+    if which_set == 'train':
+        test_iter, _, _ = load_data(dataset, train_crop_size=None,
+                                    one_hot=True, batch_size=[10, 10, 10])
+    elif which_set == 'valid':
+        _, test_iter, _ = load_data(dataset, train_crop_size=None,
+                                    one_hot=True, batch_size=[10, 10, 10])
+    if which_set == 'test':
+        _, _, test_iter = load_data(dataset, train_crop_size=None,
+                                    one_hot=True, batch_size=[10, 10, 10])
 
     n_batches_test = test_iter.get_n_batches()
     n_classes = test_iter.get_n_classes()
@@ -70,7 +78,8 @@ def inference(dataset, learn_step=0.005, num_iter=500,
         'p' + str(additional_pool) + '_z' + str(noise)
     exp_name += '_' + training_loss + ('_skip' if skip else '')
     exp_name += ('_fromgt' if from_gt else '_fromfcn8')
-    exp_name += ('_' + unpool_type)
+    exp_name += '_' + unpool_type + ('_dropout' + str(dropout) if
+                                     dropout > 0. else '')
 
     if savepath is None:
         raise ValueError('A saving directory must be specified')
@@ -103,8 +112,8 @@ def inference(dataset, learn_step=0.005, num_iter=500,
     # Build DAE with pre-trained weights
     dae = buildDAE(input_h_var, y_hat_var, n_classes, layer_h,
                    noise, n_filters, conv_before_pool, additional_pool,
-                   trainable=True, void_labels=void_labels, skip=skip,
-                   unpool_type=unpool_type, load_weights=True,
+                   dropout=dropout, trainable=True, void_labels=void_labels,
+                   skip=skip, unpool_type=unpool_type, load_weights=True,
                    path_weights=loadpath, model_name='dae_model.npz')
 
     #
@@ -155,7 +164,7 @@ def inference(dataset, learn_step=0.005, num_iter=500,
     jacc_tot_old = 0
     acc_tot_dae = 0
     jacc_tot_dae = 0
-    for i in range(1):  # range(n_batches_test):
+    for i in range(n_batches_test):
         info_str = "Batch %d out of %d" % (i, n_batches_test)
         print info_str
 
@@ -297,13 +306,17 @@ def main():
                         type=int,
                         default=2,
                         help='Additional pool DAE')
+    parser.add_argument('-dropout',
+                        type=float,
+                        default=0.5,
+                        help='Additional pool DAE')
     parser.add_argument('-skip',
                         type=bool,
-                        default=False,
+                        default=True,
                         help='Whether to skip connections in DAE')
     parser.add_argument('-unpool_type',
                         type=str,
-                        default='trackind',
+                        default='standard',
                         help='Unpooling type - standard or trackind')
     parser.add_argument('-from_gt',
                         type=bool,
@@ -314,16 +327,19 @@ def main():
                         type=bool,
                         default=True,
                         help='Save new segmentations after each step update')
-
+    parser.add_argument('-which_set',
+                        type=str,
+                        default='test',
+                        help='Inference set')
     args = parser.parse_args()
 
     inference(args.dataset, float(args.step), int(args.num_iter),
               args.training_loss, args.layer_h, noise=args.noise,
               n_filters=args.n_filters, conv_before_pool=args.conv_before_pool,
-              additional_pool=args.additional_pool, skip=args.skip,
-              unpool_type=args.unpool_type, from_gt=args.from_gt,
-              save_perstep=args.save_perstep, savepath=SAVEPATH,
-              loadpath=LOADPATH)
+              additional_pool=args.additional_pool, dropout=args.dropout,
+              skip=args.skip, unpool_type=args.unpool_type,
+              from_gt=args.from_gt, save_perstep=args.save_perstep,
+              which_set=args.which_set, savepath=SAVEPATH, loadpath=LOADPATH)
 
 
 if __name__ == "__main__":
