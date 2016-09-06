@@ -37,8 +37,8 @@ def train(dataset, learn_step=0.005,
           weight_decay=1e-4, num_epochs=500, max_patience=100,
           epsilon=.0, optimizer='rmsprop', training_loss='squared_error',
           layer_h=['pool5'], n_filters=64, noise=0.1, conv_before_pool=1,
-          additional_pool=0, skip=False, unpool_type='standard', from_gt=True,
-          savepath=None, loadpath=None, resume=False):
+          additional_pool=0, dropout=0., skip=False, unpool_type='standard',
+          from_gt=True, savepath=None, loadpath=None, resume=False):
 
     #
     # Prepare load/save directories
@@ -48,7 +48,8 @@ def train(dataset, learn_step=0.005,
         'p' + str(additional_pool) + '_z' + str(noise)
     exp_name += '_' + training_loss + ('_skip' if skip else '')
     exp_name += ('_fromgt' if from_gt else '_fromfcn8')
-    exp_name += '_' + unpool_type
+    exp_name += '_' + unpool_type + ('_dropout' + str(dropout) if
+                                     dropout > 0. else '')
 
     if savepath is None:
         raise ValueError('A saving directory must be specified')
@@ -93,8 +94,8 @@ def train(dataset, learn_step=0.005,
     print ' Building DAE network'
     dae = buildDAE(input_repr_var, input_mask_var, n_classes, layer_h,
                    noise, n_filters, conv_before_pool, additional_pool,
-                   trainable=True, void_labels=void_labels, skip=skip,
-                   unpool_type=unpool_type, load_weights=resume,
+                   dropout=dropout, trainable=True, void_labels=void_labels,
+                   skip=skip, unpool_type=unpool_type, load_weights=resume,
                    path_weights=savepath, model_name='dae_model.npz')
     # FCN
     print('Weights of FCN8 will be loaded from : ' + WEIGHTS_PATH)
@@ -332,13 +333,17 @@ def main():
                         type=int,
                         default=2,
                         help='Additional pool DAE')
+    parser.add_argument('-dropout',
+                        type=float,
+                        default=0.5,
+                        help='Additional pool DAE')
     parser.add_argument('-skip',
                         type=bool,
                         default=True,
                         help='Whether to skip connections in DAE')
     parser.add_argument('-unpool_type',
                         type=str,
-                        default='trackind',
+                        default='standard',
                         help='Unpooling type - standard or trackind')
     parser.add_argument('-from_gt',
                         type=bool,
@@ -355,6 +360,7 @@ def main():
           noise=args.noise, n_filters=args.n_filters,
           conv_before_pool=args.conv_before_pool,
           additional_pool=args.additional_pool,
+          dropout=args.dropout,
           skip=args.skip, unpool_type=args.unpool_type,
           from_gt=args.from_gt, resume=False,
           savepath=SAVEPATH, loadpath=LOADPATH)

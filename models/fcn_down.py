@@ -1,6 +1,6 @@
 from lasagne.layers import InputLayer, GaussianNoiseLayer
 from lasagne.layers import Pool2DLayer as PoolLayer, ConcatLayer
-from lasagne.layers import Conv2DLayer as ConvLayer
+from lasagne.layers import Conv2DLayer as ConvLayer, DropoutLayer
 
 
 def concatenate(net, in1, concat_layers, concat_vars, pos):
@@ -30,7 +30,8 @@ def concatenate(net, in1, concat_layers, concat_vars, pos):
 
 def buildFCN_down(input_var, concat_vars,
                   n_classes=21, concat_layers=['pool5'], noise=0.1,
-                  n_filters=64, conv_before_pool=1, additional_pool=0):
+                  n_filters=64, conv_before_pool=1, additional_pool=0,
+                  dropout=0.):
 
     '''
     Build fcn contracting path
@@ -79,6 +80,10 @@ def buildFCN_down(input_var, concat_vars,
                 net[out], n_filters*(2**p), 3,
                 pad=pad_type, flip_filters=False)
             out = 'conv'+str(p+1)+'_'+str(i)
+
+            if p == n_pool+additional_pool-1 and dropout > 0.:
+                net[out+'_drop'] = DropoutLayer(net[out], p=dropout)
+                out += '_drop'
 
         # Define pool
         net['pool'+str(p+1)] = PoolLayer(net['conv'+str(p+1)+'_'+str(i)], 2)

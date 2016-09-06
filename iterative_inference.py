@@ -9,6 +9,7 @@ import theano.tensor as T
 from theano import config
 
 import lasagne
+from lasagne.objectives import squared_error
 
 from data_loader import load_data
 from metrics import accuracy, jaccard
@@ -17,6 +18,7 @@ from models.fcn8 import buildFCN8
 from helpers import save_img
 
 _FLOATX = config.floatX
+_EPSILON = 10e-8
 
 if getuser() == 'romerosa':
     SAVEPATH = '/Tmp/romerosa/itinf/models/'
@@ -48,12 +50,13 @@ def inference(dataset, learn_step=0.005, num_iter=500,
         name += ('_'+l)
     y_hat_var = T.tensor4('pred_y_var')
     target_var = T.ivector('target_var')
+    target_var_4D = T.itensor4('target_var_4D')
 
     #
     # Build dataset iterator
     #
-    _, _, test_iter = load_data(dataset, train_crop_size=None, one_hot=True,
-                                batch_size=[1, 1, 1])
+    test_iter, _, _ = load_data(dataset, train_crop_size=None, one_hot=True,
+                                batch_size=[10, 10, 10])
 
     n_batches_test = test_iter.get_n_batches()
     n_classes = test_iter.get_n_classes()
@@ -116,7 +119,7 @@ def inference(dataset, learn_step=0.005, num_iter=500,
     # function to compute outputs of fcn
     pred_fcn_fn = theano.function([input_x_var], pred_fcn)
 
-    # Reshape iterative inference output to b,01c
+    # Reshape iterative inference output to b01,c
     y_hat_dimshuffle = y_hat_var.dimshuffle((0, 2, 3, 1))
     sh = y_hat_dimshuffle.shape
     y_hat_2D = y_hat_dimshuffle.reshape((T.prod(sh[:3]), sh[3]))
@@ -126,6 +129,13 @@ def inference(dataset, learn_step=0.005, num_iter=500,
 
     # function to compute de
     de_fn = theano.function(input_h_var+[y_hat_var], de)
+
+    loss = squared_error(pred_dae, target_var_4D).mean(axis=1)
+    mask = target_var_4D.sum(axis=1)
+    loss = loss * mask
+    loss = loss.sum()/mask.sum()
+    loss_fn = theano.function(input_h_var+[y_hat_var, target_var_4D], loss)
+    pred_dae_fn = theano.function(input_h_var+[y_hat_var], pred_dae)
 
     # metrics to evaluate iterative inference
     test_acc = accuracy(y_hat_2D, target_var, void_labels)
@@ -143,6 +153,8 @@ def inference(dataset, learn_step=0.005, num_iter=500,
     acc_tot_old = 0
     jacc_tot = 0
     jacc_tot_old = 0
+    acc_tot_dae = 0
+    jacc_tot_dae = 0
     for i in range(1):  # range(n_batches_test):
         info_str = "Batch %d out of %d" % (i, n_batches_test)
         print info_str
@@ -165,9 +177,21 @@ def inference(dataset, learn_step=0.005, num_iter=500,
         jacc_tot_old += jacc_old
         Y_test_batch_old = Y_test_batch
 
+        Y_test_batch_dae = pred_dae_fn(*(H_test_batch+[Y_test_batch]))
+        acc_dae, jacc_dae = val_fn(Y_test_batch_dae, L_test_target)
+        acc_tot_dae += acc_dae
+        jacc_tot_dae += jacc_dae
+
         # Iterative inference
         for it in range(num_iter):
+            rec_loss = loss_fn(*(H_test_batch+[Y_test_batch,
+                                               L_test_batch[:, :-1, :, :]]))
+
+            print rec_loss
             grad = de_fn(*(H_test_batch+[Y_test_batch]))
+
+            # hist = np.histogram(grad, 10)
+            # print hist
 
             Y_test_batch = Y_test_batch - learn_step * grad
 
@@ -178,8 +202,12 @@ def inference(dataset, learn_step=0.005, num_iter=500,
                          'batch' + str(i) + '_' + 'step' + str(it),
                          void_labels)
 
-            if np.linalg.norm(grad) < _EPSILON:
+            norm = np.linalg.norm(grad, axis=1).mean()
+            if norm < _EPSILON:
                 break
+            # print norm
+            acc_iter, jacc_iter = val_fn(Y_test_batch, L_test_target)
+            print acc_iter, np.mean(jacc_iter[0, :] / jacc_iter[1, :])
 
         # Compute metrics
         acc, jacc = val_fn(Y_test_batch, L_test_target)
@@ -187,12 +215,25 @@ def inference(dataset, learn_step=0.005, num_iter=500,
         acc_tot += acc
         jacc_tot += jacc
 
-        info_str = "    old acc %f, new acc %f, old jacc %f, new jacc %f"
+        jacc_perclass_old = jacc_tot_old[0, :]/jacc_tot_old[1, :]
+        jacc_perclass = jacc_tot[0, :]/jacc_tot[1, :]
+        jacc_perclass_dae = jacc_tot_dae[0, :]/jacc_tot_dae[1, :]
+
+        info_str = "    fcn8 acc %f, iter acc %f, fcn8 jacc %f, iter jacc %f"
+        info_str += ", dae acc  %f, dae jacc % f"
         info_str = info_str % (acc_tot_old,
                                acc_tot,
                                np.mean(jacc_tot_old[0, :]/jacc_tot_old[1, :]),
-                               np.mean(jacc_tot[0, :] / jacc_tot[1, :]))
+                               np.mean(jacc_tot[0, :] / jacc_tot[1, :]),
+                               acc_tot_dae,
+                               np.mean(jacc_tot_dae[0, :]/jacc_tot_dae[1, :])
+                               )
         print info_str
+
+        print jacc_perclass_old
+        print jacc_perclass
+        print jacc_perclass_dae
+        print test_iter.get_mask_labels()
 
         if not save_perstep:
             # Save images
@@ -225,12 +266,12 @@ def main():
                         help='Dataset.')
     parser.add_argument('-step',
                         type=float,
-                        default=1.,
+                        default=.1,
                         help='step')
     parser.add_argument('--num_iter',
                         '-ne',
                         type=int,
-                        default=100,
+                        default=10,
                         help='Max number of iterations')
     parser.add_argument('-training_loss',
                         type=str,
@@ -258,15 +299,15 @@ def main():
                         help='Additional pool DAE')
     parser.add_argument('-skip',
                         type=bool,
-                        default=True,
+                        default=False,
                         help='Whether to skip connections in DAE')
     parser.add_argument('-unpool_type',
                         type=str,
-                        default='standard',
+                        default='trackind',
                         help='Unpooling type - standard or trackind')
     parser.add_argument('-from_gt',
                         type=bool,
-                        default=False,
+                        default=True,
                         help='Whether to train from GT (true) or fcn' +
                         'output (False)')
     parser.add_argument('-save_perstep',
