@@ -28,6 +28,7 @@ elif getuser() == 'jegousim':
     WEIGHTS_PATH = '/data/lisatmp4/romerosa/rnncnn/fcn8_model.npz'
 elif getuser() == 'michal':
     SAVEPATH = '/home/michal/Experiments/iter_inf/'
+    LOADPATH = SAVEPATH
     WEIGHTS_PATH = '/home/michal/model_earlyjacc.npz'
 else:
     raise ValueError('Unknown user : {}'.format(getuser()))
@@ -78,7 +79,8 @@ def train(dataset, learn_step=0.005,
     #
     # Build dataset iterator
     #
-    train_iter, val_iter, _ = load_data(dataset, train_crop_size=None,
+    train_iter, val_iter, _ = load_data(dataset, 
+                                        train_crop_size=None,
                                         one_hot=True,
                                         batch_size=[3, 3, 3])
 
