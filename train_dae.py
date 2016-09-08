@@ -39,7 +39,8 @@ def train(dataset, learn_step=0.005,
           epsilon=.0, optimizer='rmsprop', training_loss='squared_error',
           layer_h=['pool5'], n_filters=64, noise=0.1, conv_before_pool=1,
           additional_pool=0, dropout=0., skip=False, unpool_type='standard',
-          from_gt=True, savepath=None, loadpath=None, resume=False):
+          from_gt=True, data_aug=False, savepath=None, loadpath=None, 
+          resume=False):
 
     #
     # Prepare load/save directories
@@ -51,6 +52,7 @@ def train(dataset, learn_step=0.005,
     exp_name += ('_fromgt' if from_gt else '_fromfcn8')
     exp_name += '_' + unpool_type + ('_dropout' + str(dropout) if
                                      dropout > 0. else '')
+    exp_name += '_data_aug' if data_aug else ''
 
     if savepath is None:
         raise ValueError('A saving directory must be specified')
@@ -79,10 +81,18 @@ def train(dataset, learn_step=0.005,
     #
     # Build dataset iterator
     #
+    if data_aug:
+        train_crop_size = [256, 256]
+        horizontal_flip = True
+    else:
+        train_crop_size = None
+        horizontal_flip = False
+
     train_iter, val_iter, _ = load_data(dataset, 
-                                        train_crop_size=None,
+                                        train_crop_size=train_crop_size,
+                                        horizontal_flip=horizontal_flip,
                                         one_hot=True,
-                                        batch_size=[3, 3, 3])
+                                        batch_size=[5, 3, 3])
 
     n_batches_train = train_iter.get_n_batches()
     n_batches_val = val_iter.get_n_batches()
@@ -341,18 +351,23 @@ def main():
                         help='Additional pool DAE')
     parser.add_argument('-skip',
                         type=bool,
-                        default=True,
+                        default=False,
                         help='Whether to skip connections in DAE')
     parser.add_argument('-unpool_type',
                         type=str,
-                        default='standard',
+                        default='trackind',
                         help='Unpooling type - standard or trackind')
     parser.add_argument('-from_gt',
                         type=bool,
-                        default=True,
+                        default=False,
                         help='Whether to train from GT (true) or fcn' +
                         'output (False)')
-
+    parser.add_argument('-data_aug',
+                        type=bool,
+                        default=True,
+                        help='use data augmentation')
+    
+    
     args = parser.parse_args()
 
     train(args.dataset, float(args.learning_rate),
@@ -364,7 +379,8 @@ def main():
           additional_pool=args.additional_pool,
           dropout=args.dropout,
           skip=args.skip, unpool_type=args.unpool_type,
-          from_gt=args.from_gt, resume=False,
+          from_gt=args.from_gt, data_aug=args.data_aug, 
+          resume=False,
           savepath=SAVEPATH, loadpath=LOADPATH)
 
 
