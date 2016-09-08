@@ -66,6 +66,7 @@ def inference(dataset, learn_step=0.005, num_iter=500,
         _, _, test_iter = load_data(dataset, train_crop_size=None,
                                     one_hot=True, batch_size=[10, 10, 10])
 
+    colors = test_iter.get_cmap_values()
     n_batches_test = test_iter.get_n_batches()
     n_classes = test_iter.get_n_classes()
     void_labels = test_iter.get_void_labels()
@@ -84,7 +85,8 @@ def inference(dataset, learn_step=0.005, num_iter=500,
     if savepath is None:
         raise ValueError('A saving directory must be specified')
 
-    savepath = os.path.join(savepath, dataset, exp_name, 'img_plots')
+    savepath = os.path.join(savepath, dataset, exp_name, 'img_plots',
+                            which_set)
     loadpath = os.path.join(loadpath, dataset, exp_name)
     if not os.path.exists(savepath):
         os.makedirs(savepath)
@@ -209,7 +211,7 @@ def inference(dataset, learn_step=0.005, num_iter=500,
                 save_img(X_test_batch, L_test_batch.argmax(1), Y_test_batch,
                          Y_test_batch_old, savepath, n_classes,
                          'batch' + str(i) + '_' + 'step' + str(it),
-                         void_labels)
+                         void_labels, colors)
 
             norm = np.linalg.norm(grad, axis=1).mean()
             if norm < _EPSILON:
@@ -248,7 +250,7 @@ def inference(dataset, learn_step=0.005, num_iter=500,
             # Save images
             save_img(X_test_batch, L_test_batch.argmax(1), Y_test_batch,
                      Y_test_batch_old, savepath, n_classes,
-                     'batch' + str(i), void_labels)
+                     'batch' + str(i), void_labels, colors)
 
     acc_test = acc_tot/n_batches_test
     jacc_test = np.mean(jacc_tot[0, :] / jacc_tot[1, :])
@@ -263,7 +265,7 @@ def inference(dataset, learn_step=0.005, num_iter=500,
     # Move segmentations
     if savepath != loadpath:
         print('Copying images to {}'.format(loadpath))
-        copy_tree(savepath, os.path.join(loadpath, 'img_plots'))
+        copy_tree(savepath, os.path.join(loadpath, 'img_plots', which_set))
 
 
 def main():

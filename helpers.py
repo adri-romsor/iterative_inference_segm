@@ -26,7 +26,7 @@ def my_label2rgboverlay(labels, colors, image, bglabel=None,
 
 
 def save_img(image_batch, mask_batch, output, output_old, out_images_folder,
-             n_classes, tag, void_label):
+             n_classes, tag, void_label, colors):
 
     output = output.argmax(1)
     output_old = output_old.argmax(1)
@@ -35,7 +35,9 @@ def save_img(image_batch, mask_batch, output, output_old, out_images_folder,
     output_old[(mask_batch == void_label).nonzero()] = void_label[0]
 
     # color_map = sns.hls_palette(n_classes+1)
-    color_map = sns.color_palette("Set2",  n_classes+1)
+    pal = ['#%02x%02x%02x' % t for t in colors]
+    sns.set_palette(pal)
+    color_map = sns.color_palette()
 
     images = []
     for j in xrange(output.shape[0]):

@@ -37,7 +37,7 @@ def buildFCN_down(input_var, concat_vars,
     Build fcn contracting path
     '''
 
-    assert all([el in ['pool1', 'pool2', 'pool3', 'pool4',  'input']
+    assert all([el in ['pool1', 'pool2', 'pool3', 'pool4', 'input']
                 for el in concat_layers])
 
     if 'pool' in concat_layers[-1]:
@@ -76,12 +76,15 @@ def buildFCN_down(input_var, concat_vars,
                 pad_type = 'same'
 
             # Define conv
+            if p < 6:
+                filters_conv = n_filters*(2**p)
+
             net['conv'+str(p+1)+'_'+str(i)] = ConvLayer(
-                net[out], n_filters*(2**p), 3,
+                net[out], filters_conv, 3,
                 pad=pad_type, flip_filters=False)
             out = 'conv'+str(p+1)+'_'+str(i)
 
-            if p == n_pool+additional_pool-1 and dropout > 0.:
+            if p > n_pool and dropout > 0.:
                 net[out+'_drop'] = DropoutLayer(net[out], p=dropout)
                 out += '_drop'
 
