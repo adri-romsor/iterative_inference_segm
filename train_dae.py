@@ -39,7 +39,7 @@ def train(dataset, learn_step=0.005,
           epsilon=.0, optimizer='rmsprop', training_loss='squared_error',
           layer_h=['pool5'], n_filters=64, noise=0.1, conv_before_pool=1,
           additional_pool=0, dropout=0., skip=False, unpool_type='standard',
-          from_gt=True, data_aug=False, savepath=None, loadpath=None, 
+          from_gt=True, data_aug=False, savepath=None, loadpath=None,
           resume=False):
 
     #
@@ -88,7 +88,7 @@ def train(dataset, learn_step=0.005,
         train_crop_size = None
         horizontal_flip = False
 
-    train_iter, val_iter, _ = load_data(dataset, 
+    train_iter, val_iter, _ = load_data(dataset,
                                         train_crop_size=train_crop_size,
                                         horizontal_flip=horizontal_flip,
                                         one_hot=True,
@@ -379,7 +379,7 @@ def main():
           additional_pool=args.additional_pool,
           dropout=args.dropout,
           skip=args.skip, unpool_type=args.unpool_type,
-          from_gt=args.from_gt, data_aug=args.data_aug, 
+          from_gt=args.from_gt, data_aug=args.data_aug,
           resume=False,
           savepath=SAVEPATH, loadpath=LOADPATH)
 
