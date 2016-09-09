@@ -38,7 +38,7 @@ def inference(dataset, learn_step=0.005, num_iter=500,
               training_loss='squared_error', layer_h=['pool5'],
               n_filters=64, noise=0.1, conv_before_pool=1, additional_pool=0,
               dropout=0., skip=False, unpool_type='standard', from_gt=True,
-              save_perstep=False, which_set='test',
+              save_perstep=False, which_set='test', data_aug=False,
               savepath=None, loadpath=None):
     #
     # Define symbolic variables
@@ -81,6 +81,7 @@ def inference(dataset, learn_step=0.005, num_iter=500,
     exp_name += ('_fromgt' if from_gt else '_fromfcn8')
     exp_name += '_' + unpool_type + ('_dropout' + str(dropout) if
                                      dropout > 0. else '')
+    exp_name += '_data_aug' if data_aug else ''
 
     if savepath is None:
         raise ValueError('A saving directory must be specified')
@@ -331,8 +332,13 @@ def main():
                         help='Save new segmentations after each step update')
     parser.add_argument('-which_set',
                         type=str,
-                        default='test',
+                        default='valid',
                         help='Inference set')
+    parser.add_argument('-data_aug',
+                        type=bool,
+                        default=False,
+                        help='Whether to do data augmentation')
+
     args = parser.parse_args()
 
     inference(args.dataset, float(args.step), int(args.num_iter),
@@ -341,7 +347,8 @@ def main():
               additional_pool=args.additional_pool, dropout=args.dropout,
               skip=args.skip, unpool_type=args.unpool_type,
               from_gt=args.from_gt, save_perstep=args.save_perstep,
-              which_set=args.which_set, savepath=SAVEPATH, loadpath=LOADPATH)
+              which_set=args.which_set, data_aug=args.data_aug,
+              savepath=SAVEPATH, loadpath=LOADPATH)
 
 
 if __name__ == "__main__":
