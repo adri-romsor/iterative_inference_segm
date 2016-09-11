@@ -72,14 +72,22 @@ def train(dataset, learn_step=0.005,
     if data_aug:
         train_crop_size = [256, 256]
         horizontal_flip = True
-        rotation_range = 25
-        shear_range = 0.41
-        vertical_flip = True
-        fill_mode = 'reflect'
-        spline_warp = False
-        warp_sigma = 10
-        warp_grid_size = 3
-        elastic_def = True
+        if dataset == 'em':
+            rotation_range = 25
+            shear_range = 0.41
+            vertical_flip = True
+            fill_mode = 'reflect'
+            spline_warp = True
+            warp_sigma = 10
+            warp_grid_size = 3
+        else:
+            rotation_range = 0
+            shear_range = 0
+            vertical_flip = False
+            fill_mode = 'reflect'
+            spline_warp = False
+            warp_sigma = 10
+            warp_grid_size = 3
     else:
         train_crop_size = None
         horizontal_flip = False
@@ -88,9 +96,8 @@ def train(dataset, learn_step=0.005,
         vertical_flip = False
         fill_mode = 'reflect'
         spline_warp = False
-        warp_sigma = 0
+        warp_sigma = 10
         warp_grid_size = 3
-        elastic_def = False
 
     train_iter, val_iter, test_iter = \
         load_data(dataset, one_hot=False,
@@ -102,8 +109,7 @@ def train(dataset, learn_step=0.005,
                   fill_mode=fill_mode,
                   spline_warp=spline_warp,
                   warp_sigma=warp_sigma,
-                  warp_grid_size=warp_grid_size,
-                  elastic_def=elastic_def)
+                  warp_grid_size=warp_grid_size)
 
     n_batches_train = train_iter.get_n_batches()
     n_batches_val = val_iter.get_n_batches()

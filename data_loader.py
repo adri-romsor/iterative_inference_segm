@@ -18,7 +18,7 @@ def load_data(dataset, train_crop_size=(224, 224), one_hot=False,
               vertical_flip=False,
               rescale=None,
               spline_warp=False,
-              warp_sigma=0.1,
+              warp_sigma=10,
               warp_grid_size=3,
               elastic_def=False):
 
@@ -138,15 +138,14 @@ def load_data(dataset, train_crop_size=(224, 224), one_hot=False,
                                          get_one_hot=one_hot,
                                          get_01c=False,
                                          overlap=0,
-                                         use_threads=True,
-                                         elastic_deform=elastic_def)
+                                         use_threads=True)
 
         val_iter = IsbiEmStacksDataset(which_set='train',
                                        batch_size=batch_size[1],
                                        seq_per_video=0,
                                        seq_length=0,
                                        crop_size=None,
-                                       get_one_hot=False,
+                                       get_one_hot=one_hot,
                                        get_01c=False,
                                        use_threads=True,
                                        shuffle_at_each_epoch=False,

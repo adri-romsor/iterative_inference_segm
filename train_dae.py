@@ -84,15 +84,39 @@ def train(dataset, learn_step=0.005,
     if data_aug:
         train_crop_size = [256, 256]
         horizontal_flip = True
+        if dataset == 'em':
+            spline_warp = True
+            rotation_range = 25
+            shear_range = .41
+            vertical_flip = True
+            fill_mode = 'reflect'
+        else:
+            spline_warp = False
+            rotation_range = 0
+            shear_range = .0
+            vertical_flip = False
+            fill_mode = 'reflect'
+
     else:
         train_crop_size = None
         horizontal_flip = False
+        spline_warp = False
+        rotation_range = 0
+        shear_range = .0
+        vertical_flip = False
+        fill_mode = 'reflect'
 
     train_iter, val_iter, _ = load_data(dataset,
                                         train_crop_size=train_crop_size,
                                         horizontal_flip=horizontal_flip,
+                                        rotation_range=rotation_range,
+                                        shear_range=shear_range,
+                                        spline_warp=spline_warp,
+                                        vertical_flip=vertical_flip,
+                                        fill_mode=fill_mode,
                                         one_hot=True,
-                                        batch_size=[5, 3, 3])
+                                        batch_size=[5, 3, 3],
+                                        )
 
     n_batches_train = train_iter.get_n_batches()
     n_batches_val = val_iter.get_n_batches()
@@ -297,7 +321,7 @@ def main():
     parser = argparse.ArgumentParser(description='DAE training')
     parser.add_argument('-dataset',
                         type=str,
-                        default='camvid',
+                        default='em',
                         help='Dataset.')
     parser.add_argument('-learning_rate',
                         type=float,
@@ -310,7 +334,7 @@ def main():
     parser.add_argument('--num_epochs',
                         '-ne',
                         type=int,
-                        default=500,
+                        default=1000,
                         help='Max number of epochs')
     parser.add_argument('--max_patience',
                         '-mp',
@@ -363,15 +387,14 @@ def main():
                         help='Unpooling type - standard or trackind')
     parser.add_argument('-from_gt',
                         type=bool,
-                        default=False,
+                        default=True,
                         help='Whether to train from GT (true) or fcn' +
                         'output (False)')
     parser.add_argument('-data_aug',
                         type=bool,
                         default=True,
                         help='use data augmentation')
-    
-    
+
     args = parser.parse_args()
 
     train(args.dataset, float(args.learning_rate),
