@@ -21,7 +21,7 @@ _FLOATX = config.floatX
 if getuser() == 'romerosa':
     SAVEPATH = '/Tmp/romerosa/itinf/models/'
     LOADPATH = '/data/lisatmp4/romerosa/itinf/models/'
-    WEIGHTS_PATH = '/Tmp/romerosa/itinf/models/camvid/fcn8_model.npz'
+    WEIGHTS_PATH = '/data/lisatmp4/romerosa/itinf/models/'
 elif getuser() == 'jegousim':
     SAVEPATH = '/data/lisatmp4/jegousim/iterative_inference/'
     LOADPATH = '/data/lisatmp4/jegousim/iterative_inference/'
@@ -98,6 +98,8 @@ def train(dataset, learn_step=0.005,
     n_batches_val = val_iter.get_n_batches()
     n_classes = train_iter.get_n_classes()
     void_labels = train_iter.get_void_labels()
+    nb_in_channels = train_iter.data_shape[0]
+    void = n_classes if any(void_labels) else n_classes+1
 
     #
     # Build networks
@@ -110,12 +112,14 @@ def train(dataset, learn_step=0.005,
                    skip=skip, unpool_type=unpool_type, load_weights=resume,
                    path_weights=savepath, model_name='dae_model.npz')
     # FCN
-    print('Weights of FCN8 will be loaded from : ' + WEIGHTS_PATH)
+    print('Weights of FCN8 will be loaded from : ' + WEIGHTS_PATH +
+          dataset + '/fcn8_model.npz')
     print ' Building FCN network'
     if not from_gt:
         layer_h += ['probs_dimshuffle']
-    fcn = buildFCN8(3, input_x_var, n_classes=n_classes,
-                    void_labels=void_labels, path_weights=WEIGHTS_PATH,
+    fcn = buildFCN8(nb_in_channels, input_x_var, n_classes=n_classes,
+                    void_labels=void_labels,
+                    path_weights=WEIGHTS_PATH+dataset+'/fcn8_model.npz',
                     trainable=True, load_weights=True, layer=layer_h)
 
     #
@@ -222,7 +226,7 @@ def train(dataset, learn_step=0.005,
             X_pred_batch = fcn_fn(X_train_batch)
             if from_gt:
                 L_train_batch = L_train_batch.astype(_FLOATX)
-                L_train_batch = L_train_batch[:, :-1, :, :]
+                L_train_batch = L_train_batch[:, :void, :, :]
             else:
                 L_train_batch = X_pred_batch[-1]
                 X_pred_batch = X_pred_batch[:-1]
@@ -243,7 +247,7 @@ def train(dataset, learn_step=0.005,
             X_pred_batch = fcn_fn(X_val_batch)
             if from_gt:
                 L_val_batch = L_val_batch.astype(_FLOATX)
-                L_val_batch = L_val_batch[:, :-1, :, :]
+                L_val_batch = L_val_batch[:, :void, :, :]
             else:
                 L_val_batch = X_pred_batch[-1]
                 X_pred_batch = X_pred_batch[:-1]
