@@ -5,10 +5,13 @@ _FLOATX = config.floatX
 _EPSILON = 10e-8
 
 
-def jaccard(y_pred, y_true, n_classes):
+def jaccard(y_pred, y_true, n_classes, one_hot=False):
 
     # y_pred to indices
     y_pred = T.argmax(y_pred, axis=1)
+
+    if one_hot:
+        y_true = T.argmax(y_true, axis=1)
 
     # Compute confusion matrix
     cm = T.zeros((n_classes, n_classes))
@@ -28,16 +31,19 @@ def jaccard(y_pred, y_true, n_classes):
     return T.stack([num, denom], axis=0)
 
 
-def accuracy(y_pred, y_true, void_labels):
+def accuracy(y_pred, y_true, void_labels, one_hot=False):
 
     # y_pred to indices
     y_pred = T.argmax(y_pred, axis=1)
 
+    if one_hot:
+        y_true = T.argmax(y_true, axis=1)
+
     # Compute accuracy
-    acc = T.eq(y_pred, y_true)
+    acc = T.eq(y_pred, y_true).astype(_FLOATX)
 
     # Create mask
-    mask = T.ones_like(y_true)
+    mask = T.ones_like(y_true, dtype=_FLOATX)
     for el in void_labels:
         indices = T.eq(y_true, el).nonzero()
         if any(indices):
@@ -45,29 +51,33 @@ def accuracy(y_pred, y_true, void_labels):
 
     # Apply mask
     acc *= mask
-    acc = T.sum(acc) / T.sum(mask).astype(_FLOATX)
+    acc = T.sum(acc) / T.sum(mask)
 
     return acc
 
 
-def crossentropy(y_pred, y_true, void_labels):
+def crossentropy(y_pred, y_true, void_labels, one_hot=False):
     # Clip predictions
     y_pred = T.clip(y_pred, _EPSILON, 1.0 - _EPSILON)
 
+    if one_hot:
+        y_true = T.argmax(y_true, axis=1)
+
     # Create mask
-    mask = T.ones_like(y_true)
+    mask = T.ones_like(y_true, dtype=_FLOATX)
     for el in void_labels:
         mask = T.set_subtensor(mask[T.eq(y_true, el).nonzero()], 0.)
 
     # Modify y_true temporarily
     y_true_tmp = y_true * mask
+    y_true_tmp = y_true_tmp.astype('int32')
 
     # Compute cross-entropy
     loss = T.nnet.categorical_crossentropy(y_pred, y_true_tmp)
 
     # Compute masked mean loss
     loss *= mask
-    loss = T.sum(loss) / T.sum(mask).astype(_FLOATX)
+    loss = T.sum(loss) / T.sum(mask)
 
     return loss
 

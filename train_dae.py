@@ -169,7 +169,8 @@ def train(dataset, learn_step=0.005,
         input_mask_var_2D = input_mask_var_2D.reshape((T.prod(sh[:3]), sh[3]))
         input_mask_var_2D = T.argmax(input_mask_var_2D, axis=1)
         # Compute loss
-        loss = crossentropy(prediction_2D, input_mask_var_2D, void_labels)
+        loss = crossentropy(prediction_2D, input_mask_var_2D, void_labels,
+                            one_hot=True)
     elif training_loss == 'squared_error':
         loss = squared_error(prediction, input_mask_var).mean(axis=1)
         mask = input_mask_var.sum(axis=1)
@@ -214,7 +215,7 @@ def train(dataset, learn_step=0.005,
                                                          sh[3]))
         # Compute loss
         test_loss = crossentropy(test_prediction_2D, input_mask_var_2D,
-                                 void_labels)
+                                 void_labels, one_hot=True)
     elif training_loss == 'squared_error':
         test_loss = squared_error(test_prediction, input_mask_var).mean(axis=1)
         mask = input_mask_var.sum(axis=1)
@@ -321,7 +322,7 @@ def main():
     parser = argparse.ArgumentParser(description='DAE training')
     parser.add_argument('-dataset',
                         type=str,
-                        default='em',
+                        default='camvid',
                         help='Dataset.')
     parser.add_argument('-learning_rate',
                         type=float,
@@ -371,7 +372,7 @@ def main():
                         help='Conv. before pool in DAE.')
     parser.add_argument('-additional_pool',
                         type=int,
-                        default=2,
+                        default=3,
                         help='Additional pool DAE')
     parser.add_argument('-dropout',
                         type=float,

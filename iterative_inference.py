@@ -50,7 +50,6 @@ def inference(dataset, learn_step=0.005, num_iter=500,
         input_h_var += [T.tensor4()]
         name += ('_'+l)
     y_hat_var = T.tensor4('pred_y_var')
-    target_var = T.ivector('target_var')
     target_var_4D = T.itensor4('target_var_4D')
 
     #
@@ -70,6 +69,8 @@ def inference(dataset, learn_step=0.005, num_iter=500,
     n_batches_test = test_iter.get_n_batches()
     n_classes = test_iter.get_n_classes()
     void_labels = test_iter.get_void_labels()
+    nb_in_channels = test_iter.data_shape[0]
+    void = n_classes if any(void_labels) else n_classes+1
 
     #
     # Prepare load/save directories
@@ -106,7 +107,7 @@ def inference(dataset, learn_step=0.005, num_iter=500,
     #
     print 'Building networks'
     # Build FCN8  with pre-trained weights up to layer_h + prediction
-    fcn = buildFCN8(3, input_var=input_x_var,
+    fcn = buildFCN8(nb_in_channels, input_var=input_x_var,
                     n_classes=n_classes,
                     void_labels=void_labels,
                     trainable=False, load_weights=True,
@@ -136,6 +137,11 @@ def inference(dataset, learn_step=0.005, num_iter=500,
     sh = y_hat_dimshuffle.shape
     y_hat_2D = y_hat_dimshuffle.reshape((T.prod(sh[:3]), sh[3]))
 
+    # Reshape iterative inference output to b01,c
+    target_var_dimshuffle = target_var_4D.dimshuffle((0, 2, 3, 1))
+    sh2 = target_var_dimshuffle.shape
+    target_var_2D = target_var_dimshuffle.reshape((T.prod(sh2[:3]), sh2[3]))
+
     # derivative of energy wrt input
     de = - (pred_dae - y_hat_var)
 
@@ -150,11 +156,11 @@ def inference(dataset, learn_step=0.005, num_iter=500,
     pred_dae_fn = theano.function(input_h_var+[y_hat_var], pred_dae)
 
     # metrics to evaluate iterative inference
-    test_acc = accuracy(y_hat_2D, target_var, void_labels)
-    test_jacc = jaccard(y_hat_2D, target_var, n_classes)
+    test_acc = accuracy(y_hat_2D, target_var_2D, void_labels, one_hot=True)
+    test_jacc = jaccard(y_hat_2D, target_var_2D, n_classes, one_hot=True)
 
     # functions to compute metrics
-    val_fn = theano.function([y_hat_var, target_var],
+    val_fn = theano.function([y_hat_var, target_var_4D],
                              [test_acc, test_jacc])
 
     #
@@ -167,16 +173,12 @@ def inference(dataset, learn_step=0.005, num_iter=500,
     jacc_tot_old = 0
     acc_tot_dae = 0
     jacc_tot_dae = 0
-    for i in range(n_batches_test):
+    for i in range(1):  # (n_batches_test):
         info_str = "Batch %d out of %d" % (i, n_batches_test)
         print info_str
 
         # Get minibatch
         X_test_batch, L_test_batch = test_iter.next()
-        L_test_target = L_test_batch.argmax(1)
-        L_test_target = np.reshape(L_test_target,
-                                   np.prod(L_test_target.shape))
-        L_test_target = L_test_target.astype('int32')
 
         # Compute fcn prediction y and h
         pred_test_batch = pred_fcn_fn(X_test_batch)
@@ -184,20 +186,20 @@ def inference(dataset, learn_step=0.005, num_iter=500,
         H_test_batch = pred_test_batch[:-1]
 
         # Compute metrics before iterative inference
-        acc_old, jacc_old = val_fn(Y_test_batch, L_test_target)
+        acc_old, jacc_old = val_fn(Y_test_batch, L_test_batch)
         acc_tot_old += acc_old
         jacc_tot_old += jacc_old
         Y_test_batch_old = Y_test_batch
 
         Y_test_batch_dae = pred_dae_fn(*(H_test_batch+[Y_test_batch]))
-        acc_dae, jacc_dae = val_fn(Y_test_batch_dae, L_test_target)
+        acc_dae, jacc_dae = val_fn(Y_test_batch_dae, L_test_batch)
         acc_tot_dae += acc_dae
         jacc_tot_dae += jacc_dae
 
         # Iterative inference
         for it in range(num_iter):
             rec_loss = loss_fn(*(H_test_batch+[Y_test_batch,
-                                               L_test_batch[:, :-1, :, :]]))
+                                               L_test_batch[:, :void, :, :]]))
 
             print rec_loss
             grad = de_fn(*(H_test_batch+[Y_test_batch]))
@@ -218,11 +220,11 @@ def inference(dataset, learn_step=0.005, num_iter=500,
             if norm < _EPSILON:
                 break
             # print norm
-            acc_iter, jacc_iter = val_fn(Y_test_batch, L_test_target)
+            acc_iter, jacc_iter = val_fn(Y_test_batch, L_test_batch)
             print acc_iter, np.mean(jacc_iter[0, :] / jacc_iter[1, :])
 
         # Compute metrics
-        acc, jacc = val_fn(Y_test_batch, L_test_target)
+        acc, jacc = val_fn(Y_test_batch, L_test_batch)
 
         acc_tot += acc
         jacc_tot += jacc
@@ -307,7 +309,7 @@ def main():
                         help='Conv. before pool in DAE.')
     parser.add_argument('-additional_pool',
                         type=int,
-                        default=2,
+                        default=4,
                         help='Additional pool DAE')
     parser.add_argument('-dropout',
                         type=float,
@@ -315,11 +317,11 @@ def main():
                         help='Additional pool DAE')
     parser.add_argument('-skip',
                         type=bool,
-                        default=True,
+                        default=False,
                         help='Whether to skip connections in DAE')
     parser.add_argument('-unpool_type',
                         type=str,
-                        default='standard',
+                        default='trackind',
                         help='Unpooling type - standard or trackind')
     parser.add_argument('-from_gt',
                         type=bool,
@@ -332,11 +334,11 @@ def main():
                         help='Save new segmentations after each step update')
     parser.add_argument('-which_set',
                         type=str,
-                        default='valid',
+                        default='train',
                         help='Inference set')
     parser.add_argument('-data_aug',
                         type=bool,
-                        default=False,
+                        default=True,
                         help='Whether to do data augmentation')
 
     args = parser.parse_args()

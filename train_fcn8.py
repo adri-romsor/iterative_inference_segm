@@ -213,7 +213,7 @@ def train(dataset, learn_step=0.005,
                              time.time()-start_time)
         print out_str
 
-        with open(savepath + "fcn8_output.log", "a") as f:
+        with open(os.path.join(savepath, "fcn8_output.log"), "a") as f:
             f.write(out_str + "\n")
 
         # Early stopping and saving stuff
@@ -222,9 +222,9 @@ def train(dataset, learn_step=0.005,
         elif epoch > 1 and jacc_valid[epoch] > best_jacc_val:
             best_jacc_val = jacc_valid[epoch]
             patience = 0
-            np.savez(savepath + 'fcn8_model.npz',
+            np.savez(os.path.join(savepath, 'fcn8_model.npz'),
                      *lasagne.layers.get_all_param_values(convmodel))
-            np.savez(savepath + "fcn8_errors.npz",
+            np.savez(os.path.join(savepath + "fcn8_errors.npz"),
                      err_valid, err_train, acc_valid,
                      jacc_valid)
         else:
@@ -235,7 +235,7 @@ def train(dataset, learn_step=0.005,
         if patience == max_patience or epoch == num_epochs-1:
             if test_iter is not None:
                 # Load best model weights
-                with np.load(savepath + 'fcn8_model.npz',) as f:
+                with np.load(os.path.join(savepath, 'fcn8_model.npz')) as f:
                     param_values = [f['arr_%d' % i]
                                     for i in range(len(f.files))]
                 nlayers = len(lasagne.layers.get_all_params(convmodel))
@@ -285,7 +285,7 @@ def main():
                         default='em',
                         help='Dataset.')
     parser.add_argument('-learning_rate',
-                        default=0.0001,
+                        default=0.001,
                         help='Learning Rate')
     parser.add_argument('-penal_cst',
                         default=0.0,

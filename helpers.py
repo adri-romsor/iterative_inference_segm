@@ -49,12 +49,12 @@ def save_img(image_batch, mask_batch, output, output_old, out_images_folder,
         mask_on_img = my_label2rgboverlay(mask_batch[j], colors=color_map,
                                           image=img, bglabel=void_label,
                                           alpha=0.2)
-        pred_on_img = my_label2rgboverlay(output[j], colors=color_map,
-                                          image=img, bglabel=void_label,
-                                          alpha=0.2)
+        # pred_on_img = my_label2rgboverlay(output[j], colors=color_map,
+        #                                   image=img, bglabel=void_label,
+        #                                   alpha=0.2)
 
         combined_image = np.concatenate((img, mask_on_img, label_out_old,
-                                         label_out, pred_on_img), axis=1)
+                                         label_out), axis=1)
         out_name = os.path.join(out_images_folder, tag + '_img' + str(j) +
                                 '.png')
         scipy.misc.toimage(combined_image).save(out_name)
