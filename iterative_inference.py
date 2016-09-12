@@ -23,7 +23,7 @@ _EPSILON = 10e-8
 if getuser() == 'romerosa':
     SAVEPATH = '/Tmp/romerosa/itinf/models/'
     LOADPATH = '/data/lisatmp4/romerosa/itinf/models/'
-    WEIGHTS_PATH = '/Tmp/romerosa/itinf/models/camvid/fcn8_model.npz'
+    WEIGHTS_PATH = '/data/lisatmp4/romerosa/itinf/models/'
 elif getuser() == 'jegousim':
     SAVEPATH = '/data/lisatmp4/jegousim/iterative_inference/'
     LOADPATH = '/data/lisatmp4/jegousim/iterative_inference/'
@@ -111,7 +111,8 @@ def inference(dataset, learn_step=0.005, num_iter=500,
                     n_classes=n_classes,
                     void_labels=void_labels,
                     trainable=False, load_weights=True,
-                    layer=layer_h+['probs_dimshuffle'])
+                    layer=layer_h+['probs_dimshuffle'],
+                    path_weights=WEIGHTS_PATH+dataset+'/fcn8_model.npz')
 
     # Build DAE with pre-trained weights
     dae = buildDAE(input_h_var, y_hat_var, n_classes, layer_h,
@@ -276,7 +277,7 @@ def main():
 
     parser.add_argument('-dataset',
                         type=str,
-                        default='camvid',
+                        default='em',
                         help='Dataset.')
     parser.add_argument('-step',
                         type=float,
