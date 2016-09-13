@@ -149,7 +149,7 @@ def load_data(dataset, train_crop_size=(224, 224), one_hot=False,
                                        get_01c=False,
                                        use_threads=True,
                                        shuffle_at_each_epoch=False,
-                                       start=26,
+                                       start=25,
                                        end=30)
         test_iter = None
     else:
