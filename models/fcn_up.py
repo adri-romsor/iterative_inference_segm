@@ -98,11 +98,11 @@ def buildFCN_up(incoming_net, incoming_layer, unpool,
                                                   unpool > 0 else 'score'],
                                               (0, 2, 3, 1))
     laySize = lasagne.layers.get_output(net['final_dimshuffle']).shape
-    net['final_reshape'] = ReshapeLayer(net['final_dimshuffle'],
-                                        (T.prod(laySize[0:3]),
-                                         laySize[3]))
-    net['probs'] = NonlinearityLayer(net['final_reshape'],
-                                     nonlinearity=softmax)
+    net['probs'] = ReshapeLayer(net['final_dimshuffle'],
+                                (T.prod(laySize[0:3]),
+                                 laySize[3]))
+    # net['probs'] = NonlinearityLayer(net['final_reshape'],
+    #                                 nonlinearity=softmax)
 
     # Go back to 4D
     net['probs_reshape'] = ReshapeLayer(net['probs'], (laySize[0], laySize[1],

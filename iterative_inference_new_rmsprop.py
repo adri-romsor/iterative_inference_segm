@@ -17,6 +17,8 @@ from models.DAE_h import buildDAE
 from models.fcn8 import buildFCN8
 from helpers import save_img
 
+import matplotlib.pyplot as plt
+
 _FLOATX = config.floatX
 _EPSILON = 10e-8
 
@@ -49,21 +51,26 @@ def inference(dataset, learn_step=0.005, num_iter=500,
     for l in layer_h:
         input_h_var += [T.tensor4()]
         name += ('_'+l)
-    y_hat_var = T.tensor4('pred_y_var')
+    # y_hat_var = T.tensor4('pred_y_var')
+    y_hat_var = theano.shared(np.zeros((10, 10, 10, 10), dtype=_FLOATX))
     target_var_4D = T.itensor4('target_var_4D')
+    y_hat_var_metrics = T.tensor4('y_hat_var_metrics')
 
     #
     # Build dataset iterator
     #
     if which_set == 'train':
         test_iter, _, _ = load_data(dataset, train_crop_size=None,
-                                    one_hot=True, batch_size=[10, 10, 10])
+                                    one_hot=False, batch_size=[5, 5, 5],
+                                    shuffle_train=False)
     elif which_set == 'valid':
         _, test_iter, _ = load_data(dataset, train_crop_size=None,
-                                    one_hot=True, batch_size=[10, 10, 10])
+                                    one_hot=False, batch_size=[5, 5, 5],
+                                    shuffle_train=False)
     if which_set == 'test':
         _, _, test_iter = load_data(dataset, train_crop_size=None,
-                                    one_hot=True, batch_size=[10, 10, 10])
+                                    one_hot=False, batch_size=[5, 5, 5],
+                                    shuffle_train=False)
 
     colors = test_iter.get_cmap_values()
     n_batches_test = test_iter.get_n_batches()
@@ -82,7 +89,7 @@ def inference(dataset, learn_step=0.005, num_iter=500,
     exp_name += ('_fromgt' if from_gt else '_fromfcn8')
     exp_name += '_' + unpool_type + ('_dropout' + str(dropout) if
                                      dropout > 0. else '')
-    exp_name += '_data_aug' if data_aug else ''
+    exp_name += '_data_aug_new' if data_aug else '_new'
 
     if savepath is None:
         raise ValueError('A saving directory must be specified')
@@ -115,7 +122,7 @@ def inference(dataset, learn_step=0.005, num_iter=500,
                     path_weights=WEIGHTS_PATH+dataset+'/fcn8_model.npz')
 
     # Build DAE with pre-trained weights
-    dae = buildDAE(input_h_var, y_hat_var, n_classes, layer_h,
+    dae = buildDAE(input_h_var, y_hat_var, 1, layer_h,
                    noise, n_filters, conv_before_pool, additional_pool,
                    dropout=dropout, trainable=True, void_labels=void_labels,
                    skip=skip, unpool_type=unpool_type, load_weights=True,
@@ -134,40 +141,45 @@ def inference(dataset, learn_step=0.005, num_iter=500,
     pred_fcn_fn = theano.function([input_x_var], pred_fcn)
 
     # Reshape iterative inference output to b01,c
-    y_hat_dimshuffle = y_hat_var.dimshuffle((0, 2, 3, 1))
+    y_hat_dimshuffle = y_hat_var_metrics.dimshuffle((0, 2, 3, 1))
     sh = y_hat_dimshuffle.shape
     y_hat_2D = y_hat_dimshuffle.reshape((T.prod(sh[:3]), sh[3]))
+    y_hat_1D = y_hat_2D.flatten()
 
     # Reshape iterative inference output to b01,c
     target_var_dimshuffle = target_var_4D.dimshuffle((0, 2, 3, 1))
     sh2 = target_var_dimshuffle.shape
     target_var_2D = target_var_dimshuffle.reshape((T.prod(sh2[:3]), sh2[3]))
+    target_var_1D = target_var_2D.flatten()
 
     # derivative of energy wrt input
     de = - (pred_dae - y_hat_var)
 
-    # function to compute de
-    de_fn = theano.function(input_h_var+[y_hat_var], de)
+    # MSE loss
+    loss = squared_error(y_hat_var, target_var_4D)
+    if any(void_labels):
+        mask = T.neq(target_var_4D, void_labels[0])
+        loss = loss * mask
+        loss = loss.sum()/mask.sum()
+    else:
+        loss = loss.mean()
 
-    loss = squared_error(pred_dae, target_var_4D).mean(axis=1)
-    mask = target_var_4D.sum(axis=1)
-    loss = loss * mask
-    loss = loss.sum()/mask.sum()
-    loss_fn = theano.function(input_h_var+[y_hat_var, target_var_4D], loss)
-    pred_dae_fn = theano.function(input_h_var+[y_hat_var], pred_dae)
+    loss_fn = theano.function([target_var_4D], loss)
+    pred_dae_fn = theano.function(input_h_var, pred_dae)
 
     # metrics to evaluate iterative inference
-    test_acc = accuracy(y_hat_2D, target_var_2D, void_labels, one_hot=True)
-    test_jacc = jaccard(y_hat_2D, target_var_2D, n_classes, one_hot=True)
+    test_acc = accuracy(y_hat_1D, target_var_1D, void_labels)
+    test_jacc = jaccard(y_hat_1D, target_var_1D, n_classes)
 
     # functions to compute metrics
-    val_fn = theano.function([y_hat_var, target_var_4D],
+    val_fn = theano.function([y_hat_var_metrics, target_var_4D],
                              [test_acc, test_jacc])
 
     #
     # Infer
     #
     print 'Start infering'
+    vis = False
     acc_tot = 0
     acc_tot_old = 0
     jacc_tot = 0
@@ -180,83 +192,123 @@ def inference(dataset, learn_step=0.005, num_iter=500,
 
         # Get minibatch
         X_test_batch, L_test_batch = test_iter.next()
+        L_test_batch = np.expand_dims(L_test_batch, axis=1)
 
         # Compute fcn prediction y and h
         pred_test_batch = pred_fcn_fn(X_test_batch)
         Y_test_batch = pred_test_batch[-1]
+        Y_test_batch = Y_test_batch.argmax(1).astype(_FLOATX)
+        Y_test_batch = np.expand_dims(Y_test_batch, axis=1)
         H_test_batch = pred_test_batch[:-1]
+        y_hat_var.set_value(Y_test_batch)
+
+        # Compute rec loss by using DAE in a standard way
+        Y_test_batch_dae = pred_dae_fn(*(H_test_batch))
+        Y_test_batch_dae_metrics = np.round(np.clip(Y_test_batch_dae, 0,
+                                                    n_classes-1))
+
+        acc_dae, jacc_dae = val_fn(Y_test_batch_dae_metrics, L_test_batch)
+        jacc_dae_mean = np.mean(jacc_dae[0, :] / jacc_dae[1, :])
+        rec_loss_dae = loss_fn(L_test_batch)
+
+        print '>>>>> Loss DAE: ' + str(rec_loss_dae)
+        print '      Acc DAE: ' + str(acc_dae)
+        print '      Jaccard DAE: ' + str(jacc_dae_mean)
 
         # Compute metrics before iterative inference
+        y_hat_var.set_value(Y_test_batch)
         acc_old, jacc_old = val_fn(Y_test_batch, L_test_batch)
         acc_tot_old += acc_old
         jacc_tot_old += jacc_old
+        rec_loss = loss_fn(L_test_batch)
         Y_test_batch_old = Y_test_batch
 
-        Y_test_batch_dae = pred_dae_fn(*(H_test_batch+[Y_test_batch]))
-        acc_dae, jacc_dae = val_fn(Y_test_batch_dae, L_test_batch)
-        acc_tot_dae += acc_dae
-        jacc_tot_dae += jacc_dae
+        jacc_mean = np.mean(jacc_tot_old[0, :] / jacc_tot_old[1, :])
+        print '>>>>> BEFORE: %f, %f, %f' % (acc_tot_old, jacc_mean, rec_loss)
+
+        # Updates (grad, shared variable to update, learning_rate)
+        updates = lasagne.updates.adam([de], [y_hat_var], learning_rate=learn_step)
+        # function to compute de
+        de_fn = theano.function(input_h_var, de, updates=updates)
 
         # Iterative inference
         for it in range(num_iter):
-            rec_loss = loss_fn(*(H_test_batch+[Y_test_batch,
-                                               L_test_batch[:, :void, :, :]]))
+            Y2 = np.copy(Y_test_batch)
+            grad = de_fn(*(H_test_batch))
 
-            print rec_loss
-            grad = de_fn(*(H_test_batch+[Y_test_batch]))
+            if vis:
+                grad_vis = -np.squeeze(np.copy(grad[0, :, :, :]))
+                plt.subplot(131)
+                img3 = plt.imshow(np.squeeze(Y2)[0, :100, :100], clim=(Y2.min(),
+                                                                    Y2.max()))
+                plt.colorbar(img3)
 
-            # hist = np.histogram(grad, 10)
-            # print hist
+                plt.subplot(132)
+                img = plt.imshow(grad_vis[:100, :100], clim=(grad_vis.min(),
+                                                             grad_vis.max()))
+                plt.colorbar(img)
 
-            Y_test_batch = Y_test_batch - learn_step * grad
+                plt.subplot(133)
+                img2 = plt.imshow(np.squeeze(np.copy(Y_test_batch))[0, :100, :100],
+                                  clim=(Y_test_batch.min(), Y_test_batch.max()))
+                plt.colorbar(img2)
+                plt.show()
+
+            # Make sure that Y_test_batch does not go beyond the max/min class
+            Y_test_batch_metrics = np.copy(Y_test_batch)
+            Y_test_batch_metrics = np.clip(Y_test_batch_metrics, 0, n_classes-1)
+            Y_test_batch_metrics = np.round(Y_test_batch_metrics)
 
             if save_perstep:
                 # Save images
-                save_img(X_test_batch, L_test_batch.argmax(1), Y_test_batch,
-                         Y_test_batch_old, savepath, n_classes,
+                save_img(np.copy(X_test_batch),
+                         np.copy(L_test_batch)[:, 0, :, :],
+                         np.copy(Y_test_batch_metrics)[:, 0, :, :],
+                         np.copy(Y_test_batch_old)[:, 0, :, :],
+                         savepath, n_classes,
                          'batch' + str(i) + '_' + 'step' + str(it),
                          void_labels, colors)
 
             norm = np.linalg.norm(grad, axis=1).mean()
             if norm < _EPSILON:
                 break
-            # print norm
-            acc_iter, jacc_iter = val_fn(Y_test_batch, L_test_batch)
-            print acc_iter, np.mean(jacc_iter[0, :] / jacc_iter[1, :])
+            # print 'norm: ' + str(norm)
+            acc_iter, jacc_iter = val_fn(Y_test_batch_metrics, L_test_batch)
+            rec_loss = loss_fn(L_test_batch)
+            print acc_iter, np.mean(jacc_iter[0, :]/jacc_iter[1, :]), rec_loss
 
         # Compute metrics
-        acc, jacc = val_fn(Y_test_batch, L_test_batch)
+        acc, jacc = val_fn(Y_test_batch_metrics, L_test_batch)
 
         acc_tot += acc
         jacc_tot += jacc
 
         jacc_perclass_old = jacc_tot_old[0, :]/jacc_tot_old[1, :]
         jacc_perclass = jacc_tot[0, :]/jacc_tot[1, :]
-        jacc_perclass_dae = jacc_tot_dae[0, :]/jacc_tot_dae[1, :]
 
         info_str = "    fcn8 acc %f, iter acc %f, fcn8 jacc %f, iter jacc %f"
-        info_str += ", dae acc  %f, dae jacc % f"
         info_str = info_str % (acc_tot_old,
                                acc_tot,
                                np.mean(jacc_tot_old[0, :]/jacc_tot_old[1, :]),
                                np.mean(jacc_tot[0, :] / jacc_tot[1, :]),
-                               acc_tot_dae,
-                               np.mean(jacc_tot_dae[0, :]/jacc_tot_dae[1, :])
                                )
         print info_str
 
         print ">>> Per class jaccard:"
         labs = test_iter.get_mask_labels()
 
-        for i in range(len(labs)-1):
+        for i in range(len(labs)-len(void_labels)):
             class_str = '    ' + labs[i] + ' : old ->  %f, new %f'
             class_str = class_str % (jacc_perclass_old[i], jacc_perclass[i])
             print class_str
 
         if not save_perstep:
             # Save images
-            save_img(X_test_batch, L_test_batch.argmax(1), Y_test_batch,
-                     Y_test_batch_old, savepath, n_classes,
+            save_img(np.copy(X_test_batch),
+                     np.copy(L_test_batch).squeeze(),
+                     np.copy(Y_test_batch_metrics).squeeze(),
+                     np.copy(Y_test_batch_old).squeeze(),
+                     savepath, n_classes,
                      'batch' + str(i), void_labels, colors)
 
     acc_test = acc_tot/n_batches_test
@@ -280,11 +332,11 @@ def main():
 
     parser.add_argument('-dataset',
                         type=str,
-                        default='camvid',
+                        default='em',
                         help='Dataset.')
     parser.add_argument('-step',
                         type=float,
-                        default=.1,
+                        default=.01,
                         help='step')
     parser.add_argument('--num_iter',
                         '-ne',
@@ -321,7 +373,7 @@ def main():
                         help='Additional pool DAE')
     parser.add_argument('-skip',
                         type=bool,
-                        default=True,
+                        default=False,
                         help='Whether to skip connections in DAE')
     parser.add_argument('-unpool_type',
                         type=str,

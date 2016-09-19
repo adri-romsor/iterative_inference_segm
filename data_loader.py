@@ -20,7 +20,8 @@ def load_data(dataset, train_crop_size=(224, 224), one_hot=False,
               spline_warp=False,
               warp_sigma=10,
               warp_grid_size=3,
-              elastic_def=False):
+              elastic_def=False,
+              shuffle_train=True):
 
     # Build dataset iterator
     if dataset == 'polyp_videos':
@@ -48,7 +49,8 @@ def load_data(dataset, train_crop_size=(224, 224), one_hot=False,
                                        get_one_hot=one_hot,
                                        get_01c=False,
                                        overlap=0,
-                                       use_threads=True)
+                                       use_threads=True,
+                                       shuffle_at_each_epoch=shuffle_train)
         val_iter = PolypVideoDataset(which_set='val',
                                      batch_size=batch_size[1],
                                      seq_per_video=0,
@@ -58,7 +60,8 @@ def load_data(dataset, train_crop_size=(224, 224), one_hot=False,
                                      get_one_hot=one_hot,
                                      get_01c=False,
                                      overlap=0,
-                                     use_threads=True)
+                                     use_threads=True,
+                                     shuffle_at_each_epoch=False)
         test_iter = PolypVideoDataset(which_set='test',
                                       batch_size=batch_size[2],
                                       seq_per_video=0,
@@ -67,7 +70,8 @@ def load_data(dataset, train_crop_size=(224, 224), one_hot=False,
                                       get_one_hot=one_hot,
                                       get_01c=False,
                                       overlap=0,
-                                      use_threads=True)
+                                      use_threads=True,
+                                      shuffle_at_each_epoch=False)
 
     elif dataset == 'camvid':
         train_iter = CamvidDataset(which_set='train',
@@ -93,7 +97,8 @@ def load_data(dataset, train_crop_size=(224, 224), one_hot=False,
                                    get_one_hot=one_hot,
                                    get_01c=False,
                                    overlap=0,
-                                   use_threads=True)
+                                   use_threads=True,
+                                   shuffle_at_each_epoch=shuffle_train)
         val_iter = CamvidDataset(which_set='val',
                                  batch_size=batch_size[1],
                                  seq_per_video=0,
@@ -102,7 +107,8 @@ def load_data(dataset, train_crop_size=(224, 224), one_hot=False,
                                  get_one_hot=one_hot,
                                  get_01c=False,
                                  overlap=0,
-                                 use_threads=True)
+                                 use_threads=True,
+                                 shuffle_at_each_epoch=False)
         test_iter = CamvidDataset(which_set='test',
                                   batch_size=batch_size[2],
                                   seq_per_video=0,
@@ -111,7 +117,8 @@ def load_data(dataset, train_crop_size=(224, 224), one_hot=False,
                                   get_one_hot=one_hot,
                                   get_01c=False,
                                   overlap=0,
-                                  use_threads=True)
+                                  use_threads=True,
+                                  shuffle_at_each_epoch=False)
     elif dataset == 'em':
         train_iter = IsbiEmStacksDataset(which_set='train',
                                          start=0,
@@ -138,7 +145,8 @@ def load_data(dataset, train_crop_size=(224, 224), one_hot=False,
                                          get_one_hot=one_hot,
                                          get_01c=False,
                                          overlap=0,
-                                         use_threads=True)
+                                         use_threads=True,
+                                         shuffle_at_each_epoch=shuffle_train)
 
         val_iter = IsbiEmStacksDataset(which_set='train',
                                        batch_size=batch_size[1],

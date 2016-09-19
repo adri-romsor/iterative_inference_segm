@@ -25,11 +25,14 @@ def my_label2rgboverlay(labels, colors, image, alpha=0.2):
 def save_img(image_batch, mask_batch, output, output_old, out_images_folder,
              n_classes, tag, void_label, colors):
 
-    output = output.argmax(1)
-    output_old = output_old.argmax(1)
+    if output.ndim == 4:
+        output = output.argmax(1)
+
+    if output_old.ndim == 4:
+        output_old = output_old.argmax(1)
 
     if any(void_label):
-        output[(mask_batch == void_label).nonzero()] = void_label[0]
+        output[(mask_batch == void_label)] = void_label[0]
         output_old[(mask_batch == void_label).nonzero()] = void_label[0]
 
     pal = ['#%02x%02x%02x' % t for t in colors]

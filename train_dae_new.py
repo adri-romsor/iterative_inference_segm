@@ -13,7 +13,6 @@ from lasagne.objectives import squared_error
 from lasagne.regularization import regularize_network_params
 
 from data_loader import load_data
-from metrics import crossentropy, entropy
 from models.DAE_h import buildDAE
 from models.fcn8 import buildFCN8
 
@@ -52,7 +51,7 @@ def train(dataset, learn_step=0.005,
     exp_name += ('_fromgt' if from_gt else '_fromfcn8')
     exp_name += '_' + unpool_type + ('_dropout' + str(dropout) if
                                      dropout > 0. else '')
-    exp_name += '_data_aug' if data_aug else ''
+    exp_name += '_data_aug_new' if data_aug else '_new'
 
     if savepath is None:
         raise ValueError('A saving directory must be specified')
@@ -114,7 +113,7 @@ def train(dataset, learn_step=0.005,
                                         spline_warp=spline_warp,
                                         vertical_flip=vertical_flip,
                                         fill_mode=fill_mode,
-                                        one_hot=True,
+                                        one_hot=False,
                                         batch_size=[5, 3, 3],
                                         )
 
@@ -130,7 +129,7 @@ def train(dataset, learn_step=0.005,
     #
     # DAE
     print ' Building DAE network'
-    dae = buildDAE(input_repr_var, input_mask_var, n_classes, layer_h,
+    dae = buildDAE(input_repr_var, input_mask_var, 1, layer_h,
                    noise, n_filters, conv_before_pool, additional_pool,
                    dropout=dropout, trainable=True, void_labels=void_labels,
                    skip=skip, unpool_type=unpool_type, load_weights=resume,
@@ -158,28 +157,16 @@ def train(dataset, learn_step=0.005,
 
     prediction = lasagne.layers.get_output(dae)
 
-    if training_loss == 'crossentropy':
-        # Convert DAE prediction to 2D
-        prediction_2D = prediction.dimshuffle((0, 2, 3, 1))
-        sh = prediction_2D.shape
-        prediction_2D = prediction_2D.reshape((T.prod(sh[:3]), sh[3]))
-        # Convert target to 2D
-        input_mask_var_2D = input_mask_var.dimshuffle((0, 2, 3, 1))
-        sh = input_mask_var_2D.shape
-        input_mask_var_2D = input_mask_var_2D.reshape((T.prod(sh[:3]), sh[3]))
-        input_mask_var_2D = T.argmax(input_mask_var_2D, axis=1)
-        # Compute loss
-        loss = crossentropy(prediction_2D, input_mask_var_2D, void_labels,
-                            one_hot=True)
-    elif training_loss == 'squared_error':
-        loss = squared_error(prediction, input_mask_var).mean(axis=1)
-        mask = input_mask_var.sum(axis=1)
-        loss = loss * mask
-        loss = loss.sum()/mask.sum()
+    if training_loss == 'squared_error':
+        loss = squared_error(prediction, input_mask_var)
+        if any(void_labels):
+            mask = T.neq(input_mask_var, void_labels[0])
+            loss = loss * mask
+            loss = loss.sum()/mask.sum()
+        else:
+            loss = loss.mean()
     else:
         raise ValueError('Unknown training loss')
-
-    loss += epsilon * entropy(prediction)
 
     # regularizers
     weightsl2 = regularize_network_params(
@@ -207,20 +194,14 @@ def train(dataset, learn_step=0.005,
     print "Defining and compiling test functions"
     # prediction and loss
     test_prediction = lasagne.layers.get_output(dae, deterministic=True)
-    if training_loss == 'crossentropy':
-        # Convert DAE prediction to 2D
-        test_prediction_2D = test_prediction.dimshuffle((0, 2, 3, 1))
-        sh = test_prediction_2D.shape
-        test_prediction_2D = test_prediction_2D.reshape((T.prod(sh[:3]),
-                                                         sh[3]))
-        # Compute loss
-        test_loss = crossentropy(test_prediction_2D, input_mask_var_2D,
-                                 void_labels, one_hot=True)
-    elif training_loss == 'squared_error':
-        test_loss = squared_error(test_prediction, input_mask_var).mean(axis=1)
-        mask = input_mask_var.sum(axis=1)
-        test_loss = test_loss * mask
-        test_loss = test_loss.sum()/mask.sum()
+    if training_loss == 'squared_error':
+        test_loss = squared_error(test_prediction, input_mask_var)
+        if any(void_labels):
+            mask = T.neq(input_mask_var, void_labels[0])
+            test_loss = test_loss * mask
+            test_loss = test_loss.sum()/mask.sum()
+        else:
+            test_loss = test_loss.mean()
     else:
         raise ValueError('Unknown training loss')
 
@@ -251,9 +232,11 @@ def train(dataset, learn_step=0.005,
             X_pred_batch = fcn_fn(X_train_batch)
             if from_gt:
                 L_train_batch = L_train_batch.astype(_FLOATX)
-                L_train_batch = L_train_batch[:, :void, :, :]
+                L_train_batch = np.expand_dims(L_train_batch, axis=1)
             else:
                 L_train_batch = X_pred_batch[-1]
+                L_train_batch = L_train_batch.argmax(1)
+                L_train_batch = np.expand_dims(L_train_batch, axis=1)
                 X_pred_batch = X_pred_batch[:-1]
 
             # Training step
@@ -272,9 +255,11 @@ def train(dataset, learn_step=0.005,
             X_pred_batch = fcn_fn(X_val_batch)
             if from_gt:
                 L_val_batch = L_val_batch.astype(_FLOATX)
-                L_val_batch = L_val_batch[:, :void, :, :]
+                L_val_batch = np.expand_dims(L_val_batch, axis=1)
             else:
                 L_val_batch = X_pred_batch[-1]
+                L_val_batch = L_val_batch.argmax(1)
+                L_val_batch = np.expand_dims(L_val_batch, axis=1)
                 X_pred_batch = X_pred_batch[:-1]
 
             # Validation step
@@ -372,7 +357,7 @@ def main():
                         help='Conv. before pool in DAE.')
     parser.add_argument('-additional_pool',
                         type=int,
-                        default=3,
+                        default=4,
                         help='Additional pool DAE')
     parser.add_argument('-dropout',
                         type=float,
@@ -388,7 +373,7 @@ def main():
                         help='Unpooling type - standard or trackind')
     parser.add_argument('-from_gt',
                         type=bool,
-                        default=True,
+                        default=False,
                         help='Whether to train from GT (true) or fcn' +
                         'output (False)')
     parser.add_argument('-data_aug',

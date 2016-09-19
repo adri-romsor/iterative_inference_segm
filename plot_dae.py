@@ -39,7 +39,7 @@ def plot(dataset,
 def main():
     parser = argparse.ArgumentParser(description='plot errors')
     parser.add_argument('-dataset',
-                        default='camvid',
+                        default='em',
                         help='Dataset')
     parser.add_argument('-path',
                         default='/data/lisatmp4/romerosa/itinf/models/',
@@ -47,8 +47,9 @@ def main():
     parser.add_argument('-models',
                         type=list,
                         default=[# 'pool3_f64c1p2_z0.1_squared_error_fromfcn8_standard',
-                                 'pool3_f64c1p2_z0.1_crossentropy_fromfcn8_standard',
-                                 'fcn8',
+                                 # 'pool3_f64c1p2_z0.1_crossentropy_fromfcn8_standard',
+                                 # 'fcn8',
+                                 # 'fcn8_data_aug'
                                  # 'pool3_f64c1p2_z0.1_squared_error_fromgt_standard',
                                  # 'pool3_f64c1p2_z0.1_squared_error_skip_fromfcn8_standard',
                                  # 'pool3_f64c1p2_z0.1_squared_error_skip_fromgt_standard',
@@ -56,6 +57,8 @@ def main():
                                  # 'input_f64c1p5_z0.1_squared_error_skip_fromgt_standard',
                                  # 'pool1_f64c1p4_z0.1_squared_error_fromgt_standard'
                                  # 'pool4_f64c1p1_z0.1_squared_error_fromgt_standard'
+                                'pool3_f64c1p2_z0.1_squared_error_fromgt_trackind_dropout0.5_data_aug_new'
+
                                 ],
                         help='List of model names.')
     parser.add_argument('-colors',
