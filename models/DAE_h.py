@@ -6,6 +6,7 @@ import model_helpers
 from fcn_up import buildFCN_up
 from fcn_down import buildFCN_down
 
+from lasagne.nonlinearities import linear
 
 def buildDAE(input_repr_var, input_mask_var, n_classes,
              layer_h=['input'], noise=0.1, n_filters=64,
@@ -14,7 +15,7 @@ def buildDAE(input_repr_var, input_mask_var, n_classes,
              unpool_type='standard',
              path_weights='/Tmp/romerosa/itinf/models/',
              model_name='dae_model.npz',
-             trainable=False, load_weights=False):
+             trainable=False, load_weights=False, out_nonlin=linear):
 
     '''
     Build score model
@@ -40,7 +41,8 @@ def buildDAE(input_repr_var, input_mask_var, n_classes,
 
     # Unpooling
     fcn_up = buildFCN_up(dae, last_layer_down, n_pool, skip=skip,
-                         n_classes=n_classes, unpool_type=unpool_type)
+                         n_classes=n_classes, unpool_type=unpool_type,
+                         out_nonlin=out_nonlin)
 
     dae.update(fcn_up)
 

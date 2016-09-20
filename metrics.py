@@ -7,10 +7,10 @@ _EPSILON = 10e-8
 
 def jaccard(y_pred, y_true, n_classes, one_hot=False):
 
-    assert (y_pred.ndim == 4) or (y_pred.ndim == 1)
+    assert (y_pred.ndim == 2) or (y_pred.ndim == 1)
 
     # y_pred to indices
-    if y_pred.ndim == 4:
+    if y_pred.ndim == 2:
         y_pred = T.argmax(y_pred, axis=1)
 
     if one_hot:
@@ -36,10 +36,10 @@ def jaccard(y_pred, y_true, n_classes, one_hot=False):
 
 def accuracy(y_pred, y_true, void_labels, one_hot=False):
 
-    assert (y_pred.ndim == 4) or (y_pred.ndim == 1)
+    assert (y_pred.ndim == 2) or (y_pred.ndim == 1)
 
     # y_pred to indices
-    if y_pred.ndim == 4:
+    if y_pred.ndim == 2:
         y_pred = T.argmax(y_pred, axis=1)
 
     if one_hot:

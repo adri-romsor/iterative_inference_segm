@@ -235,7 +235,7 @@ def train(dataset, learn_step=0.005,
                 L_train_batch = np.expand_dims(L_train_batch, axis=1)
             else:
                 L_train_batch = X_pred_batch[-1]
-                L_train_batch = L_train_batch.argmax(1)
+                L_train_batch = L_train_batch.argmax(1).astype(_FLOATX)
                 L_train_batch = np.expand_dims(L_train_batch, axis=1)
                 X_pred_batch = X_pred_batch[:-1]
 
@@ -258,7 +258,7 @@ def train(dataset, learn_step=0.005,
                 L_val_batch = np.expand_dims(L_val_batch, axis=1)
             else:
                 L_val_batch = X_pred_batch[-1]
-                L_val_batch = L_val_batch.argmax(1)
+                L_val_batch = L_val_batch.argmax(1).astype(_FLOATX)
                 L_val_batch = np.expand_dims(L_val_batch, axis=1)
                 X_pred_batch = X_pred_batch[:-1]
 

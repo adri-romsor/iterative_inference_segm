@@ -18,7 +18,8 @@ def buildFCN8(nb_in_channels, input_var,
               'camvid/fcn8_model.npz',
               n_classes=21, load_weights=True,
               void_labels=[], trainable=False,
-              layer=['probs_dimshuffle'], pascal=False):
+              layer=['probs_dimshuffle'], pascal=False,
+              temperature=1.0):
     '''
     Build fcn8 model
     '''
@@ -188,5 +189,12 @@ def buildFCN8(nb_in_channels, input_var,
 
     net['probs_dimshuffle'] = DimshuffleLayer(net['probs_reshape'],
                                               (0, 3, 1, 2))
+
+    # Apply temperature
+    if load_weights:
+        soft_value = net['upsample'].W.get_value() / temperature
+        net['upsample'].W.set_value(soft_value)
+        soft_value = net['upsample'].b.get_value() / temperature
+        net['upsample'].b.set_value(soft_value)
 
     return [net[el] for el in layer]

@@ -75,7 +75,7 @@ def UnpoolNet(incoming_net, net, p, unpool, n_classes,
 
 def buildFCN_up(incoming_net, incoming_layer, unpool,
                 skip=False, unpool_type='standard',
-                n_classes=21):
+                n_classes=21, out_nonlin=linear):
 
     '''
     Build fcn decontracting path
@@ -98,11 +98,11 @@ def buildFCN_up(incoming_net, incoming_layer, unpool,
                                                   unpool > 0 else 'score'],
                                               (0, 2, 3, 1))
     laySize = lasagne.layers.get_output(net['final_dimshuffle']).shape
-    net['probs'] = ReshapeLayer(net['final_dimshuffle'],
-                                (T.prod(laySize[0:3]),
-                                 laySize[3]))
-    # net['probs'] = NonlinearityLayer(net['final_reshape'],
-    #                                 nonlinearity=softmax)
+    net['final_reshape'] = ReshapeLayer(net['final_dimshuffle'],
+                                        (T.prod(laySize[0:3]),
+                                         laySize[3]))
+    net['probs'] = NonlinearityLayer(net['final_reshape'],
+                                     nonlinearity=out_nonlin)
 
     # Go back to 4D
     net['probs_reshape'] = ReshapeLayer(net['probs'], (laySize[0], laySize[1],
