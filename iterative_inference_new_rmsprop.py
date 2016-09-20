@@ -156,7 +156,7 @@ def inference(dataset, learn_step=0.005, num_iter=500,
     de = - (pred_dae - y_hat_var)
 
     # MSE loss
-    loss = squared_error(y_hat_var, target_var_4D)
+    loss = squared_error(y_hat_var_metrics, target_var_4D)
     if any(void_labels):
         mask = T.neq(target_var_4D, void_labels[0])
         loss = loss * mask
@@ -164,7 +164,7 @@ def inference(dataset, learn_step=0.005, num_iter=500,
     else:
         loss = loss.mean()
 
-    loss_fn = theano.function([target_var_4D], loss)
+    loss_fn = theano.function([y_hat_var_metrics, target_var_4D], loss)
     pred_dae_fn = theano.function(input_h_var, pred_dae)
 
     # metrics to evaluate iterative inference
@@ -209,19 +209,17 @@ def inference(dataset, learn_step=0.005, num_iter=500,
 
         acc_dae, jacc_dae = val_fn(Y_test_batch_dae_metrics, L_test_batch)
         jacc_dae_mean = np.mean(jacc_dae[0, :] / jacc_dae[1, :])
-        rec_loss_dae = loss_fn(L_test_batch)
+        rec_loss_dae = loss_fn(Y_test_batch_dae, L_test_batch)
 
         print '>>>>> Loss DAE: ' + str(rec_loss_dae)
         print '      Acc DAE: ' + str(acc_dae)
         print '      Jaccard DAE: ' + str(jacc_dae_mean)
 
         # Compute metrics before iterative inference
-        y_hat_var.set_value(Y_test_batch)
         acc_old, jacc_old = val_fn(Y_test_batch, L_test_batch)
         acc_tot_old += acc_old
         jacc_tot_old += jacc_old
-        rec_loss = loss_fn(L_test_batch)
-        Y_test_batch_old = Y_test_batch
+        rec_loss = loss_fn(Y_test_batch, L_test_batch)
 
         jacc_mean = np.mean(jacc_tot_old[0, :] / jacc_tot_old[1, :])
         print '>>>>> BEFORE: %f, %f, %f' % (acc_tot_old, jacc_mean, rec_loss)
@@ -233,14 +231,14 @@ def inference(dataset, learn_step=0.005, num_iter=500,
 
         # Iterative inference
         for it in range(num_iter):
-            Y2 = np.copy(Y_test_batch)
+            Y2 = np.copy(y_hat_var.get_value())
             grad = de_fn(*(H_test_batch))
 
             if vis:
                 grad_vis = -np.squeeze(np.copy(grad[0, :, :, :]))
                 plt.subplot(131)
-                img3 = plt.imshow(np.squeeze(Y2)[0, :100, :100], clim=(Y2.min(),
-                                                                    Y2.max()))
+                img3 = plt.imshow(np.squeeze(Y2)[0, :100, :100],
+                                  clim=(Y2.min(), Y2.max()))
                 plt.colorbar(img3)
 
                 plt.subplot(132)
@@ -249,13 +247,15 @@ def inference(dataset, learn_step=0.005, num_iter=500,
                 plt.colorbar(img)
 
                 plt.subplot(133)
-                img2 = plt.imshow(np.squeeze(np.copy(Y_test_batch))[0, :100, :100],
-                                  clim=(Y_test_batch.min(), Y_test_batch.max()))
+                img2 = \
+                    plt.imshow(np.squeeze(np.copy(y_hat_var.get_value()))[0, :100, :100],
+                                  clim=(y_hat_var.get_value().min(),
+                                        y_hat_var.get_value().max()))
                 plt.colorbar(img2)
                 plt.show()
 
-            # Make sure that Y_test_batch does not go beyond the max/min class
-            Y_test_batch_metrics = np.copy(Y_test_batch)
+            # Make sure that new Y_test_batch doesn't go beyond max/min class
+            Y_test_batch_metrics = np.copy(y_hat_var.get_value())
             Y_test_batch_metrics = np.clip(Y_test_batch_metrics, 0, n_classes-1)
             Y_test_batch_metrics = np.round(Y_test_batch_metrics)
 
@@ -264,7 +264,7 @@ def inference(dataset, learn_step=0.005, num_iter=500,
                 save_img(np.copy(X_test_batch),
                          np.copy(L_test_batch)[:, 0, :, :],
                          np.copy(Y_test_batch_metrics)[:, 0, :, :],
-                         np.copy(Y_test_batch_old)[:, 0, :, :],
+                         np.copy(Y2)[:, 0, :, :],
                          savepath, n_classes,
                          'batch' + str(i) + '_' + 'step' + str(it),
                          void_labels, colors)
@@ -274,7 +274,7 @@ def inference(dataset, learn_step=0.005, num_iter=500,
                 break
             # print 'norm: ' + str(norm)
             acc_iter, jacc_iter = val_fn(Y_test_batch_metrics, L_test_batch)
-            rec_loss = loss_fn(L_test_batch)
+            rec_loss = loss_fn(y_hat_var.get_value(), L_test_batch)
             print acc_iter, np.mean(jacc_iter[0, :]/jacc_iter[1, :]), rec_loss
 
         # Compute metrics
@@ -332,11 +332,11 @@ def main():
 
     parser.add_argument('-dataset',
                         type=str,
-                        default='em',
+                        default='camvid',
                         help='Dataset.')
     parser.add_argument('-step',
                         type=float,
-                        default=.01,
+                        default=.1,
                         help='step')
     parser.add_argument('--num_iter',
                         '-ne',
@@ -390,7 +390,7 @@ def main():
                         help='Save new segmentations after each step update')
     parser.add_argument('-which_set',
                         type=str,
-                        default='valid',
+                        default='train',
                         help='Inference set')
     parser.add_argument('-data_aug',
                         type=bool,
