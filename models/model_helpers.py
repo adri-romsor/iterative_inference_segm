@@ -1,3 +1,4 @@
+import theano
 import lasagne
 
 
@@ -29,3 +30,14 @@ def unfreezeParameters(net, single=True):
                 layer.params[p].add('trainable')
             except KeyError:
                 pass
+
+def softmax4D(x):
+    """
+    Softmax activation function for a 4D tensor of shape (b, c, 0, 1)
+    """
+    # Compute softmax activation
+    stable_x = x - theano.gradient.zero_grad(x.max(1, keepdims=True))
+    exp_x = stable_x.exp()
+    softmax_x = exp_x / exp_x.sum(1)[:, None, :, :]
+
+    return softmax_x

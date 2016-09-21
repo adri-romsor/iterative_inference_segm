@@ -171,7 +171,7 @@ def train(dataset, learn_step=0.005,
         input_mask_var_2D = input_mask_var.dimshuffle((0, 2, 3, 1))
         sh = input_mask_var_2D.shape
         input_mask_var_2D = input_mask_var_2D.reshape((T.prod(sh[:3]), sh[3]))
-        input_mask_var_2D = T.argmax(input_mask_var_2D, axis=1)
+        # input_mask_var_2D = T.argmax(input_mask_var_2D, axis=1)
         # Compute loss
         loss = crossentropy(prediction_2D, input_mask_var_2D, void_labels,
                             one_hot=True)
@@ -376,7 +376,7 @@ def main():
                         help='Conv. before pool in DAE.')
     parser.add_argument('-additional_pool',
                         type=int,
-                        default=3,
+                        default=2,
                         help='Additional pool DAE')
     parser.add_argument('-dropout',
                         type=float,
@@ -384,7 +384,7 @@ def main():
                         help='Additional pool DAE')
     parser.add_argument('-skip',
                         type=bool,
-                        default=False,
+                        default=True,
                         help='Whether to skip connections in DAE')
     parser.add_argument('-unpool_type',
                         type=str,
@@ -392,7 +392,7 @@ def main():
                         help='Unpooling type - standard or trackind')
     parser.add_argument('-from_gt',
                         type=bool,
-                        default=False,
+                        default=True,
                         help='Whether to train from GT (true) or fcn' +
                         'output (False)')
     parser.add_argument('-data_aug',
@@ -401,7 +401,7 @@ def main():
                         help='use data augmentation')
     parser.add_argument('-temperature',
                         type=float,
-                        default=10.0,
+                        default=1.0,
                         help='Apply temperature')
     args = parser.parse_args()
 

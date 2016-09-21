@@ -357,7 +357,7 @@ def main():
                         help='Conv. before pool in DAE.')
     parser.add_argument('-additional_pool',
                         type=int,
-                        default=4,
+                        default=2,
                         help='Additional pool DAE')
     parser.add_argument('-dropout',
                         type=float,
@@ -365,7 +365,7 @@ def main():
                         help='Additional pool DAE')
     parser.add_argument('-skip',
                         type=bool,
-                        default=False,
+                        default=True,
                         help='Whether to skip connections in DAE')
     parser.add_argument('-unpool_type',
                         type=str,

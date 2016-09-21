@@ -191,6 +191,15 @@ def inference(dataset, learn_step=0.005, num_iter=500,
         H_test_batch = pred_test_batch[:-1]
         y_hat_var.set_value(Y_test_batch)
 
+        # Compute metrics before iterative inference
+        acc_old, jacc_old = val_fn(Y_test_batch, L_test_batch)
+        acc_tot_old += acc_old
+        jacc_tot_old += jacc_old
+        rec_loss = loss_fn(Y_test_batch, L_test_batch[:, :void, :, :])
+
+        jacc_mean = np.mean(jacc_tot_old[0, :] / jacc_tot_old[1, :])
+        print '>>>>> BEFORE: %f, %f, %f' % (rec_loss, acc_tot_old, jacc_mean)
+
         # Compute rec loss by using DAE in a standard way
         Y_test_batch_dae = pred_dae_fn(*(H_test_batch))
 
@@ -201,15 +210,6 @@ def inference(dataset, learn_step=0.005, num_iter=500,
         print '>>>>> Loss DAE: ' + str(rec_loss_dae)
         print '      Acc DAE: ' + str(acc_dae)
         print '      Jaccard DAE: ' + str(jacc_dae_mean)
-
-        # Compute metrics before iterative inference
-        acc_old, jacc_old = val_fn(Y_test_batch, L_test_batch)
-        acc_tot_old += acc_old
-        jacc_tot_old += jacc_old
-        rec_loss = loss_fn(Y_test_batch, L_test_batch[:, :void, :, :])
-
-        jacc_mean = np.mean(jacc_tot_old[0, :] / jacc_tot_old[1, :])
-        print '>>>>> BEFORE: %f, %f, %f' % (acc_tot_old, jacc_mean, rec_loss)
 
         # Updates (grad, shared variable to update, learning_rate)
         updates = lasagne.updates.adam([de], [y_hat_var], learning_rate=learn_step)
@@ -236,7 +236,7 @@ def inference(dataset, learn_step=0.005, num_iter=500,
             # print norm
             acc_iter, jacc_iter = val_fn(y_hat_var.get_value(), L_test_batch)
             rec_loss = loss_fn(y_hat_var.get_value(), L_test_batch[:, :void, :, :])
-            print acc_iter, np.mean(jacc_iter[0, :]/jacc_iter[1, :]), rec_loss
+            print rec_loss, acc_iter, np.mean(jacc_iter[0, :]/jacc_iter[1, :])
 
         # Compute metrics
         acc, jacc = val_fn(y_hat_var.get_value(), L_test_batch)
@@ -292,7 +292,7 @@ def main():
 
     parser.add_argument('-dataset',
                         type=str,
-                        default='camvid',
+                        default='em',
                         help='Dataset.')
     parser.add_argument('-step',
                         type=float,
@@ -325,7 +325,7 @@ def main():
                         help='Conv. before pool in DAE.')
     parser.add_argument('-additional_pool',
                         type=int,
-                        default=2,
+                        default=3,
                         help='Additional pool DAE')
     parser.add_argument('-dropout',
                         type=float,
@@ -333,7 +333,7 @@ def main():
                         help='Additional pool DAE')
     parser.add_argument('-skip',
                         type=bool,
-                        default=False,
+                        default=True,
                         help='Whether to skip connections in DAE')
     parser.add_argument('-unpool_type',
                         type=str,
@@ -341,7 +341,7 @@ def main():
                         help='Unpooling type - standard or trackind')
     parser.add_argument('-from_gt',
                         type=bool,
-                        default=True,
+                        default=False,
                         help='Whether to train from GT (true) or fcn' +
                         'output (False)')
     parser.add_argument('-save_perstep',
@@ -358,7 +358,7 @@ def main():
                         help='Whether to do data augmentation')
     parser.add_argument('-temperature',
                         type=float,
-                        default=1.0,
+                        default=10.0,
                         help='Apply temperature')
 
     args = parser.parse_args()

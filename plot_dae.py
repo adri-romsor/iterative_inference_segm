@@ -39,7 +39,7 @@ def plot(dataset,
 def main():
     parser = argparse.ArgumentParser(description='plot errors')
     parser.add_argument('-dataset',
-                        default='em',
+                        default='camvid',
                         help='Dataset')
     parser.add_argument('-path',
                         default='/data/lisatmp4/romerosa/itinf/models/',
@@ -51,14 +51,18 @@ def main():
                                  # 'fcn8',
                                  # 'fcn8_data_aug'
                                  # 'pool3_f64c1p2_z0.1_squared_error_fromgt_standard',
-                                 # 'pool3_f64c1p2_z0.1_squared_error_skip_fromfcn8_standard',
+                                 'pool3_f64c1p2_z0.1_squared_error_skip_fromfcn8_standard',
                                  # 'pool3_f64c1p2_z0.1_squared_error_skip_fromgt_standard',
                                  # 'input_f64c1p5_z0.1_squared_error_fromgt_standard',
                                  # 'input_f64c1p5_z0.1_squared_error_skip_fromgt_standard',
                                  # 'pool1_f64c1p4_z0.1_squared_error_fromgt_standard'
                                  # 'pool4_f64c1p1_z0.1_squared_error_fromgt_standard'
-                                'pool3_f64c1p2_z0.1_squared_error_fromgt_trackind_dropout0.5_data_aug_new'
-
+                                 'pool3_f64c1p3_z0.1_squared_error_fromgt_trackind_dropout0.5_data_aug',
+                                 'pool3_f64c1p4_z0.1_squared_error_fromgt_trackind_dropout0.5_data_aug',
+                                 'pool3_f64c1p4_z0.1_squared_error_skip_fromgt_trackind_dropout0.5_data_aug',
+                                 'pool3_f64c1p2_z0.1_squared_error_fromfcn8_trackind_dropout0.5_data_aug',
+                                 'pool3_f64c1p4_z0.1_squared_error_fromgt_trackind_dropout0.5',
+                                 'pool3_f64c1p2_z0.1_squared_error_skip_fromgt_trackind'
                                 ],
                         help='List of model names.')
     parser.add_argument('-colors',

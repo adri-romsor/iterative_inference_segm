@@ -1,9 +1,14 @@
-from lasagne.layers import MergeLayer
+from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
+
+from lasagne.layers import MergeLayer, Layer
 from lasagne.layers.merge import autocrop, autocrop_array_shapes
 from lasagne.layers.pool import Upscale2DLayer
 import theano.tensor as T
 from lasagne.utils import as_tuple
 import lasagne
+from lasagne.random import get_rng
+
+from models.model_helpers import softmax4D
 
 class CroppingLayer(MergeLayer):
     """
@@ -76,14 +81,14 @@ class DePool2D(Upscale2DLayer):
         self.pool2d_layer_in = pool2d_layer_in
         if self.scale_factor[0] < 1 or self.scale_factor[1] < 1:
             raise ValueError('Scale factor must be >= 1, not {0}'.format(
-                self.scale_factor))    
+                self.scale_factor))
 
     def get_output_for(self, upscaled, **kwargs):
         a, b = self.scale_factor
         # get output for pooling and pre-pooling layer
         inp, out =\
-                lasagne.layers.get_output([self.pool2d_layer_in, 
-                                           self.pool2d_layer]) 
+                lasagne.layers.get_output([self.pool2d_layer_in,
+                                           self.pool2d_layer])
         # upscale the input feature map by scale_factor
         if b > 1:
             upscaled = T.extra_ops.repeat(upscaled, b, 3)
@@ -97,12 +102,57 @@ class DePool2D(Upscale2DLayer):
         indx = (slice(None),
                 slice(None),
                 slice(0, sh_upscaled[2]),
-                slice(0, sh_upscaled[3])) 
+                slice(0, sh_upscaled[3]))
         upscaled = T.set_subtensor(tmp[indx], upscaled)
         # get max pool indices
-        indices_pool = T.grad(None, wrt=inp, 
+        indices_pool = T.grad(None, wrt=inp,
                 known_grads={out: T.ones_like(out)})
         # mask values using indices_pool
         f = indices_pool * upscaled
-        
-        return f 
+
+        return f
+
+
+class GaussianNoiseLayerSoftmax(Layer):
+    """
+    Gaussian noise layer. Adapted from Lasagne.
+    Add zero-mean Gaussian noise of given standard deviation to the input [1],
+    and then normalize with softmax.
+    Parameters
+    ----------
+    incoming : a :class:`Layer` instance or a tuple
+            the layer feeding into this layer, or the expected input shape
+    sigma : float or tensor scalar
+            Standard deviation of added Gaussian noise
+    Notes
+    -----
+    The Gaussian noise layer is a regularizer. During training you should set
+    deterministic to false and during testing you should set deterministic to
+    true.
+    References
+    ----------
+    .. [1] K.-C. Jim, C. Giles, and B. Horne (1996):
+           An analysis of noise in recurrent neural networks: convergence and
+           generalization.
+           IEEE Transactions on Neural Networks, 7(6):1424-1438.
+    """
+    def __init__(self, incoming, sigma=0.1, **kwargs):
+        super(GaussianNoiseLayerSoftmax, self).__init__(incoming, **kwargs)
+        self._srng = RandomStreams(get_rng().randint(1, 2147462579))
+        self.sigma = sigma
+
+    def get_output_for(self, input, deterministic=False, **kwargs):
+        """
+        Parameters
+        ----------
+        input : tensor
+            output from the previous layer
+        deterministic : bool
+            If true noise is disabled, see notes
+        """
+        if deterministic or self.sigma == 0:
+            return input
+        else:
+            return softmax4D(input + self._srng.normal(input.shape,
+                                                       avg=0.0,
+                                                       std=self.sigma))

@@ -332,7 +332,7 @@ def main():
 
     parser.add_argument('-dataset',
                         type=str,
-                        default='camvid',
+                        default='em',
                         help='Dataset.')
     parser.add_argument('-step',
                         type=float,
@@ -365,7 +365,7 @@ def main():
                         help='Conv. before pool in DAE.')
     parser.add_argument('-additional_pool',
                         type=int,
-                        default=4,
+                        default=2,
                         help='Additional pool DAE')
     parser.add_argument('-dropout',
                         type=float,
