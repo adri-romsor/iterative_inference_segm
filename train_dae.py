@@ -1,3 +1,5 @@
+#!/usr/bin/env python2
+
 import os
 import argparse
 import time
@@ -12,11 +14,14 @@ import lasagne
 from lasagne.objectives import squared_error
 from lasagne.regularization import regularize_network_params
 from lasagne.nonlinearities import softmax
+from lasagne.layers import Pool2DLayer, Deconv2DLayer
 
 from data_loader import load_data
-from metrics import crossentropy, entropy
+from metrics import crossentropy, entropy, squared_error_h
 from models.DAE_h import buildDAE
 from models.fcn8 import buildFCN8
+from models.fcn8_dae import buildFCN8_DAE
+from layers.mylayers import DePool2D
 
 _FLOATX = config.floatX
 if getuser() == 'romerosa':
@@ -40,21 +45,28 @@ def train(dataset, learn_step=0.005,
           epsilon=.0, optimizer='rmsprop', training_loss='squared_error',
           layer_h=['pool5'], n_filters=64, noise=0.1, conv_before_pool=1,
           additional_pool=0, dropout=0., skip=False, unpool_type='standard',
-          from_gt=True, data_aug=False, temperature=1.0,
+          from_gt=True, data_aug=False, temperature=1.0, dae_fcn8=False,
           savepath=None, loadpath=None, resume=False):
 
     #
     # Prepare load/save directories
     #
-    exp_name = '_'.join(layer_h)
-    exp_name += '_f' + str(n_filters) + 'c' + str(conv_before_pool) + \
-        'p' + str(additional_pool) + '_z' + str(noise)
-    exp_name += '_' + training_loss + ('_skip' if skip else '')
-    exp_name += ('_fromgt' if from_gt else '_fromfcn8')
-    exp_name += '_' + unpool_type + ('_dropout' + str(dropout) if
-                                     dropout > 0. else '')
-    exp_name += '_data_aug' if data_aug else ''
-    exp_name += ('_T' + str(temperature)) if not from_gt else ''
+    if not dae_fcn8:
+        exp_name = '_'.join(layer_h)
+        exp_name += '_f' + str(n_filters) + 'c' + str(conv_before_pool) + \
+            'p' + str(additional_pool) + '_z' + str(noise)
+        exp_name += '_' + training_loss + ('_skip' if skip else '')
+        exp_name += ('_fromgt' if from_gt else '_fromfcn8')
+        exp_name += '_' + unpool_type + ('_dropout' + str(dropout) if
+                                         dropout > 0. else '')
+        exp_name += '_data_aug' if data_aug else ''
+        exp_name += ('_T' + str(temperature)) if not from_gt else ''
+    else:
+        exp_name = '_'.join(layer_h)
+        exp_name += '_' + training_loss
+        exp_name += ('_fromgt' if from_gt else '_fromfcn8')
+        exp_name += '_data_aug' if data_aug else ''
+        exp_name += ('_T' + str(temperature)) if not from_gt else ''
 
     if savepath is None:
         raise ValueError('A saving directory must be specified')
@@ -84,7 +96,7 @@ def train(dataset, learn_step=0.005,
     # Build dataset iterator
     #
     if data_aug:
-        train_crop_size = [256, 256]
+        train_crop_size = [224, 224]
         horizontal_flip = True
         if dataset == 'em':
             spline_warp = True
@@ -117,7 +129,7 @@ def train(dataset, learn_step=0.005,
                                         vertical_flip=vertical_flip,
                                         fill_mode=fill_mode,
                                         one_hot=True,
-                                        batch_size=[5, 3, 3],
+                                        batch_size=[3, 3, 3],
                                         )
 
     n_batches_train = train_iter.get_n_batches()
@@ -132,15 +144,25 @@ def train(dataset, learn_step=0.005,
     #
     # DAE
     print ' Building DAE network'
-    dae = buildDAE(input_repr_var, input_mask_var, n_classes, layer_h,
-                   noise, n_filters, conv_before_pool, additional_pool,
-                   dropout=dropout, trainable=True, void_labels=void_labels,
-                   skip=skip, unpool_type=unpool_type, load_weights=resume,
-                   path_weights=savepath, model_name='dae_model.npz',
-                   out_nonlin=softmax)
+    if not dae_fcn8:
+        dae = buildDAE(input_repr_var, input_mask_var, n_classes, layer_h,
+                       noise, n_filters, conv_before_pool, additional_pool,
+                       dropout=dropout, trainable=True,
+                       void_labels=void_labels, skip=skip,
+                       unpool_type=unpool_type, load_weights=resume,
+                       path_weights=savepath, model_name='dae_model.npz',
+                       out_nonlin=softmax)
+    else:
+        # be careful: only works from fcn8 (from gt, remove extra class if void)
+        dae = buildFCN8_DAE(n_classes, input_mask_var,
+                            path_weights=savepath+'/dae_model.npz',
+                            n_classes=n_classes, load_weights=True,
+                            void_labels=void_labels, trainable=True,
+                            concat_layers=layer_h, noise=noise,
+                            concat_vars=input_repr_var)
+        exp_name += '_fromfcn8'
+
     # FCN
-    print('Weights of FCN8 will be loaded from : ' + WEIGHTS_PATH +
-          dataset + '/fcn8_model.npz')
     print ' Building FCN network'
     if not from_gt:
         layer_h += ['probs_dimshuffle']
@@ -160,7 +182,21 @@ def train(dataset, learn_step=0.005,
     # prediction and loss
     fcn_prediction = lasagne.layers.get_output(fcn, deterministic=True)
 
-    prediction = lasagne.layers.get_output(dae)
+    dae_lays = lasagne.layers.get_all_layers(dae)
+    dae_lays = [l for l in dae_lays
+                if (hasattr(l, 'input_layer') and
+                    isinstance(l.input_layer, DePool2D)) or
+                isinstance(l, Pool2DLayer) or
+                isinstance(l, Deconv2DLayer) or
+                l == dae_lays[-1]]
+    # dae_lays = dae_lays[::2]
+    prediction_all = lasagne.layers.get_output(dae_lays)
+    prediction = prediction_all[-1]
+    prediction_h = prediction_all[:-1]
+    test_prediction_all = lasagne.layers.get_output(dae_lays,
+                                                    deterministic=True)
+    test_prediction = test_prediction_all[-1]
+    test_prediction_h = test_prediction_all[:-1]
 
     if training_loss == 'crossentropy':
         # Convert DAE prediction to 2D
@@ -183,12 +219,14 @@ def train(dataset, learn_step=0.005,
     else:
         raise ValueError('Unknown training loss')
 
-    loss += epsilon * entropy(prediction)
+    # loss += epsilon * entropy(prediction)
 
     # regularizers
-    weightsl2 = regularize_network_params(
-        dae, lasagne.regularization.l2)
-    loss += weight_decay * weightsl2
+    # weightsl2 = regularize_network_params(dae, lasagne.regularization.l2)
+    # loss += weight_decay * weightsl2
+
+    # Add intermediate losses
+    loss += squared_error_h(prediction_h, test_prediction_h)
 
     params = lasagne.layers.get_all_params(dae, trainable=True)
 
@@ -209,8 +247,7 @@ def train(dataset, learn_step=0.005,
 
     # Define required theano functions for testing and compile them
     print "Defining and compiling test functions"
-    # prediction and loss
-    test_prediction = lasagne.layers.get_output(dae, deterministic=True)
+    # test loss
     if training_loss == 'crossentropy':
         # Convert DAE prediction to 2D
         test_prediction_2D = test_prediction.dimshuffle((0, 2, 3, 1))
@@ -326,7 +363,7 @@ def main():
     parser = argparse.ArgumentParser(description='DAE training')
     parser.add_argument('-dataset',
                         type=str,
-                        default='em',
+                        default='camvid',
                         help='Dataset.')
     parser.add_argument('-learning_rate',
                         type=float,
@@ -364,7 +401,7 @@ def main():
                         help='All h to introduce to the DAE')
     parser.add_argument('-noise',
                         type=float,
-                        default=0.1,
+                        default=0.,
                         help='Noise of DAE input.')
     parser.add_argument('-n_filters',
                         type=int,
@@ -392,7 +429,7 @@ def main():
                         help='Unpooling type - standard or trackind')
     parser.add_argument('-from_gt',
                         type=bool,
-                        default=True,
+                        default=False,
                         help='Whether to train from GT (true) or fcn' +
                         'output (False)')
     parser.add_argument('-data_aug',
@@ -403,6 +440,10 @@ def main():
                         type=float,
                         default=1.0,
                         help='Apply temperature')
+    parser.add_argument('-dae_fcn8',
+                        type=bool,
+                        default=False,
+                        help='Whether to use fcn archictecture as DAE')
     args = parser.parse_args()
 
     train(args.dataset, float(args.learning_rate),
@@ -415,8 +456,8 @@ def main():
           dropout=args.dropout,
           skip=args.skip, unpool_type=args.unpool_type,
           from_gt=args.from_gt, data_aug=args.data_aug,
-          temperature=args.temperature, resume=False,
-          savepath=SAVEPATH, loadpath=LOADPATH)
+          temperature=args.temperature, dae_fcn8=args.dae_fcn8,
+          resume=False, savepath=SAVEPATH, loadpath=LOADPATH)
 
 
 if __name__ == "__main__":

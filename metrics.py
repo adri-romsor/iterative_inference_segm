@@ -104,3 +104,11 @@ def entropy(y_pred):
     ent = - T.sum(y_pred * T.log(y_pred), axis=1)
 
     return ent.mean()
+
+
+def squared_error_h(y_pred, y_true):
+
+    error_list = [((a_i - b_i)**2).mean() for
+                  a_i, b_i in zip(y_pred, y_true)]
+
+    return sum(error_list)

@@ -8,6 +8,7 @@ from fcn_down import buildFCN_down
 
 from lasagne.nonlinearities import linear
 
+
 def buildDAE(input_repr_var, input_mask_var, n_classes,
              layer_h=['input'], noise=0.1, n_filters=64,
              conv_before_pool=1, additional_pool=0,
@@ -15,7 +16,8 @@ def buildDAE(input_repr_var, input_mask_var, n_classes,
              unpool_type='standard',
              path_weights='/Tmp/romerosa/itinf/models/',
              model_name='dae_model.npz',
-             trainable=False, load_weights=False, out_nonlin=linear):
+             trainable=False, load_weights=False,
+             out_nonlin=linear):
 
     '''
     Build score model

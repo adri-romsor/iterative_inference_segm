@@ -17,6 +17,7 @@ from metrics import accuracy, jaccard
 from models.DAE_h import buildDAE
 from models.fcn8 import buildFCN8
 from helpers import save_img
+from models.model_helpers import softmax4D
 
 _FLOATX = config.floatX
 _EPSILON = 10e-8
@@ -168,6 +169,10 @@ def inference(dataset, learn_step=0.005, num_iter=500,
     val_fn = theano.function([y_hat_var_metrics, target_var_4D],
                              [test_acc, test_jacc])
 
+    # Softmax function
+    softmax_fn = theano.function([y_hat_var_metrics],
+                                 softmax4D(y_hat_var_metrics))
+
     #
     # Infer
     #
@@ -202,6 +207,7 @@ def inference(dataset, learn_step=0.005, num_iter=500,
 
         # Compute rec loss by using DAE in a standard way
         Y_test_batch_dae = pred_dae_fn(*(H_test_batch))
+        Y_test_batch_dae = softmax_fn(Y_test_batch_dae)
 
         acc_dae, jacc_dae = val_fn(Y_test_batch_dae, L_test_batch)
         jacc_dae_mean = np.mean(jacc_dae[0, :] / jacc_dae[1, :])
@@ -212,13 +218,15 @@ def inference(dataset, learn_step=0.005, num_iter=500,
         print '      Jaccard DAE: ' + str(jacc_dae_mean)
 
         # Updates (grad, shared variable to update, learning_rate)
-        updates = lasagne.updates.adam([de], [y_hat_var], learning_rate=learn_step)
+        updates = lasagne.updates.adam([de], [y_hat_var],
+                                       learning_rate=learn_step)
         # function to compute de
         de_fn = theano.function(input_h_var, de, updates=updates)
 
         # Iterative inference
         for it in range(num_iter):
             grad = de_fn(*(H_test_batch))
+            y_hat_var.set_value(softmax_fn(y_hat_var.get_value()))
 
             if save_perstep:
                 # Save images
@@ -235,7 +243,8 @@ def inference(dataset, learn_step=0.005, num_iter=500,
                 break
             # print norm
             acc_iter, jacc_iter = val_fn(y_hat_var.get_value(), L_test_batch)
-            rec_loss = loss_fn(y_hat_var.get_value(), L_test_batch[:, :void, :, :])
+            rec_loss = loss_fn(y_hat_var.get_value(),
+                               L_test_batch[:, :void, :, :])
             print rec_loss, acc_iter, np.mean(jacc_iter[0, :]/jacc_iter[1, :])
 
         # Compute metrics
@@ -292,7 +301,7 @@ def main():
 
     parser.add_argument('-dataset',
                         type=str,
-                        default='em',
+                        default='camvid',
                         help='Dataset.')
     parser.add_argument('-step',
                         type=float,
@@ -325,7 +334,7 @@ def main():
                         help='Conv. before pool in DAE.')
     parser.add_argument('-additional_pool',
                         type=int,
-                        default=3,
+                        default=2,
                         help='Additional pool DAE')
     parser.add_argument('-dropout',
                         type=float,
@@ -341,7 +350,7 @@ def main():
                         help='Unpooling type - standard or trackind')
     parser.add_argument('-from_gt',
                         type=bool,
-                        default=False,
+                        default=True,
                         help='Whether to train from GT (true) or fcn' +
                         'output (False)')
     parser.add_argument('-save_perstep',
@@ -358,7 +367,7 @@ def main():
                         help='Whether to do data augmentation')
     parser.add_argument('-temperature',
                         type=float,
-                        default=10.0,
+                        default=1.0,
                         help='Apply temperature')
 
     args = parser.parse_args()
