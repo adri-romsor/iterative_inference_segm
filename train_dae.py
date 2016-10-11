@@ -21,6 +21,7 @@ from metrics import crossentropy, entropy, squared_error_h
 from models.DAE_h import buildDAE
 from models.fcn8 import buildFCN8
 from models.fcn8_dae import buildFCN8_DAE
+from models.contextmod_dae import buildDAE_contextmod
 from layers.mylayers import DePool2D
 
 _FLOATX = config.floatX
@@ -45,13 +46,13 @@ def train(dataset, learn_step=0.005,
           epsilon=.0, optimizer='rmsprop', training_loss='squared_error',
           layer_h=['pool5'], n_filters=64, noise=0.1, conv_before_pool=1,
           additional_pool=0, dropout=0., skip=False, unpool_type='standard',
-          from_gt=True, data_aug=False, temperature=1.0, dae_fcn8=False,
+          from_gt=True, data_aug=False, temperature=1.0, dae_kind='standard',
           savepath=None, loadpath=None, resume=False):
 
     #
     # Prepare load/save directories
     #
-    if not dae_fcn8:
+    if dae_kind == 'standard':
         exp_name = '_'.join(layer_h)
         exp_name += '_f' + str(n_filters) + 'c' + str(conv_before_pool) + \
             'p' + str(additional_pool) + '_z' + str(noise)
@@ -61,9 +62,15 @@ def train(dataset, learn_step=0.005,
                                          dropout > 0. else '')
         exp_name += '_data_aug' if data_aug else ''
         exp_name += ('_T' + str(temperature)) if not from_gt else ''
-    else:
+    elif dae_kind == 'fcn8':
         exp_name = '_'.join(layer_h)
-        exp_name += '_' + training_loss
+        exp_name += '_fcn8_' + training_loss
+        exp_name += ('_fromgt' if from_gt else '_fromfcn8')
+        exp_name += '_data_aug' if data_aug else ''
+        exp_name += ('_T' + str(temperature)) if not from_gt else ''
+    elif dae_kind == 'contextmod':
+        exp_name = '_'.join(layer_h)
+        exp_name += '_contexmod_' + training_loss
         exp_name += ('_fromgt' if from_gt else '_fromfcn8')
         exp_name += '_data_aug' if data_aug else ''
         exp_name += ('_T' + str(temperature)) if not from_gt else ''
@@ -144,7 +151,7 @@ def train(dataset, learn_step=0.005,
     #
     # DAE
     print ' Building DAE network'
-    if not dae_fcn8:
+    if dae_kind == 'standard':
         dae = buildDAE(input_repr_var, input_mask_var, n_classes, layer_h,
                        noise, n_filters, conv_before_pool, additional_pool,
                        dropout=dropout, trainable=True,
@@ -152,15 +159,23 @@ def train(dataset, learn_step=0.005,
                        unpool_type=unpool_type, load_weights=resume,
                        path_weights=savepath, model_name='dae_model.npz',
                        out_nonlin=softmax)
-    else:
-        # be careful: only works from fcn8 (from gt, remove extra class if void)
+    elif dae_kind == 'fcn8':
         dae = buildFCN8_DAE(n_classes, input_mask_var,
                             path_weights=savepath+'/dae_model.npz',
-                            n_classes=n_classes, load_weights=True,
+                            n_classes=n_classes, load_weights=resume,
                             void_labels=void_labels, trainable=True,
                             concat_layers=layer_h, noise=noise,
-                            concat_vars=input_repr_var)
-        exp_name += '_fromfcn8'
+                            concat_vars=input_repr_var, pretrained=True)
+
+    elif dae_kind == 'contextmod':
+        dae = buildDAE_contextmod(input_repr_var, input_mask_var, n_classes,
+                                  concat_layers=layer_h, noise=noise,
+                                  path_weights=savepath,
+                                  model_name='dae_model.npz',
+                                  trainable=True, load_weights=resume,
+                                  out_nonlin=softmax)
+    else:
+        raise ValueError('Unknown dae kind')
 
     # FCN
     print ' Building FCN network'
@@ -183,13 +198,16 @@ def train(dataset, learn_step=0.005,
     fcn_prediction = lasagne.layers.get_output(fcn, deterministic=True)
 
     dae_lays = lasagne.layers.get_all_layers(dae)
-    dae_lays = [l for l in dae_lays
-                if (hasattr(l, 'input_layer') and
-                    isinstance(l.input_layer, DePool2D)) or
-                isinstance(l, Pool2DLayer) or
-                isinstance(l, Deconv2DLayer) or
-                l == dae_lays[-1]]
-    # dae_lays = dae_lays[::2]
+    if dae_kind != 'contextmod':
+        dae_lays = [l for l in dae_lays
+                    if (hasattr(l, 'input_layer') and
+                        isinstance(l.input_layer, DePool2D)) or
+                    isinstance(l, Pool2DLayer) or
+                    isinstance(l, Deconv2DLayer) or
+                    l == dae_lays[-1]]
+        # dae_lays = dae_lays[::2]
+    else:
+        dae_lays = dae_lays[3:-5]
     prediction_all = lasagne.layers.get_output(dae_lays)
     prediction = prediction_all[-1]
     prediction_h = prediction_all[:-1]
@@ -198,7 +216,9 @@ def train(dataset, learn_step=0.005,
     test_prediction = test_prediction_all[-1]
     test_prediction_h = test_prediction_all[:-1]
 
-    if training_loss == 'crossentropy':
+    loss = 0
+
+    if training_loss == 'crossentropy' or training_loss == 'both':
         # Convert DAE prediction to 2D
         prediction_2D = prediction.dimshuffle((0, 2, 3, 1))
         sh = prediction_2D.shape
@@ -209,15 +229,13 @@ def train(dataset, learn_step=0.005,
         input_mask_var_2D = input_mask_var_2D.reshape((T.prod(sh[:3]), sh[3]))
         # input_mask_var_2D = T.argmax(input_mask_var_2D, axis=1)
         # Compute loss
-        loss = crossentropy(prediction_2D, input_mask_var_2D, void_labels,
+        loss += crossentropy(prediction_2D, input_mask_var_2D, void_labels,
                             one_hot=True)
-    elif training_loss == 'squared_error':
-        loss = squared_error(prediction, input_mask_var).mean(axis=1)
+    if training_loss == 'squared_error' or training_loss == 'both':
+        loss_aux = squared_error(prediction, input_mask_var).mean(axis=1)
         mask = input_mask_var.sum(axis=1)
-        loss = loss * mask
-        loss = loss.sum()/mask.sum()
-    else:
-        raise ValueError('Unknown training loss')
+        loss_aux = loss_aux * mask
+        loss += loss_aux.sum()/mask.sum()
 
     # loss += epsilon * entropy(prediction)
 
@@ -248,22 +266,21 @@ def train(dataset, learn_step=0.005,
     # Define required theano functions for testing and compile them
     print "Defining and compiling test functions"
     # test loss
-    if training_loss == 'crossentropy':
+    test_loss = 0
+    if training_loss == 'crossentropy' or training_loss == 'both':
         # Convert DAE prediction to 2D
         test_prediction_2D = test_prediction.dimshuffle((0, 2, 3, 1))
         sh = test_prediction_2D.shape
         test_prediction_2D = test_prediction_2D.reshape((T.prod(sh[:3]),
                                                          sh[3]))
         # Compute loss
-        test_loss = crossentropy(test_prediction_2D, input_mask_var_2D,
+        test_loss += crossentropy(test_prediction_2D, input_mask_var_2D,
                                  void_labels, one_hot=True)
-    elif training_loss == 'squared_error':
-        test_loss = squared_error(test_prediction, input_mask_var).mean(axis=1)
+    if training_loss == 'squared_error' or training_loss == 'both':
+        test_loss_aux = squared_error(test_prediction, input_mask_var).mean(axis=1)
         mask = input_mask_var.sum(axis=1)
-        test_loss = test_loss * mask
-        test_loss = test_loss.sum()/mask.sum()
-    else:
-        raise ValueError('Unknown training loss')
+        test_loss_aux = test_loss_aux * mask
+        test_loss += test_loss_aux.sum()/mask.sum()
 
     # functions
     val_fn = theano.function(input_repr_var + [input_mask_var], test_loss)
@@ -367,7 +384,7 @@ def main():
                         help='Dataset.')
     parser.add_argument('-learning_rate',
                         type=float,
-                        default=0.001,
+                        default=0.0001,
                         help='Learning rate')
     parser.add_argument('-weight_decay',
                         type=float,
@@ -393,7 +410,7 @@ def main():
                         help='Optimizer (adam or rmsprop)')
     parser.add_argument('-training_loss',
                         type=str,
-                        default='squared_error',
+                        default='both',
                         help='Training loss')
     parser.add_argument('-layer_h',
                         type=list,
@@ -440,10 +457,10 @@ def main():
                         type=float,
                         default=1.0,
                         help='Apply temperature')
-    parser.add_argument('-dae_fcn8',
-                        type=bool,
-                        default=False,
-                        help='Whether to use fcn archictecture as DAE')
+    parser.add_argument('-dae_kind',
+                        type=str,
+                        default='fcn8',
+                        help='What kind of AE archictecture to use')
     args = parser.parse_args()
 
     train(args.dataset, float(args.learning_rate),
@@ -456,7 +473,7 @@ def main():
           dropout=args.dropout,
           skip=args.skip, unpool_type=args.unpool_type,
           from_gt=args.from_gt, data_aug=args.data_aug,
-          temperature=args.temperature, dae_fcn8=args.dae_fcn8,
+          temperature=args.temperature, dae_kind=args.dae_kind,
           resume=False, savepath=SAVEPATH, loadpath=LOADPATH)
 
 

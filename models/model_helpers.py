@@ -48,8 +48,9 @@ def softmax4D(x):
 
 
 def concatenate(net, in1, concat_layers, concat_vars, pos):
-    if concat_layers[pos] == 'input':
-        concat_layers[pos] = 'noisy_input'
+
+    if pos < len(concat_layers) and concat_layers[pos] == 'input':
+        concat_layers[pos] = in1
 
     if in1 in concat_layers:
         net[in1 + '_h'] = InputLayer((None, net[in1].input_shape[1] if
@@ -66,7 +67,7 @@ def concatenate(net, in1, concat_layers, concat_vars, pos):
     else:
         out = in1
 
-    if concat_layers[pos-1] == 'noisy_input':
+    if pos <= len(concat_layers) and concat_layers[pos-1] == 'noisy_input':
         concat_layers[pos-1] = 'input'
 
     return pos, out

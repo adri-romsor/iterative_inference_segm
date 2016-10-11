@@ -1,3 +1,5 @@
+#!/usr/bin/env python2
+
 import argparse
 import os
 from getpass import getuser
@@ -16,6 +18,8 @@ from data_loader import load_data
 from metrics import accuracy, jaccard
 from models.DAE_h import buildDAE
 from models.fcn8 import buildFCN8
+from models.fcn8_dae import buildFCN8_DAE
+from models.contextmod_dae import buildDAE_contextmod
 from helpers import save_img
 from models.model_helpers import softmax4D
 
@@ -41,7 +45,8 @@ def inference(dataset, learn_step=0.005, num_iter=500,
               n_filters=64, noise=0.1, conv_before_pool=1, additional_pool=0,
               dropout=0., skip=False, unpool_type='standard', from_gt=True,
               save_perstep=False, which_set='test', data_aug=False,
-              savepath=None, loadpath=None, temperature=1.0):
+              savepath=None, loadpath=None, temperature=1.0,
+              dae_kind='standard'):
     #
     # Define symbolic variables
     #
@@ -79,15 +84,28 @@ def inference(dataset, learn_step=0.005, num_iter=500,
     #
     # Prepare load/save directories
     #
-    exp_name = '_'.join(layer_h)
-    exp_name += '_f' + str(n_filters) + 'c' + str(conv_before_pool) + \
-        'p' + str(additional_pool) + '_z' + str(noise)
-    exp_name += '_' + training_loss + ('_skip' if skip else '')
-    exp_name += ('_fromgt' if from_gt else '_fromfcn8')
-    exp_name += '_' + unpool_type + ('_dropout' + str(dropout) if
-                                     dropout > 0. else '')
-    exp_name += '_data_aug' if data_aug else ''
-    exp_name += ('_T' + str(temperature)) if not from_gt else ''
+    if dae_kind == 'standard':
+        exp_name = '_'.join(layer_h)
+        exp_name += '_f' + str(n_filters) + 'c' + str(conv_before_pool) + \
+            'p' + str(additional_pool) + '_z' + str(noise)
+        exp_name += '_' + training_loss + ('_skip' if skip else '')
+        exp_name += ('_fromgt' if from_gt else '_fromfcn8')
+        exp_name += '_' + unpool_type + ('_dropout' + str(dropout) if
+                                         dropout > 0. else '')
+        exp_name += '_data_aug' if data_aug else ''
+        exp_name += ('_T' + str(temperature)) if not from_gt else ''
+    elif dae_kind == 'fcn8':
+        exp_name = '_'.join(layer_h)
+        exp_name += '_fcn8_' + training_loss
+        exp_name += ('_fromgt' if from_gt else '_fromfcn8')
+        exp_name += '_data_aug' if data_aug else ''
+        exp_name += ('_T' + str(temperature)) if not from_gt else ''
+    elif dae_kind == 'contextmod':
+        exp_name = '_'.join(layer_h)
+        exp_name += '_contexmod_' + training_loss
+        exp_name += ('_fromgt' if from_gt else '_fromfcn8')
+        exp_name += '_data_aug' if data_aug else ''
+        exp_name += ('_T' + str(temperature)) if not from_gt else ''
 
     if savepath is None:
         raise ValueError('A saving directory must be specified')
@@ -121,12 +139,33 @@ def inference(dataset, learn_step=0.005, num_iter=500,
                     temperature=temperature)
 
     # Build DAE with pre-trained weights
-    dae = buildDAE(input_h_var, y_hat_var, n_classes, layer_h,
-                   noise, n_filters, conv_before_pool, additional_pool,
-                   dropout=dropout, trainable=True, void_labels=void_labels,
-                   skip=skip, unpool_type=unpool_type, load_weights=True,
-                   path_weights=loadpath, model_name='dae_model.npz',
-                   out_nonlin=softmax)
+    print ' Building DAE network'
+    if dae_kind == 'standard':
+        dae = buildDAE(input_h_var, y_hat_var, n_classes, layer_h,
+                       noise, n_filters, conv_before_pool, additional_pool,
+                       dropout=dropout, trainable=True,
+                       void_labels=void_labels, skip=skip,
+                       unpool_type=unpool_type, load_weights=True,
+                       path_weights=loadpath, model_name='dae_model.npz',
+                       out_nonlin=softmax)
+    elif dae_kind == 'fcn8':
+        dae = buildFCN8_DAE(n_classes, y_hat_var,
+                            path_weights=loadpath,
+                            model_name='/dae_model.npz',
+                            n_classes=n_classes, load_weights=True,
+                            void_labels=void_labels, trainable=True,
+                            concat_layers=layer_h, noise=noise,
+                            concat_vars=input_h_var)
+
+    elif dae_kind == 'contextmod':
+        dae = buildDAE_contextmod(input_h_var, y_hat_var, n_classes,
+                                  concat_layers=layer_h, noise=noise,
+                                  path_weights=loadpath,
+                                  model_name='dae_model.npz',
+                                  trainable=True, load_weights=True,
+                                  out_nonlin=softmax)
+    else:
+        raise ValueError('Unknown dae kind')
 
     #
     # Define and compile theano functions
@@ -318,11 +357,11 @@ def main():
                         help='Training loss')
     parser.add_argument('-layer_h',
                         type=list,
-                        default=['pool3'],
+                        default=['input'],
                         help='All h to introduce to the DAE')
     parser.add_argument('-noise',
                         type=float,
-                        default=0.1,
+                        default=0.0,
                         help='Noise of DAE input.')
     parser.add_argument('-n_filters',
                         type=int,
@@ -350,7 +389,7 @@ def main():
                         help='Unpooling type - standard or trackind')
     parser.add_argument('-from_gt',
                         type=bool,
-                        default=True,
+                        default=False,
                         help='Whether to train from GT (true) or fcn' +
                         'output (False)')
     parser.add_argument('-save_perstep',
@@ -370,6 +409,11 @@ def main():
                         default=1.0,
                         help='Apply temperature')
 
+    parser.add_argument('-dae_kind',
+                        type=str,
+                        default='contextmod',
+                        help='What kind of AE archictecture to use')
+
     args = parser.parse_args()
 
     inference(args.dataset, float(args.step), int(args.num_iter),
@@ -379,8 +423,8 @@ def main():
               skip=args.skip, unpool_type=args.unpool_type,
               from_gt=args.from_gt, save_perstep=args.save_perstep,
               which_set=args.which_set, data_aug=args.data_aug,
-              temperature=args.temperature, savepath=SAVEPATH,
-              loadpath=LOADPATH)
+              temperature=args.temperature, dae_kind=args.dae_kind,
+              savepath=SAVEPATH, loadpath=LOADPATH)
 
 
 if __name__ == "__main__":
