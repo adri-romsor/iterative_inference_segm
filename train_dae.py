@@ -99,6 +99,16 @@ def train(dataset, learn_step=0.005,
     input_mask_var = T.tensor4('input_mask_var')
     input_repr_var = [T.tensor4()] * len(layer_h)
 
+    test_values = False
+
+    if test_values:
+        theano.config.compute_test_value = 'raise'
+        input_x_var.tag.test_value = np.zeros((1, 3, 224, 224), dtype="float32")
+        input_mask_var.tag.test_value = np.zeros((1, 11, 224, 224),
+                                                 dtype="float32")
+        input_repr_var[0].tag.test_value = np.zeros((1, 256, 52, 52),
+                                                    dtype="float32")
+
     #
     # Build dataset iterator
     #
@@ -459,7 +469,7 @@ def main():
                         help='Apply temperature')
     parser.add_argument('-dae_kind',
                         type=str,
-                        default='fcn8',
+                        default='standard',
                         help='What kind of AE archictecture to use')
     args = parser.parse_args()
 

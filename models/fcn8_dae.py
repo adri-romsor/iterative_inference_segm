@@ -7,6 +7,7 @@ from lasagne.layers import Pool2DLayer as PoolLayer
 from lasagne.layers import Conv2DLayer as ConvLayer
 from lasagne.layers import ElemwiseSumLayer, ElemwiseMergeLayer
 from lasagne.layers import Deconv2DLayer as DeconvLayer
+from lasagne.layers import ConcatLayer
 from lasagne.nonlinearities import softmax, linear
 
 import model_helpers
@@ -177,7 +178,8 @@ def buildFCN8_DAE(nb_in_channels, input_var,
             layer_params = layer.get_params()
             for p in layer_params:
                 try:
-                    p.set_value(param_values[count])
+                    if hasattr(layer, 'input_layer') and not isinstance(layer.input_layer, ConcatLayer):
+                        p.set_value(param_values[count])
                     count += 1
                 except KeyError:
                     pass

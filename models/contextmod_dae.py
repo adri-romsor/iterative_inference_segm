@@ -13,30 +13,7 @@ from lasagne.layers import (DilatedConv2DLayer, Conv2DLayer,
 from layers.mylayers import GaussianNoiseLayerSoftmax
 from lasagne.init import Initializer
 
-
-def concatenate(net, in1, concat_layers, concat_vars, pos):
-    if concat_layers[pos] == 'input':
-        concat_layers[pos] = in1
-
-    if in1 in concat_layers:
-        net[in1 + '_h'] = InputLayer((None, net[in1].input_shape[1] if
-                                      'input' not in concat_layers[pos]
-                                      else 3, None, None), concat_vars[pos])
-        net[in1 + '_concat'] = ConcatLayer((net[in1 + '_h'],
-                                            net[in1]), axis=1, cropping=None)
-        pos += 1
-        out = in1 + '_concat'
-
-        laySize = net[out].output_shape
-        n_cl = laySize[1]
-        print('Number of feature maps (concat):', n_cl)
-    else:
-        out = in1
-
-    if concat_layers[pos-1] == 'noisy_input':
-        concat_layers[pos-1] = 'input'
-
-    return pos, out
+import model_helpers
 
 
 def buildDAE_contextmod(concat_vars, input_mask_var, n_classes,
@@ -64,7 +41,7 @@ def buildDAE_contextmod(concat_vars, input_mask_var, n_classes,
     else:
         in_next = 'input'
 
-    pos, out = concatenate(net, in_next, concat_layers, concat_vars, pos)
+    pos, out = model_helpers.concatenate(net, in_next, concat_layers, concat_vars, pos)
 
     class IdentityInit(Initializer):
         """ We adapt the same initializiation method than in the paper"""

@@ -3,30 +3,7 @@ from lasagne.layers import Pool2DLayer as PoolLayer, ConcatLayer
 from lasagne.layers import Conv2DLayer as ConvLayer, DropoutLayer
 from layers.mylayers import GaussianNoiseLayerSoftmax
 
-
-def concatenate(net, in1, concat_layers, concat_vars, pos):
-    if concat_layers[pos] == 'input':
-        concat_layers[pos] = in1
-
-    if in1 in concat_layers:
-        net[in1 + '_h'] = InputLayer((None, net[in1].input_shape[1] if
-                                      concat_layers[pos] != 'noisy_input'
-                                      else 3, None, None), concat_vars[pos])
-        net[in1 + '_concat'] = ConcatLayer((net[in1 + '_h'],
-                                            net[in1]), axis=1, cropping=None)
-        pos += 1
-        out = in1 + '_concat'
-
-        laySize = net[out].output_shape
-        n_cl = laySize[1]
-        print('Number of feature maps (concat):', n_cl)
-    else:
-        out = in1
-
-    if concat_layers[pos-1] == 'noisy_input':
-        concat_layers[pos-1] = 'input'
-
-    return pos, out
+import model_helpers
 
 
 def buildFCN_down(input_var, concat_vars,
@@ -60,7 +37,7 @@ def buildFCN_down(input_var, concat_vars,
     else:
         in_next = 'input'
 
-    pos, out = concatenate(net, in_next, concat_layers, concat_vars, pos)
+    pos, out = model_helpers.concatenate(net, in_next, concat_layers, concat_vars, pos)
 
     if concat_layers[-1] == 'input' and additional_pool == 0:
         return net, out
@@ -101,7 +78,7 @@ def buildFCN_down(input_var, concat_vars,
         print('Number of feature maps (out):', n_cl)
 
         if p < n_pool:
-            pos, out = concatenate(net, 'pool'+str(p+1), concat_layers,
+            pos, out = model_helpers.concatenate(net, 'pool'+str(p+1), concat_layers,
                                    concat_vars, pos)
 
         last_layer = out
