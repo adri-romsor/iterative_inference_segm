@@ -28,6 +28,10 @@ elif getuser() == 'michal':
     SAVEPATH = '/home/michal/Experiments/iter_inf/'
     LOADPATH = SAVEPATH
     WEIGHTS_PATH = '/home/michal/model_earlyjacc.npz'
+elif getuser() == 'erraqaba':
+    SAVEPATH = '/Tmp/erraqaba/iterative_inference/models/'
+    LOADPATH = '/data/lisatmp4/erraqabi/iterative_inference/models/'
+    WEIGHTS_PATH = LOADPATH
 else:
     raise ValueError('Unknown user : {}'.format(getuser()))
 
@@ -282,7 +286,7 @@ def train(dataset, learn_step=0.005,
 def main():
     parser = argparse.ArgumentParser(description='Unet model training')
     parser.add_argument('-dataset',
-                        default='em',
+                        default='polyps912',
                         help='Dataset.')
     parser.add_argument('-learning_rate',
                         default=0.001,
