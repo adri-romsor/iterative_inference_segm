@@ -162,6 +162,7 @@ def buildFCN8_DAE(nb_in_channels, input_var,
 
     # Load weights
     if load_weights:
+        pretrained = False
         with np.load(path_weights) as f:
             param_values = [f['arr_%d' % i] for i in range(len(f.files))]
         lasagne.layers.set_all_param_values(net['probs'], param_values)
@@ -180,6 +181,7 @@ def buildFCN8_DAE(nb_in_channels, input_var,
                 try:
                     if hasattr(layer, 'input_layer') and not isinstance(layer.input_layer, ConcatLayer):
                         p.set_value(param_values[count])
+                        model_helpers.freezeParameters(layer, single=True)
                     count += 1
                 except KeyError:
                     pass

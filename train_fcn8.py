@@ -1,3 +1,5 @@
+#!/usr/bin/env python2
+
 import os
 import argparse
 import time
@@ -48,6 +50,9 @@ def train(dataset, learn_step=0.005,
 
     savepath = os.path.join(savepath, dataset, exp_name)
     loadpath = os.path.join(loadpath, dataset, exp_name)
+    print savepath
+    print loadpath
+
     if not os.path.exists(savepath):
         os.makedirs(savepath)
     else:
@@ -72,22 +77,25 @@ def train(dataset, learn_step=0.005,
     if data_aug:
         train_crop_size = [256, 256]
         horizontal_flip = True
+        warp_sigma = 10
+        warp_grid_size = 3
+        fill_mode = 'reflect'
+
         if dataset == 'em':
             rotation_range = 25
             shear_range = 0.41
             vertical_flip = True
-            fill_mode = 'reflect'
             spline_warp = True
-            warp_sigma = 10
-            warp_grid_size = 3
+        elif dataset == 'polyps912':
+            rotation_range = 180
+            shear_range = 0
+            vertical_flip = False
+            spline_warp = False
         else:
             rotation_range = 0
             shear_range = 0
             vertical_flip = False
-            fill_mode = 'reflect'
             spline_warp = False
-            warp_sigma = 10
-            warp_grid_size = 3
     else:
         train_crop_size = None
         horizontal_flip = False
@@ -99,8 +107,11 @@ def train(dataset, learn_step=0.005,
         warp_sigma = 10
         warp_grid_size = 3
 
+    bs = [10, 1, 1] if dataset == 'polyps912' else [10, 10, 10]
+
     train_iter, val_iter, test_iter = \
         load_data(dataset, one_hot=False,
+                  batch_size=bs,
                   train_crop_size=train_crop_size,
                   horizontal_flip=horizontal_flip,
                   vertical_flip=vertical_flip,
@@ -118,6 +129,11 @@ def train(dataset, learn_step=0.005,
     void_labels = train_iter.get_void_labels()
     nb_in_channels = train_iter.data_shape[0]
 
+    print "Batch. train: %d, val %d, test %d" % (n_batches_train, n_batches_val,
+                                                 n_batches_test)
+    print "Nb of classes: %d" % (n_classes)
+    print "Nb. of input channels: %d" % (nb_in_channels)
+
     #
     # Build network
     #
@@ -133,9 +149,10 @@ def train(dataset, learn_step=0.005,
     prediction = lasagne.layers.get_output(convmodel)[0]
     loss = crossentropy(prediction, target_var, void_labels)
 
-    weightsl2 = regularize_network_params(
-        convmodel, lasagne.regularization.l2)
-    loss += weight_decay * weightsl2
+    if weight_decay > 0:
+        weightsl2 = regularize_network_params(
+            convmodel, lasagne.regularization.l2)
+        loss += weight_decay * weightsl2
 
     params = lasagne.layers.get_all_params(convmodel, trainable=True)
     updates = lasagne.updates.adam(loss, params, learning_rate=learn_step)
@@ -282,10 +299,10 @@ def train(dataset, learn_step=0.005,
 def main():
     parser = argparse.ArgumentParser(description='Unet model training')
     parser.add_argument('-dataset',
-                        default='em',
+                        default='polyps912',
                         help='Dataset.')
     parser.add_argument('-learning_rate',
-                        default=0.001,
+                        default=0.0001,
                         help='Learning Rate')
     parser.add_argument('-penal_cst',
                         default=0.0,

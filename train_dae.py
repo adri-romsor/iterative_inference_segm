@@ -167,11 +167,11 @@ def train(dataset, learn_step=0.005,
                        dropout=dropout, trainable=True,
                        void_labels=void_labels, skip=skip,
                        unpool_type=unpool_type, load_weights=resume,
-                       path_weights=savepath, model_name='dae_model.npz',
+                       path_weights=loadpath, model_name='dae_model.npz',
                        out_nonlin=softmax)
     elif dae_kind == 'fcn8':
         dae = buildFCN8_DAE(n_classes, input_mask_var,
-                            path_weights=savepath+'/dae_model.npz',
+                            path_weights=loadpath+'/dae_model.npz',
                             n_classes=n_classes, load_weights=resume,
                             void_labels=void_labels, trainable=True,
                             concat_layers=layer_h, noise=noise,
@@ -180,7 +180,7 @@ def train(dataset, learn_step=0.005,
     elif dae_kind == 'contextmod':
         dae = buildDAE_contextmod(input_repr_var, input_mask_var, n_classes,
                                   concat_layers=layer_h, noise=noise,
-                                  path_weights=savepath,
+                                  path_weights=loadpath,
                                   model_name='dae_model.npz',
                                   trainable=True, load_weights=resume,
                                   out_nonlin=softmax)
@@ -254,7 +254,8 @@ def train(dataset, learn_step=0.005,
     # loss += weight_decay * weightsl2
 
     # Add intermediate losses
-    loss += squared_error_h(prediction_h, test_prediction_h)
+    if training_loss != 'crossentropy':
+        loss += squared_error_h(prediction_h, test_prediction_h)
 
     params = lasagne.layers.get_all_params(dae, trainable=True)
 
@@ -291,6 +292,9 @@ def train(dataset, learn_step=0.005,
         mask = input_mask_var.sum(axis=1)
         test_loss_aux = test_loss_aux * mask
         test_loss += test_loss_aux.sum()/mask.sum()
+
+    if training_loss != 'crossentropy':
+        test_loss += squared_error_h(prediction_h, test_prediction_h)
 
     # functions
     val_fn = theano.function(input_repr_var + [input_mask_var], test_loss)
