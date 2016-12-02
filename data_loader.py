@@ -1,5 +1,6 @@
 from dataset_loaders.images.polyps912 import Polyps912Dataset
 from dataset_loaders.images.camvid import CamvidDataset
+from dataset_loaders.images.polyps912 import Polyps912Dataset
 from dataset_loaders.images.em_stacks import IsbiEmStacksDataset
 
 
@@ -157,6 +158,31 @@ def load_data(dataset, train_crop_size=(224, 224), one_hot=False,
                                        start=25,
                                        end=30)
         test_iter = None
+    elif dataset == 'polyps912':
+        train_iter = Polyps912Dataset(which_set='train',
+                                      batch_size=10,
+                                      seq_per_video=0,
+                                      seq_length=0,
+                                      crop_size=(224, 224),
+                                      get_one_hot=True,
+                                      get_01c=True,
+                                      use_threads=False)
+        val_iter = Polyps912Dataset(which_set='val',
+                                    batch_size=10,
+                                    seq_per_video=0,
+                                    seq_length=0,
+                                    crop_size=None,
+                                    get_one_hot=True,
+                                    get_01c=True,
+                                    use_threads=False)
+        test_iter = Polyps912Dataset(which_set='test',
+                                     batch_size=10,
+                                     seq_per_video=0,
+                                     seq_length=0,
+                                     crop_size=None,
+                                     get_one_hot=True,
+                                     get_01c=True,
+                                     use_threads=False)
     else:
         raise NotImplementedError
 
