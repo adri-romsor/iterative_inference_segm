@@ -16,6 +16,7 @@ from metrics import accuracy, jaccard
 from models.DAE_h import buildDAE
 from models.fcn8 import buildFCN8
 from helpers import save_img
+from helpers import build_experiment_name
 
 _FLOATX = config.floatX
 _EPSILON = 10e-8

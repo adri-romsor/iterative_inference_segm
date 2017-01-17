@@ -1,6 +1,8 @@
 import theano.tensor as T
 from theano import config
 
+from lasagne.objectives import squared_error as squared_error_lasagne
+
 _FLOATX = config.floatX
 _EPSILON = 10e-8
 
@@ -108,7 +110,20 @@ def entropy(y_pred):
 
 def squared_error_h(y_pred, y_true):
 
+    coef = np.linspace(_EPSILON, 1, len(y_pred)+1)[:-1]
+
     error_list = [((a_i - b_i)**2).mean() for
                   a_i, b_i in zip(y_pred, y_true)]
+    error_list = error_list * coef
 
     return sum(error_list)
+
+
+def squared_error(y_pred, y_true, void):
+
+    loss_aux = squared_error_lasagne(y_pred, y_true[:, :void, :, :]).mean(axis=1)
+    mask = y_true[:, :void, :, :].sum(axis=1)
+    loss_aux = loss_aux * mask
+    loss = loss_aux.sum()/mask.sum()
+
+    return loss

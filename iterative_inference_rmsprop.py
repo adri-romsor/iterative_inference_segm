@@ -11,17 +11,18 @@ import theano.tensor as T
 from theano import config
 
 import lasagne
-from lasagne.objectives import squared_error
+# from lasagne.objectives import squared_error
 from lasagne.nonlinearities import softmax
 
 from data_loader import load_data
-from metrics import accuracy, jaccard
+from metrics import accuracy, jaccard, squared_error
 from models.DAE_h import buildDAE
 from models.fcn8 import buildFCN8
 from models.fcn8_dae import buildFCN8_DAE
 from models.contextmod_dae import buildDAE_contextmod
 from helpers import save_img
 from models.model_helpers import softmax4D
+from helpers import build_experiment_name
 
 _FLOATX = config.floatX
 _EPSILON = 10e-8
@@ -84,28 +85,10 @@ def inference(dataset, learn_step=0.005, num_iter=500,
     #
     # Prepare load/save directories
     #
-    if dae_kind == 'standard':
-        exp_name = '_'.join(layer_h)
-        exp_name += '_f' + str(n_filters) + 'c' + str(conv_before_pool) + \
-            'p' + str(additional_pool) + '_z' + str(noise)
-        exp_name += '_' + training_loss + ('_skip' if skip else '')
-        exp_name += ('_fromgt' if from_gt else '_fromfcn8')
-        exp_name += '_' + unpool_type + ('_dropout' + str(dropout) if
-                                         dropout > 0. else '')
-        exp_name += '_data_aug' if data_aug else ''
-        exp_name += ('_T' + str(temperature)) if not from_gt else ''
-    elif dae_kind == 'fcn8':
-        exp_name = '_'.join(layer_h)
-        exp_name += '_fcn8_' + training_loss
-        exp_name += ('_fromgt' if from_gt else '_fromfcn8')
-        exp_name += '_data_aug' if data_aug else ''
-        exp_name += ('_T' + str(temperature)) if not from_gt else ''
-    elif dae_kind == 'contextmod':
-        exp_name = '_'.join(layer_h)
-        exp_name += '_contexmod_' + training_loss
-        exp_name += ('_fromgt' if from_gt else '_fromfcn8')
-        exp_name += '_data_aug' if data_aug else ''
-        exp_name += ('_T' + str(temperature)) if not from_gt else ''
+    exp_name = build_experiment_name(dae_kind, layer_h, training_loss, from_gt,
+                                     noise, data_aug, temperature, n_filters,
+                                     conv_before_pool, additional_pool, skip,
+                                     unpool_type, dropout)
 
     if savepath is None:
         raise ValueError('A saving directory must be specified')
@@ -149,13 +132,10 @@ def inference(dataset, learn_step=0.005, num_iter=500,
                        path_weights=loadpath, model_name='dae_model.npz',
                        out_nonlin=softmax)
     elif dae_kind == 'fcn8':
-        dae = buildFCN8_DAE(n_classes, y_hat_var,
-                            path_weights=loadpath,
-                            model_name='/dae_model.npz',
-                            n_classes=n_classes, load_weights=True,
-                            void_labels=void_labels, trainable=True,
-                            concat_layers=layer_h, noise=noise,
-                            concat_vars=input_h_var)
+        dae = buildFCN8_DAE(input_h_var, y_hat_var, n_classes,
+                            n_classes, layer_h=layer_h, noise=noise,
+                            path_weights=loadpath, model_name='dae_model.npz',
+                            trainable=True, load_weights=True)
 
     elif dae_kind == 'contextmod':
         dae = buildDAE_contextmod(input_h_var, y_hat_var, n_classes,
@@ -193,10 +173,7 @@ def inference(dataset, learn_step=0.005, num_iter=500,
     de = - (pred_dae - y_hat_var)
 
     # MSE loss
-    loss = squared_error(y_hat_var_metrics, target_var_4D).mean(axis=1)
-    mask = target_var_4D.sum(axis=1)
-    loss = loss * mask
-    loss = loss.sum()/mask.sum()
+    loss=  squared_error(y_hat_var_metrics, target_var_4D, void)
     loss_fn = theano.function([y_hat_var_metrics, target_var_4D], loss)
     pred_dae_fn = theano.function(input_h_var, pred_dae)
 
@@ -353,15 +330,15 @@ def main():
                         help='Max number of iterations')
     parser.add_argument('-training_loss',
                         type=str,
-                        default='squared_error',
+                        default=['squared_error', 'squared_error_h', 'crossentropy'],
                         help='Training loss')
     parser.add_argument('-layer_h',
                         type=list,
-                        default=['input'],
+                        default=['pool3'],
                         help='All h to introduce to the DAE')
     parser.add_argument('-noise',
                         type=float,
-                        default=0.0,
+                        default=0.1,
                         help='Noise of DAE input.')
     parser.add_argument('-n_filters',
                         type=int,
@@ -411,7 +388,7 @@ def main():
 
     parser.add_argument('-dae_kind',
                         type=str,
-                        default='contextmod',
+                        default='fcn8',
                         help='What kind of AE archictecture to use')
 
     args = parser.parse_args()

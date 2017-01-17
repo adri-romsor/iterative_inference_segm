@@ -11,18 +11,18 @@ import theano
 import theano.tensor as T
 from theano import config
 import lasagne
-from lasagne.objectives import squared_error
 from lasagne.regularization import regularize_network_params
 from lasagne.nonlinearities import softmax
-from lasagne.layers import Pool2DLayer, Deconv2DLayer
+from lasagne.layers import Pool2DLayer, Deconv2DLayer, InputLayer
 
 from data_loader import load_data
-from metrics import crossentropy, entropy, squared_error_h
+from metrics import crossentropy, entropy, squared_error_h, squared_error
 from models.DAE_h import buildDAE
 from models.fcn8 import buildFCN8
 from models.fcn8_dae import buildFCN8_DAE
 from models.contextmod_dae import buildDAE_contextmod
 from layers.mylayers import DePool2D
+from helpers import build_experiment_name
 
 _FLOATX = config.floatX
 if getuser() == 'romerosa':
@@ -47,7 +47,7 @@ else:
 
 def train(dataset, learn_step=0.005,
           weight_decay=1e-4, num_epochs=500, max_patience=100,
-          epsilon=.0, optimizer='rmsprop', training_loss='squared_error',
+          epsilon=.0, optimizer='rmsprop', training_loss=['squared_error'],
           layer_h=['pool5'], n_filters=64, noise=0.1, conv_before_pool=1,
           additional_pool=0, dropout=0., skip=False, unpool_type='standard',
           from_gt=True, data_aug=False, temperature=1.0, dae_kind='standard',
@@ -56,29 +56,10 @@ def train(dataset, learn_step=0.005,
     #
     # Prepare load/save directories
     #
-    if dae_kind == 'standard':
-        exp_name = '_'.join(layer_h)
-        exp_name += '_f' + str(n_filters) + 'c' + str(conv_before_pool) + \
-            'p' + str(additional_pool) + '_z' + str(noise)
-        exp_name += '_' + training_loss + ('_skip' if skip else '')
-        exp_name += ('_fromgt' if from_gt else '_fromfcn8')
-        exp_name += '_' + unpool_type + ('_dropout' + str(dropout) if
-                                         dropout > 0. else '')
-        exp_name += '_data_aug' if data_aug else ''
-        exp_name += ('_T' + str(temperature)) if not from_gt else ''
-    elif dae_kind == 'fcn8':
-        exp_name = '_'.join(layer_h)
-        exp_name += '_fcn8_' + training_loss
-        exp_name += ('_fromgt' if from_gt else '_fromfcn8')
-        exp_name += '_data_aug' if data_aug else ''
-        exp_name += ('_T' + str(temperature)) if not from_gt else ''
-    elif dae_kind == 'contextmod':
-        exp_name = '_'.join(layer_h)
-        exp_name += '_contexmod_' + training_loss
-        exp_name += ('_fromgt' if from_gt else '_fromfcn8')
-        exp_name += '_data_aug' if data_aug else ''
-        exp_name += ('_T' + str(temperature)) if not from_gt else ''
-
+    exp_name = build_experiment_name(dae_kind, layer_h, training_loss, from_gt,
+                                     noise, data_aug, temperature, n_filters,
+                                     conv_before_pool, additional_pool, skip,
+                                     unpool_type, dropout)
     if savepath is None:
         raise ValueError('A saving directory must be specified')
 
@@ -99,12 +80,15 @@ def train(dataset, learn_step=0.005,
     #
     # Define symbolic variables
     #
-    input_x_var = T.tensor4('input_x_var')
-    input_mask_var = T.tensor4('input_mask_var')
-    input_repr_var = [T.tensor4()] * len(layer_h)
+    input_x_var = T.tensor4('input_x_var')  # tensor for input image batch
+    input_mask_var = T.tensor4('input_mask_var')  # tensor for segmentation bach (input dae)
+    input_repr_var = [T.tensor4()] * len(layer_h)  # tensor for hidden repr batch (input dae)
+    target_var = T.tensor4('target_var')  # tensor for target batch
 
+    #
+    # Only for debugging
+    #
     test_values = False
-
     if test_values:
         theano.config.compute_test_value = 'raise'
         input_x_var.tag.test_value = np.zeros((1, 3, 224, 224), dtype="float32")
@@ -174,12 +158,11 @@ def train(dataset, learn_step=0.005,
                        path_weights=loadpath, model_name='dae_model.npz',
                        out_nonlin=softmax)
     elif dae_kind == 'fcn8':
-        dae = buildFCN8_DAE(n_classes, input_mask_var,
-                            path_weights=loadpath+'/dae_model.npz',
-                            n_classes=n_classes, load_weights=resume,
-                            void_labels=void_labels, trainable=True,
-                            concat_layers=layer_h, noise=noise,
-                            concat_vars=input_repr_var, pretrained=True)
+        dae = buildFCN8_DAE(input_repr_var, input_mask_var, n_classes,
+                            n_classes, layer_h=layer_h, noise=noise,
+                            path_weights=loadpath, model_name='dae_model.npz',
+                            trainable=True, load_weights=resume,
+                            pretrained=True)
 
     elif dae_kind == 'contextmod':
         dae = buildDAE_contextmod(input_repr_var, input_mask_var, n_classes,
@@ -208,59 +191,74 @@ def train(dataset, learn_step=0.005,
     # training functions
     print "Defining and compiling training functions"
 
-    # prediction and loss
+    # fcn prediction
     fcn_prediction = lasagne.layers.get_output(fcn, deterministic=True)
 
-    dae_lays = lasagne.layers.get_all_layers(dae)
+    # dae prediction: TODO - clean!
+    dae_all_lays = lasagne.layers.get_all_layers(dae)
     if dae_kind != 'contextmod':
-        dae_lays = [l for l in dae_lays
+        dae_lays = [l for l in dae_all_lays
                     if (hasattr(l, 'input_layer') and
                         isinstance(l.input_layer, DePool2D)) or
                     isinstance(l, Pool2DLayer) or
                     isinstance(l, Deconv2DLayer) or
-                    l == dae_lays[-1]]
+                    l == dae_all_lays[-1]]
         # dae_lays = dae_lays[::2]
     else:
-        dae_lays = dae_lays[3:-5]
-    prediction_all = lasagne.layers.get_output(dae_lays)
-    prediction = prediction_all[-1]
-    prediction_h = prediction_all[:-1]
-    test_prediction_all = lasagne.layers.get_output(dae_lays,
-                                                    deterministic=True)
-    test_prediction = test_prediction_all[-1]
-    test_prediction_h = test_prediction_all[:-1]
+        dae_lays = dae_all_lays[3:-5]
 
+    dae_prediction_all = lasagne.layers.get_output(dae_lays)
+    dae_prediction = dae_prediction_all[-1]
+    dae_prediction_h = dae_prediction_all[:-1]
+
+    test_dae_prediction_all = lasagne.layers.get_output(dae_lays,
+                                                        deterministic=True)
+    test_dae_prediction = test_dae_prediction_all[-1]
+    test_dae_prediction_h = test_dae_prediction_all[:-1]
+
+    # loss
     loss = 0
-
-    if training_loss == 'crossentropy' or training_loss == 'both':
+    test_loss = 0
+    if 'crossentropy' in training_loss:
         # Convert DAE prediction to 2D
-        prediction_2D = prediction.dimshuffle((0, 2, 3, 1))
-        sh = prediction_2D.shape
-        prediction_2D = prediction_2D.reshape((T.prod(sh[:3]), sh[3]))
+        dae_prediction_2D = dae_prediction.dimshuffle((0, 2, 3, 1))
+        sh = dae_prediction_2D.shape
+        dae_prediction_2D = dae_prediction_2D.reshape((T.prod(sh[:3]), sh[3]))
+
+        test_dae_prediction_2D = test_dae_prediction.dimshuffle((0, 2, 3, 1))
+        sh = test_dae_prediction_2D.shape
+        test_dae_prediction_2D = test_dae_prediction_2D.reshape((T.prod(sh[:3]),
+                                                         sh[3]))
         # Convert target to 2D
-        input_mask_var_2D = input_mask_var.dimshuffle((0, 2, 3, 1))
-        sh = input_mask_var_2D.shape
-        input_mask_var_2D = input_mask_var_2D.reshape((T.prod(sh[:3]), sh[3]))
-        # input_mask_var_2D = T.argmax(input_mask_var_2D, axis=1)
+        target_var_2D = target_var.dimshuffle((0, 2, 3, 1))
+        sh = target_var_2D.shape
+        target_var_2D = target_var_2D.reshape((T.prod(sh[:3]), sh[3]))
         # Compute loss
-        loss += crossentropy(prediction_2D, input_mask_var_2D, void_labels,
-                            one_hot=True)
-    if training_loss == 'squared_error' or training_loss == 'both':
-        loss_aux = squared_error(prediction, input_mask_var).mean(axis=1)
-        mask = input_mask_var.sum(axis=1)
-        loss_aux = loss_aux * mask
-        loss += loss_aux.sum()/mask.sum()
-
-    # loss += epsilon * entropy(prediction)
-
-    # regularizers
-    # weightsl2 = regularize_network_params(dae, lasagne.regularization.l2)
-    # loss += weight_decay * weightsl2
+        loss += crossentropy(dae_prediction_2D, target_var_2D, void_labels,
+                             one_hot=True)
+        test_loss += crossentropy(test_dae_prediction_2D, target_var_2D,
+                                  void_labels, one_hot=True)
+    if 'squared_error' in training_loss:
+        loss += squared_error(dae_prediction, target_var, void)
+        test_loss += squared_error(test_dae_prediction, target_var, void)
 
     # Add intermediate losses
-    if training_loss != 'crossentropy':
-        loss += squared_error_h(prediction_h, test_prediction_h)
+    if 'squared_error_h' in training_loss:
+        # extract input layers and create dictionary
+        dae_input_lays = [l for l in dae_all_lays if isinstance(l, InputLayer)]
+        inputs = {dae_input_lays[0]: target_var[:, :void, :, :], dae_input_lays[-1]:target_var[:, :void, :, :]}
+        for idx, val in enumerate(input_repr_var):
+            inputs[dae_input_lays[idx+1]] = val
 
+        test_dae_prediction_all_gt = lasagne.layers.get_output(dae_lays,
+                                                               inputs=inputs,
+                                                               deterministic=True)
+        test_dae_prediction_h_gt = test_dae_prediction_all_gt[:-1]
+
+        loss += squared_error_h(dae_prediction_h, test_dae_prediction_h_gt)
+        test_loss += squared_error_h(test_dae_prediction_h, test_dae_prediction_h_gt)
+
+    # network parameters
     params = lasagne.layers.get_all_params(dae, trainable=True)
 
     # optimizer
@@ -274,34 +272,10 @@ def train(dataset, learn_step=0.005,
         raise ValueError('Unknown optimizer')
 
     # functions
-    train_fn = theano.function(input_repr_var + [input_mask_var],
+    train_fn = theano.function(input_repr_var + [input_mask_var, target_var],
                                loss, updates=updates)
     fcn_fn = theano.function([input_x_var], fcn_prediction)
-
-    # Define required theano functions for testing and compile them
-    print "Defining and compiling test functions"
-    # test loss
-    test_loss = 0
-    if training_loss == 'crossentropy' or training_loss == 'both':
-        # Convert DAE prediction to 2D
-        test_prediction_2D = test_prediction.dimshuffle((0, 2, 3, 1))
-        sh = test_prediction_2D.shape
-        test_prediction_2D = test_prediction_2D.reshape((T.prod(sh[:3]),
-                                                         sh[3]))
-        # Compute loss
-        test_loss += crossentropy(test_prediction_2D, input_mask_var_2D,
-                                 void_labels, one_hot=True)
-    if training_loss == 'squared_error' or training_loss == 'both':
-        test_loss_aux = squared_error(test_prediction, input_mask_var).mean(axis=1)
-        mask = input_mask_var.sum(axis=1)
-        test_loss_aux = test_loss_aux * mask
-        test_loss += test_loss_aux.sum()/mask.sum()
-
-    if training_loss != 'crossentropy':
-        test_loss += squared_error_h(prediction_h, test_prediction_h)
-
-    # functions
-    val_fn = theano.function(input_repr_var + [input_mask_var], test_loss)
+    val_fn = theano.function(input_repr_var + [input_mask_var, target_var], test_loss)
 
     err_train = []
     err_valid = []
@@ -322,18 +296,18 @@ def train(dataset, learn_step=0.005,
         for i in range(n_batches_train):
             # Get minibatch
             X_train_batch, L_train_batch = train_iter.next()
+            L_train_batch = L_train_batch.astype(_FLOATX)
 
             # h prediction
-            X_pred_batch = fcn_fn(X_train_batch)
+            H_pred_batch = fcn_fn(X_train_batch)
             if from_gt:
-                L_train_batch = L_train_batch.astype(_FLOATX)
-                L_train_batch = L_train_batch[:, :void, :, :]
+                Y_pred_batch = L_train_batch[:, :void, :, :]
             else:
-                L_train_batch = X_pred_batch[-1]
-                X_pred_batch = X_pred_batch[:-1]
+                Y_pred_batch = H_pred_batch[-1]
+                H_pred_batch = H_pred_batch[:-1]
 
             # Training step
-            cost_train = train_fn(*(X_pred_batch + [L_train_batch]))
+            cost_train = train_fn(*(H_pred_batch + [Y_pred_batch, L_train_batch]))
             cost_train_tot += cost_train
 
         err_train += [cost_train_tot / n_batches_train]
@@ -343,18 +317,18 @@ def train(dataset, learn_step=0.005,
         for i in range(n_batches_val):
             # Get minibatch
             X_val_batch, L_val_batch = val_iter.next()
+            L_val_batch = L_val_batch.astype(_FLOATX)
 
             # h prediction
-            X_pred_batch = fcn_fn(X_val_batch)
+            H_pred_batch = fcn_fn(X_val_batch)
             if from_gt:
-                L_val_batch = L_val_batch.astype(_FLOATX)
-                L_val_batch = L_val_batch[:, :void, :, :]
+                Y_pred_batch = L_val_batch[:, :void, :, :]
             else:
-                L_val_batch = X_pred_batch[-1]
-                X_pred_batch = X_pred_batch[:-1]
+                Y_pred_batch = H_pred_batch[-1]
+                H_pred_batch = H_pred_batch[:-1]
 
             # Validation step
-            cost_val = val_fn(*(X_pred_batch + [L_val_batch]))
+            cost_val = val_fn(*(H_pred_batch + [Y_pred_batch, L_val_batch]))
             cost_val_tot += cost_val
 
         err_valid += [cost_val_tot / n_batches_val]
@@ -375,12 +349,16 @@ def train(dataset, learn_step=0.005,
         elif epoch > 0 and err_valid[epoch] < best_err_val:
             best_err_val = err_valid[epoch]
             patience = 0
-            np.savez(os.path.join(savepath, 'dae_model.npz'),
+            np.savez(os.path.join(savepath, 'dae_model_best.npz'),
                      *lasagne.layers.get_all_param_values(dae))
-            np.savez(os.path.join(savepath, 'dae_errors.npz'),
+            np.savez(os.path.join(savepath, 'dae_errors_best.npz'),
                      err_valid, err_train)
         else:
             patience += 1
+            np.savez(os.path.join(savepath, 'dae_model_last.npz'),
+                     *lasagne.layers.get_all_param_values(dae))
+            np.savez(os.path.join(savepath, 'dae_errors_last.npz'),
+                     err_valid, err_train)
 
         # Finish training if patience has expired or max nber of epochs
         # reached
@@ -398,7 +376,7 @@ def main():
     parser = argparse.ArgumentParser(description='DAE training')
     parser.add_argument('-dataset',
                         type=str,
-                        default='polyps912',
+                        default='camvid',
                         help='Dataset.')
     parser.add_argument('-learning_rate',
                         type=float,
@@ -427,8 +405,8 @@ def main():
                         default='rmsprop',
                         help='Optimizer (adam or rmsprop)')
     parser.add_argument('-training_loss',
-                        type=str,
-                        default='both',
+                        type=list,
+                        default=['crossentropy'],
                         help='Training loss')
     parser.add_argument('-layer_h',
                         type=list,
@@ -436,7 +414,7 @@ def main():
                         help='All h to introduce to the DAE')
     parser.add_argument('-noise',
                         type=float,
-                        default=0.,
+                        default=0.0,
                         help='Noise of DAE input.')
     parser.add_argument('-n_filters',
                         type=int,
@@ -477,7 +455,7 @@ def main():
                         help='Apply temperature')
     parser.add_argument('-dae_kind',
                         type=str,
-                        default='standard',
+                        default='fcn8',
                         help='What kind of AE archictecture to use')
     args = parser.parse_args()
 

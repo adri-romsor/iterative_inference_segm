@@ -59,3 +59,28 @@ def save_img(image_batch, mask_batch, output, output_old, out_images_folder,
         scipy.misc.toimage(combined_image).save(out_name)
         images.append(combined_image)
     return images
+
+
+def build_experiment_name(dae_kind, layer_h, training_loss, from_gt, noise,
+                          data_aug, temperature, n_filters, conv_before_pool,
+                          additional_pool, skip, unpool_type, dropout):
+
+    all_layer_h = '_'.join(layer_h)
+    all_loss = '_'.join(training_loss)
+
+    exp_name = dae_kind + '_' + all_layer_h
+
+    if dae_kind == 'standard':
+        exp_name += '_f' + str(n_filters) + 'c' + str(conv_before_pool) + \
+            'p' + str(additional_pool) + ('_skip' if skip else '')
+        exp_name += '_' + unpool_type + ('_dropout' + str(dropout) if
+                                         dropout > 0. else '')
+
+    exp_name += '_' +  all_loss
+    exp_name += ('_fromgt' if from_gt else '_fromfcn8') + '_z' + str(noise)
+    exp_name += '_data_aug' if data_aug else ''
+    exp_name += ('_T' + str(temperature)) if not from_gt else ''
+
+    print(exp_name)
+
+    return exp_name

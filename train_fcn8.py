@@ -42,6 +42,7 @@ def train(dataset, learn_step=0.005,
           weight_decay=1e-4, num_epochs=500,
           max_patience=100, data_aug=False,
           savepath=None, loadpath=None,
+          early_stop_class=None,
           resume=False):
 
     #
@@ -79,27 +80,32 @@ def train(dataset, learn_step=0.005,
     # Build dataset iterator
     #
     if data_aug:
-        train_crop_size = [256, 256]
+        train_crop_size = [224, 224]
         horizontal_flip = True
         warp_sigma = 10
         warp_grid_size = 3
-        fill_mode = 'reflect'
 
         if dataset == 'em':
             rotation_range = 25
             shear_range = 0.41
             vertical_flip = True
             spline_warp = True
+            zoom_range = 0.
+            fill_mode = 'reflect'
         elif dataset == 'polyps912':
             rotation_range = 180
-            shear_range = 0
-            vertical_flip = False
-            spline_warp = False
+            shear_range = 0.5
+            vertical_flip = True
+            spline_warp = True
+            zoom_range = 0.1
+            fill_mode = 'constant'
         else:
             rotation_range = 0
             shear_range = 0
             vertical_flip = False
             spline_warp = False
+            zoom_range = 0.
+            fill_mode = 'constant'
     else:
         train_crop_size = None
         horizontal_flip = False
@@ -108,6 +114,7 @@ def train(dataset, learn_step=0.005,
         vertical_flip = False
         fill_mode = 'reflect'
         spline_warp = False
+        zoom_range = 0.
         warp_sigma = 10
         warp_grid_size = 3
 
@@ -124,7 +131,8 @@ def train(dataset, learn_step=0.005,
                   fill_mode=fill_mode,
                   spline_warp=spline_warp,
                   warp_sigma=warp_sigma,
-                  warp_grid_size=warp_grid_size)
+                  warp_grid_size=warp_grid_size,
+                  zoom_range=zoom_range)
 
     n_batches_train = train_iter.get_n_batches()
     n_batches_val = val_iter.get_n_batches()
@@ -222,8 +230,12 @@ def train(dataset, learn_step=0.005,
 
         err_valid += [cost_val_tot/n_batches_val]
         acc_valid += [acc_val_tot/n_batches_val]
-        jacc_valid += [np.mean(jacc_val_tot[0, :] /
-                               jacc_val_tot[1, :])]
+        jacc_perclass_valid = jacc_val_tot[0, :] / jacc_val_tot[1, :]
+        if early_stop_class == None:
+            jacc_valid += [np.mean(jacc_perclass_valid)]
+        else:
+            jacc_valid += [jacc_perclass_valid[early_stop_class]]
+
 
         out_str = "EPOCH %i: Avg epoch training cost train %f, cost val %f" +\
             ", acc val %f, jacc val %f took %f s"
@@ -314,7 +326,7 @@ def main():
     parser.add_argument('--num_epochs',
                         '-ne',
                         type=int,
-                        default=1000,
+                        default=750,
                         help='Optional. Int to indicate the max'
                         'number of epochs.')
     parser.add_argument('-max_patience',
@@ -325,11 +337,16 @@ def main():
                         type=bool,
                         default=True,
                         help='use data augmentation')
+    parser.add_argument('-early_stop_class',
+                        type=int,
+                        default=1,
+                        help='class to early stop on')
     args = parser.parse_args()
 
     train(args.dataset, float(args.learning_rate),
           float(args.penal_cst), int(args.num_epochs), int(args.max_patience),
-          data_aug=args.data_aug, savepath=SAVEPATH, loadpath=LOADPATH)
+          data_aug=args.data_aug, early_stop_class=args.early_stop_class,
+          savepath=SAVEPATH, loadpath=LOADPATH)
 
 if __name__ == "__main__":
     main()
