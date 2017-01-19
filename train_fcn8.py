@@ -40,7 +40,7 @@ else:
 
 def train(dataset, learn_step=0.005,
           weight_decay=1e-4, num_epochs=500,
-          max_patience=100, data_aug=False,
+          max_patience=100, data_augmentation={},
           savepath=None, loadpath=None,
           early_stop_class=None,
           resume=False):
@@ -48,7 +48,7 @@ def train(dataset, learn_step=0.005,
     #
     # Prepare load/save directories
     #
-    exp_name = 'fcn8_' + 'data_aug' if data_aug else ''
+    exp_name = 'fcn8_' + 'data_aug' if bool(data_augmentation) else ''
 
     if savepath is None:
         raise ValueError('A saving directory must be specified')
@@ -79,66 +79,17 @@ def train(dataset, learn_step=0.005,
     #
     # Build dataset iterator
     #
-    if data_aug:
-        train_crop_size = [224, 224]
-        horizontal_flip = True
-        warp_sigma = 10
-        warp_grid_size = 3
-
-        if dataset == 'em':
-            rotation_range = 25
-            shear_range = 0.41
-            vertical_flip = True
-            spline_warp = True
-            zoom_range = 0.
-            fill_mode = 'reflect'
-        elif dataset == 'polyps912':
-            rotation_range = 180
-            shear_range = 0.5
-            vertical_flip = True
-            spline_warp = True
-            zoom_range = 0.1
-            fill_mode = 'constant'
-        else:
-            rotation_range = 0
-            shear_range = 0
-            vertical_flip = False
-            spline_warp = False
-            zoom_range = 0.
-            fill_mode = 'constant'
-    else:
-        train_crop_size = None
-        horizontal_flip = False
-        rotation_range = 0
-        shear_range = 0
-        vertical_flip = False
-        fill_mode = 'reflect'
-        spline_warp = False
-        zoom_range = 0.
-        warp_sigma = 10
-        warp_grid_size = 3
-
-    bs = [10, 1, 1] if dataset == 'polyps912' else [10, 10, 10]
+    bs = [10, 10, 10]
 
     train_iter, val_iter, test_iter = \
-        load_data(dataset, one_hot=False,
-                  batch_size=bs,
-                  train_crop_size=train_crop_size,
-                  horizontal_flip=horizontal_flip,
-                  vertical_flip=vertical_flip,
-                  rotation_range=rotation_range,
-                  shear_range=shear_range,
-                  fill_mode=fill_mode,
-                  spline_warp=spline_warp,
-                  warp_sigma=warp_sigma,
-                  warp_grid_size=warp_grid_size,
-                  zoom_range=zoom_range)
+        load_data(dataset, data_augmentation,
+                  one_hot=False, batch_size=bs)
 
-    n_batches_train = train_iter.get_n_batches()
-    n_batches_val = val_iter.get_n_batches()
-    n_batches_test = test_iter.get_n_batches() if test_iter is not None else 0
-    n_classes = train_iter.get_n_classes()
-    void_labels = train_iter.get_void_labels()
+    n_batches_train = train_iter.nbatches
+    n_batches_val = val_iter.nbatches
+    n_batches_test = test_iter.nbatches if test_iter is not None else 0
+    n_classes = train_iter.non_void_nclasses
+    void_labels = train_iter.void_labels
     nb_in_channels = train_iter.data_shape[0]
 
     print "Batch. train: %d, val %d, test %d" % (n_batches_train, n_batches_val,
@@ -150,9 +101,8 @@ def train(dataset, learn_step=0.005,
     # Build network
     #
     convmodel = buildFCN8(nb_in_channels, input_var, n_classes=n_classes,
-                          void_labels=void_labels, path_weights=WEIGHTS_PATH,
-                          trainable=True, load_weights=resume,
-                          layer=['probs'])
+                          void_labels=void_labels, trainable=True,
+                          load_weights=resume, pascal=True, layer=['probs'])
 
     #
     # Define and compile theano functions
@@ -255,20 +205,24 @@ def train(dataset, learn_step=0.005,
         elif epoch > 1 and jacc_valid[epoch] > best_jacc_val:
             best_jacc_val = jacc_valid[epoch]
             patience = 0
-            np.savez(os.path.join(savepath, 'fcn8_model.npz'),
+            np.savez(os.path.join(savepath, 'fcn8_model_best.npz'),
                      *lasagne.layers.get_all_param_values(convmodel))
-            np.savez(os.path.join(savepath + "fcn8_errors.npz"),
+            np.savez(os.path.join(savepath + "fcn8_errors_best.npz"),
                      err_valid, err_train, acc_valid,
                      jacc_valid)
         else:
             patience += 1
-
+            np.savez(os.path.join(savepath, 'fcn8_model_last.npz'),
+                     *lasagne.layers.get_all_param_values(convmodel))
+            np.savez(os.path.join(savepath + "fcn8_errors_last.npz"),
+                     err_valid, err_train, acc_valid,
+                     jacc_valid)
         # Finish training if patience has expired or max nber of epochs
         # reached
         if patience == max_patience or epoch == num_epochs-1:
             if test_iter is not None:
                 # Load best model weights
-                with np.load(os.path.join(savepath, 'fcn8_model.npz')) as f:
+                with np.load(os.path.join(savepath, 'fcn8_model_best.npz')) as f:
                     param_values = [f['arr_%d' % i]
                                     for i in range(len(f.files))]
                 nlayers = len(lasagne.layers.get_all_params(convmodel))
@@ -315,7 +269,7 @@ def train(dataset, learn_step=0.005,
 def main():
     parser = argparse.ArgumentParser(description='Unet model training')
     parser.add_argument('-dataset',
-                        default='polyps912',
+                        default='camvid',
                         help='Dataset.')
     parser.add_argument('-learning_rate',
                         default=0.0001,
@@ -333,19 +287,19 @@ def main():
                         type=int,
                         default=100,
                         help='Max patience')
-    parser.add_argument('-data_aug',
-                        type=bool,
-                        default=True,
+    parser.add_argument('-data_augmentation',
+                        type=dict,
+                        default={'crop_size': (224, 224), 'horizontal_flip': True, 'fill_mode':'constant'},
                         help='use data augmentation')
     parser.add_argument('-early_stop_class',
                         type=int,
-                        default=1,
+                        default=None,
                         help='class to early stop on')
     args = parser.parse_args()
 
     train(args.dataset, float(args.learning_rate),
           float(args.penal_cst), int(args.num_epochs), int(args.max_patience),
-          data_aug=args.data_aug, early_stop_class=args.early_stop_class,
+          data_augmentation=args.data_augmentation, early_stop_class=args.early_stop_class,
           savepath=SAVEPATH, loadpath=LOADPATH)
 
 if __name__ == "__main__":

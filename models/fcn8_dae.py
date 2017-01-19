@@ -172,7 +172,7 @@ def buildFCN8_DAE(input_repr_var, input_mask_var, n_classes, nb_in_channels,
 
     # In case we want to re-use the weights of an FCN8 model pretrained from images (not GT)
     if pretrained:
-        with np.load(os.path.join(pretraioned_path, model_name)) as f:
+        with np.load(os.path.join(pretrained_path, model_name)) as f:
             start = 0 if nb_in_channels == f['arr_%d' % 0].shape[1] \
                 else 2
             param_values = [f['arr_%d' % i] for i in range(start,
@@ -191,6 +191,7 @@ def buildFCN8_DAE(input_repr_var, input_mask_var, n_classes, nb_in_channels,
                     if freeze:
                         model_helpers.freezeParameters(layer, single=True)
                 if isinstance(layer.input_layer, ConcatLayer) and idx == last_concat:
+                    print('freezing')
                     freeze = True
                 count += 1
 

@@ -54,9 +54,9 @@ def test(dataset, which_set='test', data_aug=False,
                                     one_hot=False, batch_size=[10, 10, 10])
 
     colors = test_iter.get_cmap_values()
-    n_batches_test = test_iter.get_n_batches()
-    n_classes = test_iter.get_n_classes()
-    void_labels = test_iter.get_void_labels()
+    n_batches_test = test_iter.nbatches
+    n_classes = test_iter.non_void_nclasses
+    void_labels = test_iter.void_labels
     nb_in_channels = test_iter.data_shape[0]
     void = n_classes if any(void_labels) else n_classes+1
 

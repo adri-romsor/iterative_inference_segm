@@ -39,9 +39,9 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=5, Bilateral=
     _, _, test_iter = load_data(dataset, train_crop_size=None, one_hot=True,
             batch_size=[1, 1, 1])
 
-    n_batches_test = test_iter.get_n_batches()
-    n_classes = test_iter.get_n_classes()
-    void_labels = test_iter.get_void_labels()
+    n_batches_test = test_iter.nbatches
+    n_classes = test_iter.non_void_nclasses
+    void_labels = test_iter.void_labels
 
     # Prepare saving directory
     savepath = savepath + dataset + "/"
@@ -120,19 +120,19 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=5, Bilateral=
         # This adds the color-independent term, features are the
         # locations only. Smoothness kernel.
         # sxy: gaussian x, y std
-        # compat: ways to weight contributions, a number for potts compatibility, 
+        # compat: ways to weight contributions, a number for potts compatibility,
         #     vector for diagonal compatibility, an array for matrix compatibility
         # kernel: kernel used, CONST_KERNEL, FULL_KERNEL, DIAG_KERNEL
         # normalization: NORMALIZE_AFTER, NORMALIZE_BEFORE,
         #     NO_NORMALIZAITION, NORMALIZE_SYMMETRIC
         d.addPairwiseGaussian(sxy=(3, 3), compat=3, kernel=dcrf.DIAG_KERNEL,
                               normalization=dcrf.NORMALIZE_SYMMETRIC)
-        # Appearance kernel. This adds the color-dependent term, i.e. features 
+        # Appearance kernel. This adds the color-dependent term, i.e. features
         # are (x,y,r,g,b).
         # im is an image-array, e.g. im.dtype == np.uint8 and im.shape == (640,480,3)
         # to set sxy and srgb perform grid search on validation set
         if Bilateral:
-            d.addPairwiseBilateral(sxy=(3, 3), srgb=(13, 13, 13), 
+            d.addPairwiseBilateral(sxy=(3, 3), srgb=(13, 13, 13),
                                    rgbim=img2, compat=10, kernel=dcrf.DIAG_KERNEL,
                                    normalization=dcrf.NORMALIZE_SYMMETRIC)
         Q = d.inference(num_iter)

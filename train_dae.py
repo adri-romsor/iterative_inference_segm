@@ -50,14 +50,14 @@ def train(dataset, learn_step=0.005,
           epsilon=.0, optimizer='rmsprop', training_loss=['squared_error'],
           layer_h=['pool5'], n_filters=64, noise=0.1, conv_before_pool=1,
           additional_pool=0, dropout=0., skip=False, unpool_type='standard',
-          from_gt=True, data_aug=False, temperature=1.0, dae_kind='standard',
+          from_gt=True, data_augmentation={}, temperature=1.0, dae_kind='standard',
           savepath=None, loadpath=None, resume=False):
 
     #
     # Prepare load/save directories
     #
     exp_name = build_experiment_name(dae_kind, layer_h, training_loss, from_gt,
-                                     noise, data_aug, temperature, n_filters,
+                                     noise, data_augmentation, temperature, n_filters,
                                      conv_before_pool, additional_pool, skip,
                                      unpool_type, dropout)
     if savepath is None:
@@ -100,47 +100,16 @@ def train(dataset, learn_step=0.005,
     #
     # Build dataset iterator
     #
-    if data_aug:
-        train_crop_size = [224, 224]
-        horizontal_flip = True
-        if dataset == 'em':
-            spline_warp = True
-            rotation_range = 25
-            shear_range = .41
-            vertical_flip = True
-            fill_mode = 'reflect'
-        else:
-            spline_warp = False
-            rotation_range = 0
-            shear_range = .0
-            vertical_flip = False
-            fill_mode = 'reflect'
-
-    else:
-        train_crop_size = None
-        horizontal_flip = False
-        spline_warp = False
-        rotation_range = 0
-        shear_range = .0
-        vertical_flip = False
-        fill_mode = 'reflect'
-
     train_iter, val_iter, _ = load_data(dataset,
-                                        train_crop_size=train_crop_size,
-                                        horizontal_flip=horizontal_flip,
-                                        rotation_range=rotation_range,
-                                        shear_range=shear_range,
-                                        spline_warp=spline_warp,
-                                        vertical_flip=vertical_flip,
-                                        fill_mode=fill_mode,
+                                        data_augmentation,
                                         one_hot=True,
                                         batch_size=[3, 3, 3],
                                         )
 
-    n_batches_train = train_iter.get_n_batches()
-    n_batches_val = val_iter.get_n_batches()
-    n_classes = train_iter.get_n_classes()
-    void_labels = train_iter.get_void_labels()
+    n_batches_train = train_iter.nbatches
+    n_batches_val = val_iter.nbatches
+    n_classes = train_iter.non_void_nclasses
+    void_labels = train_iter.void_labels
     nb_in_channels = train_iter.data_shape[0]
     void = n_classes if any(void_labels) else n_classes+1
 
@@ -445,10 +414,10 @@ def main():
                         default=False,
                         help='Whether to train from GT (true) or fcn' +
                         'output (False)')
-    parser.add_argument('-data_aug',
-                        type=bool,
-                        default=True,
-                        help='use data augmentation')
+    parser.add_argument('-data_augmentation',
+                        type=dict,
+                        default={'crop_size': (224, 224), 'horizontal_flip': True, 'vertical_flip': True, 'fill_mode': 'nearest'},
+                        help='Dictionary of data augmentation to be used')
     parser.add_argument('-temperature',
                         type=float,
                         default=1.0,
@@ -468,7 +437,7 @@ def main():
           additional_pool=args.additional_pool,
           dropout=args.dropout,
           skip=args.skip, unpool_type=args.unpool_type,
-          from_gt=args.from_gt, data_aug=args.data_aug,
+          from_gt=args.from_gt, data_augmentation=args.data_augmentation,
           temperature=args.temperature, dae_kind=args.dae_kind,
           resume=False, savepath=SAVEPATH, loadpath=LOADPATH)
 

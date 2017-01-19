@@ -7,7 +7,7 @@ import seaborn as sns
 
 
 def my_label2rgb(labels, colors):
-    output = np.zeros(labels.shape + (3,), dtype=np.float64)
+    output = np.zeros(labels.shape + (3,), dtype=np.float32)
     for i in range(len(colors)):
         output[(labels == i).nonzero()] = colors[i]
     return output
@@ -78,7 +78,7 @@ def build_experiment_name(dae_kind, layer_h, training_loss, from_gt, noise,
 
     exp_name += '_' +  all_loss
     exp_name += ('_fromgt' if from_gt else '_fromfcn8') + '_z' + str(noise)
-    exp_name += '_data_aug' if data_aug else ''
+    exp_name += '_data_aug' if bool(data_aug) else ''
     exp_name += ('_T' + str(temperature)) if not from_gt else ''
 
     print(exp_name)
