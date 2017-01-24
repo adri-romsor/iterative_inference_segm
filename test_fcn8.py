@@ -44,14 +44,14 @@ def test(dataset, which_set='test', data_aug=False,
     # Build dataset iterator
     #
     if which_set == 'train':
-        test_iter, _, _ = load_data(dataset, train_crop_size=None,
-                                    one_hot=False, batch_size=[10, 10, 10])
+        test_iter, _, _ = load_data(dataset, one_hot=False,
+                                    batch_size=[10, 10, 10])
     elif which_set == 'valid':
-        _, test_iter, _ = load_data(dataset, train_crop_size=None,
-                                    one_hot=False, batch_size=[10, 10, 10])
+        _, test_iter, _ = load_data(dataset, one_hot=False,
+                                    batch_size=[10, 10, 10])
     if which_set == 'test':
-        _, _, test_iter = load_data(dataset, train_crop_size=None,
-                                    one_hot=False, batch_size=[10, 10, 10])
+        _, _, test_iter = load_data(dataset, one_hot=False,
+                                    batch_size=[10, 10, 10])
 
     colors = test_iter.get_cmap_values()
     n_batches_test = test_iter.nbatches
@@ -127,7 +127,7 @@ def test(dataset, which_set='test', data_aug=False,
     jacc_per_class = jacc_per_class[0]
     jacc_test = np.mean(jacc_per_class)
 
-    out_str = "FINAL MODEL: acc test %f, jacc test .1%f"
+    out_str = "FINAL MODEL: acc test %f, jacc test %f"
     out_str = out_str % (acc_test,
                          jacc_test)
     print out_str

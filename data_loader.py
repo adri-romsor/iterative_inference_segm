@@ -4,7 +4,7 @@ from dataset_loaders.images.polyps912 import Polyps912Dataset
 from dataset_loaders.images.isbi_em_stacks import IsbiEmStacksDataset
 
 
-def load_data(dataset, train_data_augm_kwargs, one_hot=False,
+def load_data(dataset, train_data_augm_kwargs={}, one_hot=False,
               batch_size=[10, 10, 10], shuffle_train=True):
 
     # Build dataset iterator
