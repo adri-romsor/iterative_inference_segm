@@ -1,4 +1,5 @@
 import theano.tensor as T
+import numpy as np
 from theano import config
 
 from lasagne.objectives import squared_error as squared_error_lasagne
@@ -121,8 +122,13 @@ def squared_error_h(y_pred, y_true):
 
 def squared_error(y_pred, y_true, void):
 
-    loss_aux = squared_error_lasagne(y_pred, y_true[:, :void, :, :]).mean(axis=1)
-    mask = y_true[:, :void, :, :].sum(axis=1)
+    if not isinstance(void, tuple):
+        loss_aux = squared_error_lasagne(y_pred, y_true[:, :void, :, :]).mean(axis=1)
+        mask = y_true[:, :void, :, :].sum(axis=1)
+    else:  # assumes b,c,0,1
+        loss_aux = squared_error_lasagne(y_pred, y_true).mean(axis=1)
+        mask = T.neq(y_true.sum(1), sum(void))
+
     loss_aux = loss_aux * mask
     loss = loss_aux.sum()/mask.sum()
 

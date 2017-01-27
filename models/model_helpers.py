@@ -56,7 +56,7 @@ def concatenate(net, in1, concat_layers, concat_vars, pos):
         net[in1 + '_h'] = InputLayer((None, net[in1].input_shape[1] if
                                       (concat_layers[pos] != 'noisy_input' and
                                       concat_layers[pos] != 'input')
-                                      else 3, None, None), concat_vars[pos]) 
+                                      else 3, None, None), concat_vars[pos])
         net[in1 + '_concat'] = ConcatLayer((net[in1 + '_h'],
                                             net[in1]), axis=1, cropping=None)
         pos += 1
@@ -68,7 +68,7 @@ def concatenate(net, in1, concat_layers, concat_vars, pos):
     else:
         out = in1
 
-    if pos <= len(concat_layers) and concat_layers[pos-1] == 'noisy_input':
+    if concat_layers and pos <= len(concat_layers) and concat_layers[pos-1] == 'noisy_input':
         concat_layers[pos-1] = 'input'
 
     return pos, out
