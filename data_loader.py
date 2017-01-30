@@ -99,32 +99,6 @@ def load_data(dataset, train_data_augm_kwargs={}, one_hot=False,
                                        end=30,
                                        return_list=True)
         test_iter = None
-    elif dataset == 'polyps912':
-        train_iter = Polyps912Dataset(which_set='train',
-                                      batch_size=10,
-                                      seq_per_subset=0,
-                                      seq_length=0,
-                                      data_augm_kwargs=train_data_augm_kwargs,
-                                      return_one_hot=True,
-                                      return_01c=True,
-                                      use_threads=False,
-                                      return_list=True)
-        val_iter = Polyps912Dataset(which_set='val',
-                                    batch_size=10,
-                                    seq_per_subset=0,
-                                    seq_length=0,
-                                    return_one_hot=True,
-                                    return_01c=True,
-                                    use_threads=False,
-                                    return_list=True)
-        test_iter = Polyps912Dataset(which_set='test',
-                                     batch_size=10,
-                                     seq_per_subset=0,
-                                     seq_length=0,
-                                     return_one_hot=True,
-                                     return_01c=True,
-                                     use_threads=False,
-                                     return_list=True)
     else:
         raise NotImplementedError
 
