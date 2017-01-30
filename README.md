@@ -31,7 +31,7 @@ Pre-trained models for semantic segmentation and pre-trained DAE for iterative i
 See wiki
 
 ## TODO list
-- [x] Code VGG plug and play
+- [ ] Code VGG plug and play
 - [ ] Experiments
 
 ### TODO experiments
