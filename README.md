@@ -31,20 +31,8 @@ Pre-trained models for semantic segmentation and pre-trained DAE for iterative i
 See wiki
 
 ## TODO list
-- [x] Code fcn8 model and script to train the model
-- [x] Code DAE model and script to train the model
-- [x] Code to perform iterative inference
-- [x] Add entropy
-- [x] Add possibility of having an intermediate layer as input (not only x)
-- [x] Add possibility of having several intermediate layers as input
-- [x] Add skip connections in DAE
-- [x] Add WWAE pooling tracking
-- [x] Code CRF
-- [x] Add training DAE training from the output of FCN8 instead of GT.
-- [ ] Add possibility of having only y
-- [ ] Add noise to skip connections
-- [ ] Add BFGS optimization
-
+- [ ] Code VGG plug and play
+- [ ] Experiments
 
 ### TODO experiments
 **Camvid:**
