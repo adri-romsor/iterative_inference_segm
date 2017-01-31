@@ -111,7 +111,7 @@ def train(dataset, learn_step=0.005,
     n_classes = train_iter.non_void_nclasses
     void_labels = train_iter.void_labels
     nb_in_channels = train_iter.data_shape[0]
-    colors = train_iter.cmap.values()
+    colors = train_iter.cmap
     void = colors[n_classes if any(void_labels) else n_classes+1]
 
     #

@@ -53,7 +53,7 @@ def test(dataset, which_set='test', data_aug=False,
         _, _, test_iter = load_data(dataset, one_hot=False,
                                     batch_size=[10, 10, 10])
 
-    colors = test_iter.cmap.values()
+    colors = test_iter.cmap
     n_batches_test = test_iter.nbatches
     n_classes = test_iter.non_void_nclasses
     void_labels = test_iter.void_labels

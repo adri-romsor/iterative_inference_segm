@@ -122,7 +122,7 @@ def squared_error_h(y_pred, y_true):
 
 def squared_error(y_pred, y_true, void):
 
-    if not isinstance(void, tuple):
+    if void.ndim != 1 and void.shape[0] != 3:
         loss_aux = squared_error_lasagne(y_pred, y_true[:, :void, :, :]).mean(axis=1)
         mask = y_true[:, :void, :, :].sum(axis=1)
     else:  # assumes b,c,0,1

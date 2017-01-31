@@ -10,6 +10,8 @@ from lasagne.random import get_rng
 
 from models.model_helpers import softmax4D
 
+import numpy as np
+
 class CroppingLayer(MergeLayer):
     """
     This layer performs an elementwise merge of its input layers.
