@@ -43,6 +43,7 @@ def train(dataset, learn_step=0.005,
           max_patience=100, data_augmentation={},
           savepath=None, loadpath=None,
           early_stop_class=None,
+          batch_size=None,
           resume=False):
 
     #
@@ -79,7 +80,10 @@ def train(dataset, learn_step=0.005,
     #
     # Build dataset iterator
     #
-    bs = [10, 10, 10]
+    if batch_size is not None:
+        bs = batch_size
+    else:
+        bs = [10, 1, 1]
 
     train_iter, val_iter, test_iter = \
         load_data(dataset, data_augmentation,
@@ -287,6 +291,10 @@ def main():
                         type=int,
                         default=100,
                         help='Max patience')
+    parser.add_argument('-batch_size',
+                        type=int,
+                        default=[10, 1, 1],
+                        help='Batch size [train, val, test]')
     parser.add_argument('-data_augmentation',
                         type=dict,
                         default={'crop_size': (224, 224), 'horizontal_flip': True, 'fill_mode':'constant'},
@@ -300,7 +308,7 @@ def main():
     train(args.dataset, float(args.learning_rate),
           float(args.penal_cst), int(args.num_epochs), int(args.max_patience),
           data_augmentation=args.data_augmentation, early_stop_class=args.early_stop_class,
-          savepath=SAVEPATH, loadpath=LOADPATH)
+          batch_size=args.batch_size, savepath=SAVEPATH, loadpath=LOADPATH)
 
 if __name__ == "__main__":
     main()
