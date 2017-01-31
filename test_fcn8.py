@@ -53,7 +53,7 @@ def test(dataset, which_set='test', data_aug=False,
         _, _, test_iter = load_data(dataset, one_hot=False,
                                     batch_size=[10, 10, 10])
 
-    colors = test_iter.get_cmap_values()
+    colors = test_iter.cmap.values()
     n_batches_test = test_iter.nbatches
     n_classes = test_iter.non_void_nclasses
     void_labels = test_iter.void_labels
@@ -133,7 +133,7 @@ def test(dataset, which_set='test', data_aug=False,
     print out_str
 
     print ">>> Per class jaccard:"
-    labs = test_iter.get_mask_labels()
+    labs = test_iter.mask_labels
 
     for i in range(len(labs)-len(void_labels)):
         class_str = '    ' + labs[i] + ' : %f'

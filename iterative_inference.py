@@ -66,7 +66,7 @@ def inference(dataset, learn_step=0.005, num_iter=500,
         _, _, test_iter = load_data(dataset, train_crop_size=None,
                                     one_hot=True, batch_size=[10, 10, 10])
 
-    colors = test_iter.get_cmap_values()
+    colors = test_iter.cmap.values()
     n_batches_test = test_iter.nbatches
     n_classes = test_iter.non_void_nclasses
     void_labels = test_iter.void_labels
@@ -247,7 +247,7 @@ def inference(dataset, learn_step=0.005, num_iter=500,
         print info_str
 
         print ">>> Per class jaccard:"
-        labs = test_iter.get_mask_labels()
+        labs = test_iter.mask_labels
 
         for i in range(len(labs)-1):
             class_str = '    ' + labs[i] + ' : old ->  %f, new %f'
