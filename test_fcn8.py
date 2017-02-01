@@ -32,7 +32,7 @@ else:
 
 
 def test(dataset, which_set='test', data_aug=False,
-         savepath=None, loadpath=None):
+         savepath=None, loadpath=None, test_from_0_255=False):
 
     #
     # Define symbolic variables
@@ -45,13 +45,16 @@ def test(dataset, which_set='test', data_aug=False,
     #
     if which_set == 'train':
         test_iter, _, _ = load_data(dataset, one_hot=False,
-                                    batch_size=[10, 10, 10])
+                                    batch_size=[10, 10, 10],
+                                    return_0_255=test_from_0_255)
     elif which_set == 'valid':
         _, test_iter, _ = load_data(dataset, one_hot=False,
-                                    batch_size=[10, 10, 10])
+                                    batch_size=[10, 10, 10],
+                                    return_0_255=test_from_0_255)
     if which_set == 'test':
         _, _, test_iter = load_data(dataset, one_hot=False,
-                                    batch_size=[10, 10, 10])
+                                    batch_size=[10, 10, 10],
+                                    return_0_255=test_from_0_255)
 
     colors = test_iter.cmap
     n_batches_test = test_iter.nbatches
@@ -146,10 +149,15 @@ def main():
     parser.add_argument('-dataset',
                         default='camvid',
                         help='Dataset.')
+    parser.add_argument('-test_from_0_255',
+                        type=bool,
+                        default=False,
+                        help='Whether to train from images within 0-255 range')
 
     args = parser.parse_args()
 
-    test(args.dataset,savepath=SAVEPATH, loadpath=LOADPATH)
+    test(args.dataset,savepath=SAVEPATH, loadpath=LOADPATH,
+         test_from_0_255=args.test_from_0_255)
 
 if __name__ == "__main__":
     main()

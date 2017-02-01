@@ -51,7 +51,7 @@ def train(dataset, learn_step=0.005,
           layer_h=['pool5'], n_filters=64, noise=0.1, conv_before_pool=1,
           additional_pool=0, dropout=0., skip=False, unpool_type='standard',
           from_gt=True, data_augmentation={}, temperature=1.0, dae_kind='standard',
-          savepath=None, loadpath=None, resume=False):
+          savepath=None, loadpath=None, resume=False, train_from_0_255=False):
 
     #
     # Prepare load/save directories
@@ -104,6 +104,7 @@ def train(dataset, learn_step=0.005,
                                         data_augmentation,
                                         one_hot=True,
                                         batch_size=[3, 3, 3],
+                                        return_0_255=train_from_0_255,
                                         )
 
     n_batches_train = train_iter.nbatches
@@ -426,6 +427,10 @@ def main():
                         type=str,
                         default='fcn8',
                         help='What kind of AE archictecture to use')
+    parser.add_argument('-train_from_0_255',
+                        type=bool,
+                        default=False,
+                        help='Whether to train from images within 0-255 range')
     args = parser.parse_args()
 
     train(args.dataset, float(args.learning_rate),
@@ -439,7 +444,8 @@ def main():
           skip=args.skip, unpool_type=args.unpool_type,
           from_gt=args.from_gt, data_augmentation=args.data_augmentation,
           temperature=args.temperature, dae_kind=args.dae_kind,
-          resume=False, savepath=SAVEPATH, loadpath=LOADPATH)
+          resume=False, savepath=SAVEPATH, loadpath=LOADPATH,
+          train_from_0_255=args.train_from_0_255)
 
 
 if __name__ == "__main__":

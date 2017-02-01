@@ -25,7 +25,8 @@ _FLOATX = config.floatX
 
 
 def inference(dataset, layer_name=None, learn_step=0.005, num_iter=5, Bilateral=True,
-              num_filters=[256], skip=False, filter_size=[3], savepath=None):
+              num_filters=[256], skip=False, filter_size=[3], savepath=None,
+              test_from_0_255=False):
 
     # Define symbolic variables
     input_x_var = T.tensor4('input_x_var')
@@ -37,7 +38,7 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=5, Bilateral=
 
     # Build dataset iterator
     _, _, test_iter = load_data(dataset, train_crop_size=None, one_hot=True,
-            batch_size=[1, 1, 1])
+            batch_size=[1, 1, 1], return_0_255=test_from_0_255)
 
     n_batches_test = test_iter.nbatches
     n_classes = test_iter.non_void_nclasses
@@ -192,12 +193,16 @@ def main():
                         type=str,
                         default='/home/michal/Experiments/iter_inf/',
                         help='Path to save images')
+    parser.add_argument('-test_from_0_255',
+                        type=bool,
+                        default=False,
+                        help='Whether to train from images within 0-255 range')
 
     args = parser.parse_args()
 
     inference(args.dataset, args.layer_name, float(args.step),
               int(args.num_iter), args.num_filters, args.skip,
-              savepath=args.savepath)
+              savepath=args.savepath, test_from_0_255=args.test_from_0_255)
 
 if __name__ == "__main__":
     main()

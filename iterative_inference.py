@@ -40,7 +40,7 @@ def inference(dataset, learn_step=0.005, num_iter=500,
               n_filters=64, noise=0.1, conv_before_pool=1, additional_pool=0,
               dropout=0., skip=False, unpool_type='standard', from_gt=True,
               save_perstep=False, which_set='test', data_aug=False,
-              savepath=None, loadpath=None):
+              savepath=None, loadpath=None, test_from_0_255=False):
     #
     # Define symbolic variables
     #
@@ -58,13 +58,16 @@ def inference(dataset, learn_step=0.005, num_iter=500,
     #
     if which_set == 'train':
         test_iter, _, _ = load_data(dataset, train_crop_size=None,
-                                    one_hot=True, batch_size=[10, 10, 10])
+                                    one_hot=True, batch_size=[10, 10, 10],
+                                    return_0_255=test_from_0_255)
     elif which_set == 'valid':
         _, test_iter, _ = load_data(dataset, train_crop_size=None,
-                                    one_hot=True, batch_size=[10, 10, 10])
+                                    one_hot=True, batch_size=[10, 10, 10],
+                                    return_0_255=test_from_0_255)
     if which_set == 'test':
         _, _, test_iter = load_data(dataset, train_crop_size=None,
-                                    one_hot=True, batch_size=[10, 10, 10])
+                                    one_hot=True, batch_size=[10, 10, 10],
+                                    return_0_255=test_from_0_255)
 
     colors = test_iter.cmap
     n_batches_test = test_iter.nbatches
@@ -345,6 +348,10 @@ def main():
                         type=bool,
                         default=True,
                         help='Whether to do data augmentation')
+    parser.add_argument('-test_from_0_255',
+                        type=bool,
+                        default=False,
+                        help='Whether to train from images within 0-255 range')
 
     args = parser.parse_args()
 
@@ -355,7 +362,8 @@ def main():
               skip=args.skip, unpool_type=args.unpool_type,
               from_gt=args.from_gt, save_perstep=args.save_perstep,
               which_set=args.which_set, data_aug=args.data_aug,
-              savepath=SAVEPATH, loadpath=LOADPATH)
+              savepath=SAVEPATH, loadpath=LOADPATH,
+              test_from_0_255=args.test_from_0_255)
 
 
 if __name__ == "__main__":

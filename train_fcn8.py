@@ -44,7 +44,8 @@ def train(dataset, learn_step=0.005,
           savepath=None, loadpath=None,
           early_stop_class=None,
           batch_size=None,
-          resume=False):
+          resume=False,
+          train_from_0_255=False):
 
     #
     # Prepare load/save directories
@@ -87,7 +88,7 @@ def train(dataset, learn_step=0.005,
 
     train_iter, val_iter, test_iter = \
         load_data(dataset, data_augmentation,
-                  one_hot=False, batch_size=bs)
+                  one_hot=False, batch_size=bs, return_0_255=train_from_0_255)
 
     n_batches_train = train_iter.nbatches
     n_batches_val = val_iter.nbatches
@@ -209,14 +210,14 @@ def train(dataset, learn_step=0.005,
         elif epoch > 1 and jacc_valid[epoch] > best_jacc_val:
             best_jacc_val = jacc_valid[epoch]
             patience = 0
-            np.savez(os.path.join(savepath, 'fcn8_model_best.npz'),
+            np.savez(os.path.join(savepath, 'new_fcn8_model_best.npz'),
                      *lasagne.layers.get_all_param_values(convmodel))
             np.savez(os.path.join(savepath + "fcn8_errors_best.npz"),
                      err_valid, err_train, acc_valid,
                      jacc_valid)
         else:
             patience += 1
-            np.savez(os.path.join(savepath, 'fcn8_model_last.npz'),
+            np.savez(os.path.join(savepath, 'new_fcn8_model_last.npz'),
                      *lasagne.layers.get_all_param_values(convmodel))
             np.savez(os.path.join(savepath + "fcn8_errors_last.npz"),
                      err_valid, err_train, acc_valid,
@@ -226,7 +227,7 @@ def train(dataset, learn_step=0.005,
         if patience == max_patience or epoch == num_epochs-1:
             if test_iter is not None:
                 # Load best model weights
-                with np.load(os.path.join(savepath, 'fcn8_model_best.npz')) as f:
+                with np.load(os.path.join(savepath, 'new_fcn8_model_best.npz')) as f:
                     param_values = [f['arr_%d' % i]
                                     for i in range(len(f.files))]
                 nlayers = len(lasagne.layers.get_all_params(convmodel))
@@ -303,12 +304,17 @@ def main():
                         type=int,
                         default=None,
                         help='class to early stop on')
+    parser.add_argument('-train_from_0_255',
+                        type=bool,
+                        default=False,
+                        help='Whether to train from images within 0-255 range')
     args = parser.parse_args()
 
     train(args.dataset, float(args.learning_rate),
           float(args.penal_cst), int(args.num_epochs), int(args.max_patience),
-          data_augmentation=args.data_augmentation, early_stop_class=args.early_stop_class,
-          batch_size=args.batch_size, savepath=SAVEPATH, loadpath=LOADPATH)
+          data_augmentation=args.data_augmentation, batch_size=args.batch_size,
+          early_stop_class=args.early_stop_class, savepath=SAVEPATH,
+          train_from_0_255=args.train_from_0_255, loadpath=LOADPATH)
 
 if __name__ == "__main__":
     main()

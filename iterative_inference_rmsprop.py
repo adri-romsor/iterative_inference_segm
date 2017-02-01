@@ -47,7 +47,7 @@ def inference(dataset, learn_step=0.005, num_iter=500,
               dropout=0., skip=False, unpool_type='standard', from_gt=True,
               save_perstep=False, which_set='test', data_aug=False,
               savepath=None, loadpath=None, temperature=1.0,
-              dae_kind='standard'):
+              dae_kind='standard', test_from_0_255=False):
     #
     # Define symbolic variables
     #
@@ -67,13 +67,16 @@ def inference(dataset, learn_step=0.005, num_iter=500,
     #
     if which_set == 'train':
         test_iter, _, _ = load_data(dataset, train_crop_size=None,
-                                    one_hot=True, batch_size=[10, 10, 10])
+                                    one_hot=True, batch_size=[10, 10, 10],
+                                    return_0_255=test_from_0_255)
     elif which_set == 'valid':
         _, test_iter, _ = load_data(dataset, train_crop_size=None,
-                                    one_hot=True, batch_size=[10, 10, 10])
+                                    one_hot=True, batch_size=[10, 10, 10],
+                                    return_0_255=test_from_0_255)
     if which_set == 'test':
         _, _, test_iter = load_data(dataset, train_crop_size=None,
-                                    one_hot=True, batch_size=[10, 10, 10])
+                                    one_hot=True, batch_size=[10, 10, 10],
+                                    return_0_255=test_from_0_255)
 
     colors = test_iter.cmap
     n_batches_test = test_iter.nbatches
@@ -390,6 +393,10 @@ def main():
                         type=str,
                         default='fcn8',
                         help='What kind of AE archictecture to use')
+    parser.add_argument('-test_from_0_255',
+                        type=bool,
+                        default=False,
+                        help='Whether to train from images within 0-255 range')
 
     args = parser.parse_args()
 
@@ -401,7 +408,8 @@ def main():
               from_gt=args.from_gt, save_perstep=args.save_perstep,
               which_set=args.which_set, data_aug=args.data_aug,
               temperature=args.temperature, dae_kind=args.dae_kind,
-              savepath=SAVEPATH, loadpath=LOADPATH)
+              savepath=SAVEPATH, loadpath=LOADPATH,
+              test_from_0_255=args.test_from_0_255)
 
 
 if __name__ == "__main__":
