@@ -16,17 +16,30 @@ from lasagne.init import Initializer
 import model_helpers
 
 
-def buildDAE_contextmod(concat_vars, input_mask_var, n_classes,
-                        concat_layers=['input'], noise=0.1,
+def buildDAE_contextmod(input_concat_h_vars, input_mask_var, n_classes,
                         path_weights='/Tmp/romerosa/itinf/models/',
                         model_name='dae_model.npz',
                         trainable=False, load_weights=False,
-                        out_nonlin=linear):
+                        out_nonlin=linear, concat_h=['input'], noise=0.1):
 
     '''
-    Build score model as a context module
+    Build context module
+
+    Parameters
+    ----------
+    input_concat_h_vars: list of theano tensors, variables to concatenate
+    input_mask_var: theano tensor, input to context module
+    n_classes: int, number of classes
+    path_weights: string, path to weights directory
+    trainable: bool, whether the model is trainable (freeze parameters or not)
+    load_weights: bool, whether to load pretrained weights
+    out_nonlin: output nonlinearity
+    concat_h: list of strings, names of layers we want to concatenate
+    noise: float, noise
     '''
-    assert all([el in ['input'] for el in concat_layers])
+
+    # context module does not reduce the image resolution
+    assert all([el in ['input'] for el in concat_h])
     net = {}
     pos = 0
 
@@ -41,7 +54,7 @@ def buildDAE_contextmod(concat_vars, input_mask_var, n_classes,
     else:
         in_next = 'input'
 
-    pos, out = model_helpers.concatenate(net, in_next, concat_layers, concat_vars, pos)
+    pos, out = model_helpers.concatenate(net, in_next, concat_h, input_concat_h_vars, pos)
 
     class IdentityInit(Initializer):
         """ We adapt the same initializiation method than in the paper"""

@@ -15,7 +15,7 @@ import model_helpers
 
 def buildFCN8(nb_in_channels, input_var,
               path_weights='/Tmp/romerosa/itinf/models/' +
-              'camvid/fcn8_model.npz',
+              'camvid/new_fcn8_model_best.npz',
               n_classes=21, load_weights=True,
               void_labels=[], trainable=False,
               layer=['probs_dimshuffle'], pascal=False,

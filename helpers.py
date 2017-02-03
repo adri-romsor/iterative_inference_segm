@@ -6,14 +6,34 @@ from skimage import img_as_float
 import seaborn as sns
 
 
+# TODO: test with new code
 def my_label2rgb(labels, colors):
+    """
+    Converts labels to RGB
+
+    Parameters
+    ----------
+    labels:
+    colors:
+    """
     output = np.zeros(labels.shape + (3,), dtype=np.float32)
     for i in range(len(colors)):
         output[(labels == i).nonzero()] = colors[i]
     return output
 
 
+# TODO: test with new code
 def my_label2rgboverlay(labels, colors, image, alpha=0.2):
+    """
+    Generates image with segmentation labels on top
+
+    Parameters
+    ----------
+    labels:
+    colors:
+    image:
+    alpha: transparency
+    """
     image_float = gray2rgb(img_as_float(rgb2gray(image) if
                                         image.shape[2] == 3 else
                                         np.squeeze(image)))
@@ -22,8 +42,24 @@ def my_label2rgboverlay(labels, colors, image, alpha=0.2):
     return output
 
 
+# TODO: test with new code
 def save_img(image_batch, mask_batch, output, output_old, out_images_folder,
              n_classes, tag, void_label, colors):
+    """
+    Save image, segmentation, ground truth
+
+    Parameters
+    ----------
+    image_batc:
+    mask_batch:
+    output:
+    output_old:
+    out_images_folder:
+    n_classes:
+    tag:
+    void_label:
+    colors:
+    """
 
     if output.ndim == 4:
         output = output.argmax(1)
@@ -61,25 +97,42 @@ def save_img(image_batch, mask_batch, output, output_old, out_images_folder,
     return images
 
 
-def build_experiment_name(dae_kind, layer_h, training_loss, from_gt, noise,
-                          data_aug, temperature, n_filters, conv_before_pool,
-                          additional_pool, skip, unpool_type, dropout):
+def build_experiment_name(dae_dict, training_loss, data_aug, temperature=1.0):
+    """
+    Build experiment name
 
-    all_layer_h = '_'.join(layer_h)
+    Parameters
+    ----------
+    dae_dict: dictionary
+        Parameters of DAE
+    training_loss: string
+        Training loss
+    data_aug: bool
+        Whether or not we do data augmentation
+    temperature: float
+        Temperature to reduce the network confidence - default: 1.0 (does not
+        change the output)
+    """
+
+    all_concat_h = '_'.join(dae_dict['concat_h'])
     all_loss = '_'.join(training_loss)
 
-    exp_name = dae_kind + '_' + all_layer_h
+    exp_name = dae_dict['kind'] + '_' + all_concat_h
 
-    if dae_kind == 'standard':
-        exp_name += '_f' + str(n_filters) + 'c' + str(conv_before_pool) + \
-            'p' + str(additional_pool) + ('_skip' if skip else '')
-        exp_name += '_' + unpool_type + ('_dropout' + str(dropout) if
-                                         dropout > 0. else '')
+    if dae_dict['kind'] == 'standard':
+        exp_name += '_f' + str(dae_dict['n_filters']) + 'c' + \
+            str(dae_dict['conv_before_pool']) + 'p' + \
+            str(dae_dict['additional_pool']) + \
+            ('_skip' if dae_dict['skip'] else '')
+        exp_name += '_' + dae_dict['unpool_type'] + \
+                    ('_dropout' + str(dae_dict['dropout']) if
+                    dae_dict['dropout'] > 0. else '')
 
     exp_name += '_' +  all_loss
-    exp_name += ('_fromgt' if from_gt else '_fromfcn8') + '_z' + str(noise)
+    exp_name += ('_fromgt' if dae_dict['from_gt'] else '_fromfcn8') + '_z' + \
+                str(dae_dict['noise'])
     exp_name += '_data_aug' if bool(data_aug) else ''
-    exp_name += ('_T' + str(temperature)) if not from_gt else ''
+    exp_name += ('_T' + str(temperature)) if not dae_dict['from_gt'] else ''
 
     print(exp_name)
 

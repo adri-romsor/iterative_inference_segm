@@ -13,7 +13,7 @@ from theano import config
 import lasagne
 from lasagne.regularization import regularize_network_params
 from lasagne.nonlinearities import softmax
-from lasagne.layers import Pool2DLayer, Deconv2DLayer, InputLayer
+from lasagne.layers import Pool2DLayer, Deconv2DLayer, InputLayer, DilatedConv2DLayer
 
 from data_loader import load_data
 from metrics import crossentropy, entropy, squared_error_h, squared_error
@@ -47,19 +47,31 @@ else:
 
 def train(dataset, learn_step=0.005,
           weight_decay=1e-4, num_epochs=500, max_patience=100,
-          epsilon=.0, optimizer='rmsprop', training_loss=['squared_error'],
-          layer_h=['pool5'], n_filters=64, noise=0.1, conv_before_pool=1,
-          additional_pool=0, dropout=0., skip=False, unpool_type='standard',
-          from_gt=True, data_augmentation={}, temperature=1.0, dae_kind='standard',
+          optimizer='rmsprop', training_loss=['squared_error'],
+          dae_dict_updates= {}, data_augmentation={}, temperature=1.0,
           savepath=None, loadpath=None, resume=False, train_from_0_255=False):
+
+    #
+    # Update DAE parameters
+    #
+    dae_dict = {'kind': 'fcn8',
+                'dropout': 0.0,
+                'skip': True,
+                'unpool_type':'standard',
+                'n_filters': 64,
+                'conv_before_pool': 1,
+                'additional_pool': 0,
+                'concat_h': ['input'],
+                'noise': 0.0,
+                'from_gt': True}
+
+    dae_dict.update(dae_dict_updates)
 
     #
     # Prepare load/save directories
     #
-    exp_name = build_experiment_name(dae_kind, layer_h, training_loss, from_gt,
-                                     noise, data_augmentation, temperature, n_filters,
-                                     conv_before_pool, additional_pool, skip,
-                                     unpool_type, dropout)
+    exp_name = build_experiment_name(dae_dict, training_loss,
+                                     bool(data_augmentation), temperature)
     if savepath is None:
         raise ValueError('A saving directory must be specified')
 
@@ -82,7 +94,7 @@ def train(dataset, learn_step=0.005,
     #
     input_x_var = T.tensor4('input_x_var')  # tensor for input image batch
     input_mask_var = T.tensor4('input_mask_var')  # tensor for segmentation bach (input dae)
-    input_repr_var = [T.tensor4()] * len(layer_h)  # tensor for hidden repr batch (input dae)
+    input_concat_h_vars = [T.tensor4()] * len(dae_dict['concat_h'])  # tensor for hidden repr batch (input dae)
     target_var = T.tensor4('target_var')  # tensor for target batch
 
     #
@@ -94,7 +106,7 @@ def train(dataset, learn_step=0.005,
         input_x_var.tag.test_value = np.zeros((1, 3, 224, 224), dtype="float32")
         input_mask_var.tag.test_value = np.zeros((1, 11, 224, 224),
                                                  dtype="float32")
-        input_repr_var[0].tag.test_value = np.zeros((1, 256, 52, 52),
+        input_concat_h_vars[0].tag.test_value = np.zeros((1, 256, 52, 52),
                                                     dtype="float32")
 
     #
@@ -117,41 +129,43 @@ def train(dataset, learn_step=0.005,
     #
     # Build networks
     #
+
     # DAE
     print ' Building DAE network'
-    if dae_kind == 'standard':
-        dae = buildDAE(input_repr_var, input_mask_var, n_classes, layer_h,
-                       noise, n_filters, conv_before_pool, additional_pool,
-                       dropout=dropout, trainable=True,
-                       void_labels=void_labels, skip=skip,
-                       unpool_type=unpool_type, load_weights=resume,
+    if dae_dict['kind'] == 'standard':
+        dae = buildDAE(input_concat_h_vars, input_mask_var, n_classes, trainable=True,
+                       void_labels=void_labels, load_weights=resume,
                        path_weights=loadpath, model_name='dae_model.npz',
-                       out_nonlin=softmax)
-    elif dae_kind == 'fcn8':
-        dae = buildFCN8_DAE(input_repr_var, input_mask_var, n_classes,
-                            n_classes, layer_h=layer_h, noise=noise,
-                            path_weights=loadpath, model_name='dae_model.npz',
-                            trainable=True, load_weights=resume,
-                            pretrained=True)
-
-    elif dae_kind == 'contextmod':
-        dae = buildDAE_contextmod(input_repr_var, input_mask_var, n_classes,
-                                  concat_layers=layer_h, noise=noise,
+                       out_nonlin=softmax, concat_h=dae_dict['concat_h'],
+                       noise=dae_dict['noise'], n_filters=dae_dict['n_filters'],
+                       conv_before_pool=dae_dict['conv_before_pool'],
+                       additional_pool=dae_dict['additional_pool'],
+                       dropout=dae_dict['dropout'], skip=dae_dict['skip'],
+                       unpool_type=dae_dict['unpool_type'])
+    elif dae_dict['kind'] == 'fcn8':
+        dae = buildFCN8_DAE(input_concat_h_vars, input_mask_var, n_classes,
+                            nb_in_channels=n_classes, path_weights=loadpath,
+                            model_name='dae_model.npz', trainable=True,
+                            load_weights=resume, pretrained=True, pascal=True,
+                            concat_h=dae_dict['concat_h'], noise=dae_dict['noise'])
+    elif dae_dict['kind'] == 'contextmod':
+        dae = buildDAE_contextmod(input_concat_h_vars, input_mask_var, n_classes,
                                   path_weights=loadpath,
                                   model_name='dae_model.npz',
                                   trainable=True, load_weights=resume,
-                                  out_nonlin=softmax)
+                                  out_nonlin=softmax, noise=dae_dict['noise'],
+                                  concat_h=dae_dict['concat_h'])
     else:
         raise ValueError('Unknown dae kind')
 
     # FCN
     print ' Building FCN network'
-    if not from_gt:
-        layer_h += ['probs_dimshuffle']
+    if not dae_dict['from_gt']:
+        dae_dict['concat_h'] += ['probs_dimshuffle']
     fcn = buildFCN8(nb_in_channels, input_x_var, n_classes=n_classes,
                     void_labels=void_labels,
                     path_weights=WEIGHTS_PATH+dataset+'/fcn8_model.npz',
-                    trainable=True, load_weights=True, layer=layer_h,
+                    trainable=True, load_weights=True, layer=dae_dict['concat_h'],
                     temperature=temperature)
 
     #
@@ -164,19 +178,18 @@ def train(dataset, learn_step=0.005,
     # fcn prediction
     fcn_prediction = lasagne.layers.get_output(fcn, deterministic=True)
 
-    # dae prediction: TODO - clean!
+    # select prediction layers (pooling and upsampling layers)
     dae_all_lays = lasagne.layers.get_all_layers(dae)
-    if dae_kind != 'contextmod':
+    if dae_dict['kind'] != 'contextmod':
         dae_lays = [l for l in dae_all_lays
-                    if (hasattr(l, 'input_layer') and
-                        isinstance(l.input_layer, DePool2D)) or
-                    isinstance(l, Pool2DLayer) or
-                    isinstance(l, Deconv2DLayer) or
+                    if (hasattr(l, 'input_layer') and isinstance(l.input_layer,
+                                                                 DePool2D)) or
+                    isinstance(l, Pool2DLayer) or isinstance(l, Deconv2DLayer) or
                     l == dae_all_lays[-1]]
-        # dae_lays = dae_lays[::2]
     else:
-        dae_lays = dae_all_lays[3:-5]
+        dae_lays = [l for l in dae_all_lays if isinstance(l, DilatedConv2DLayer)]
 
+    # predictions
     dae_prediction_all = lasagne.layers.get_output(dae_lays)
     dae_prediction = dae_prediction_all[-1]
     dae_prediction_h = dae_prediction_all[:-1]
@@ -217,7 +230,7 @@ def train(dataset, learn_step=0.005,
         # extract input layers and create dictionary
         dae_input_lays = [l for l in dae_all_lays if isinstance(l, InputLayer)]
         inputs = {dae_input_lays[0]: target_var[:, :void, :, :], dae_input_lays[-1]:target_var[:, :void, :, :]}
-        for idx, val in enumerate(input_repr_var):
+        for idx, val in enumerate(input_concat_h_vars):
             inputs[dae_input_lays[idx+1]] = val
 
         test_dae_prediction_all_gt = lasagne.layers.get_output(dae_lays,
@@ -242,10 +255,10 @@ def train(dataset, learn_step=0.005,
         raise ValueError('Unknown optimizer')
 
     # functions
-    train_fn = theano.function(input_repr_var + [input_mask_var, target_var],
+    train_fn = theano.function(input_concat_h_vars + [input_mask_var, target_var],
                                loss, updates=updates)
     fcn_fn = theano.function([input_x_var], fcn_prediction)
-    val_fn = theano.function(input_repr_var + [input_mask_var, target_var], test_loss)
+    val_fn = theano.function(input_concat_h_vars + [input_mask_var, target_var], test_loss)
 
     err_train = []
     err_valid = []
@@ -270,7 +283,7 @@ def train(dataset, learn_step=0.005,
 
             # h prediction
             H_pred_batch = fcn_fn(X_train_batch)
-            if from_gt:
+            if dae_dict['from_gt']:
                 Y_pred_batch = L_train_batch[:, :void, :, :]
             else:
                 Y_pred_batch = H_pred_batch[-1]
@@ -291,7 +304,7 @@ def train(dataset, learn_step=0.005,
 
             # h prediction
             H_pred_batch = fcn_fn(X_val_batch)
-            if from_gt:
+            if dae_dict['from_gt']:
                 Y_pred_batch = L_val_batch[:, :void, :, :]
             else:
                 Y_pred_batch = H_pred_batch[-1]
@@ -366,85 +379,40 @@ def main():
                         type=int,
                         default=100,
                         help='Max patience')
-    parser.add_argument('-epsilon',
-                        type=float,
-                        default=0.,
-                        help='Entropy weight')
     parser.add_argument('-optimizer',
                         type=str,
                         default='rmsprop',
                         help='Optimizer (adam or rmsprop)')
     parser.add_argument('-training_loss',
                         type=list,
-                        default=['crossentropy'],
+                        default=['crossentropy', 'squared_error_h'],
                         help='Training loss')
-    parser.add_argument('-layer_h',
-                        type=list,
-                        default=['pool3'],
-                        help='All h to introduce to the DAE')
-    parser.add_argument('-noise',
-                        type=float,
-                        default=0.0,
-                        help='Noise of DAE input.')
-    parser.add_argument('-n_filters',
-                        type=int,
-                        default=64,
-                        help='Nb filters DAE (1st lay, increases pow 2')
-    parser.add_argument('-conv_before_pool',
-                        type=int,
-                        default=1,
-                        help='Conv. before pool in DAE.')
-    parser.add_argument('-additional_pool',
-                        type=int,
-                        default=2,
-                        help='Additional pool DAE')
-    parser.add_argument('-dropout',
-                        type=float,
-                        default=0.5,
-                        help='Additional pool DAE')
-    parser.add_argument('-skip',
-                        type=bool,
-                        default=True,
-                        help='Whether to skip connections in DAE')
-    parser.add_argument('-unpool_type',
-                        type=str,
-                        default='trackind',
-                        help='Unpooling type - standard or trackind')
-    parser.add_argument('-from_gt',
-                        type=bool,
-                        default=False,
-                        help='Whether to train from GT (true) or fcn' +
-                        'output (False)')
+    parser.add_argument('-dae_dict',
+                        type=dict,
+                        default={'kind': 'contextmod', 'dropout': 0.5, 'skip': True,
+                                  'unpool_type': 'trackind', 'noise': 0.0,
+                                  'concat_h': ['input'], 'from_gt': False,
+                                  'n_filters': 64, 'conv_before_pool': 1,
+                                  'additional_pool': 2},
+                        help='DAE kind and parameters')
     parser.add_argument('-data_augmentation',
                         type=dict,
-                        default={'crop_size': (224, 224), 'horizontal_flip': True, 'vertical_flip': True, 'fill_mode': 'nearest'},
+                        default={'crop_size': (224, 224),
+                                 'horizontal_flip': True, 'vertical_flip': True,
+                                 'fill_mode': 'nearest'},
                         help='Dictionary of data augmentation to be used')
-    parser.add_argument('-temperature',
-                        type=float,
-                        default=1.0,
-                        help='Apply temperature')
-    parser.add_argument('-dae_kind',
-                        type=str,
-                        default='fcn8',
-                        help='What kind of AE archictecture to use')
     parser.add_argument('-train_from_0_255',
                         type=bool,
-                        default=False,
+                        default=True,
                         help='Whether to train from images within 0-255 range')
     args = parser.parse_args()
 
     train(args.dataset, float(args.learning_rate),
           float(args.weight_decay), int(args.num_epochs),
-          int(args.max_patience), float(args.epsilon),
-          args.optimizer, args.training_loss, args.layer_h,
-          noise=args.noise, n_filters=args.n_filters,
-          conv_before_pool=args.conv_before_pool,
-          additional_pool=args.additional_pool,
-          dropout=args.dropout,
-          skip=args.skip, unpool_type=args.unpool_type,
-          from_gt=args.from_gt, data_augmentation=args.data_augmentation,
-          temperature=args.temperature, dae_kind=args.dae_kind,
-          resume=False, savepath=SAVEPATH, loadpath=LOADPATH,
+          int(args.max_patience), args.optimizer, args.training_loss,
+          dae_dict_updates=args.dae_dict,
+          data_augmentation=args.data_augmentation, resume=False,
+          savepath=SAVEPATH, loadpath=LOADPATH,
           train_from_0_255=args.train_from_0_255)
 
 
