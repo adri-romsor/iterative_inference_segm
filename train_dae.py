@@ -385,13 +385,13 @@ def main():
                         help='Optimizer (adam or rmsprop)')
     parser.add_argument('-training_loss',
                         type=list,
-                        default=['crossentropy', 'squared_error_h'],
+                        default=['squared_error', 'squared_error_h'],
                         help='Training loss')
     parser.add_argument('-dae_dict',
                         type=dict,
-                        default={'kind': 'contextmod', 'dropout': 0.5, 'skip': True,
-                                  'unpool_type': 'trackind', 'noise': 0.0,
-                                  'concat_h': ['input'], 'from_gt': False,
+                        default={'kind': 'fcn8', 'dropout': 0.5, 'skip': True,
+                                  'unpool_type': 'trackind', 'noise': 1.0,
+                                  'concat_h': ['pool3'], 'from_gt': False,
                                   'n_filters': 64, 'conv_before_pool': 1,
                                   'additional_pool': 2},
                         help='DAE kind and parameters')
