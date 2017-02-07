@@ -13,8 +13,9 @@ from theano import config
 import lasagne
 from lasagne.regularization import regularize_network_params
 from lasagne.nonlinearities import softmax
-from lasagne.layers import Pool2DLayer, Deconv2DLayer, InputLayer
-
+from lasagne.layers import Pool2DLayer, Deconv2DLayer, InputLayer, ElemwiseSumLayer
+from layers.mylayers import CroppingLayer
+from lasagne.objectives import squared_error as squared_error_L
 from data_loader import load_data
 from metrics import crossentropy, entropy, squared_error_h, squared_error
 from models.DAE_h import buildDAE
@@ -51,8 +52,8 @@ def train(dataset, learn_step=0.005,
           layer_h=['pool5'], n_filters=64, noise=0.1, conv_before_pool=1,
           additional_pool=0, dropout=0., skip=False, unpool_type='standard',
           from_gt=True, data_augmentation={}, temperature=1.0, dae_kind='standard',
-          savepath=None, loadpath=None, resume=False):
-
+          batch_size=(10, 1, 1), ae_h=False, savepath=None, loadpath=None,
+          resume=False):
     #
     # Prepare load/save directories
     #
@@ -84,26 +85,29 @@ def train(dataset, learn_step=0.005,
     input_mask_var = T.tensor4('input_mask_var')  # tensor for segmentation bach (input dae)
     input_repr_var = [T.tensor4()] * len(layer_h)  # tensor for hidden repr batch (input dae)
     target_var = T.tensor4('target_var')  # tensor for target batch
-
     #
     # Only for debugging
     #
     test_values = False
     if test_values:
         theano.config.compute_test_value = 'raise'
-        input_x_var.tag.test_value = np.zeros((1, 3, 224, 224), dtype="float32")
-        input_mask_var.tag.test_value = np.zeros((1, 11, 224, 224),
-                                                 dtype="float32")
-        input_repr_var[0].tag.test_value = np.zeros((1, 256, 52, 52),
-                                                    dtype="float32")
-
+        if dataset == 'camvid':
+            input_x_var.tag.test_value = np.zeros((1, 3, 224, 224), dtype="float32")
+            input_mask_var.tag.test_value = np.zeros((1, 11, 224, 224),
+                                                     dtype="float32")
+            input_repr_var[0].tag.test_value = np.zeros((1, 256, 52, 52),
+                                                        dtype="float32")
+        if dataset == 'polyps912':
+            input_mask_var.tag.test_value = np.zeros((10, 2, 224, 224), dtype='float32')
+            input_x_var.tag.test_value = np.zeros((10, 3, 224, 224), dtype='float32')
+            # target_var.tag.test_value = np.zeros((10, 3, 224, 224), dtype='int32')
     #
     # Build dataset iterator
     #
     train_iter, val_iter, _ = load_data(dataset,
                                         data_augmentation,
                                         one_hot=True,
-                                        batch_size=[3, 3, 3],
+                                        batch_size=batch_size,
                                         )
 
     n_batches_train = train_iter.nbatches
@@ -113,7 +117,12 @@ def train(dataset, learn_step=0.005,
     nb_in_channels = train_iter.data_shape[0]
     void = n_classes if any(void_labels) else n_classes+1
 
-    #
+    # Number of feasible pools
+    if 'pool' in layer_h[-1]:
+        n_pool = int(layer_h[-1][-1])
+    else:
+        n_pool = 0
+
     # Build networks
     #
     # DAE
@@ -125,7 +134,7 @@ def train(dataset, learn_step=0.005,
                        void_labels=void_labels, skip=skip,
                        unpool_type=unpool_type, load_weights=resume,
                        path_weights=loadpath, model_name='dae_model.npz',
-                       out_nonlin=softmax)
+                       out_nonlin=softmax, ae_h=ae_h)
     elif dae_kind == 'fcn8':
         dae = buildFCN8_DAE(input_repr_var, input_mask_var, n_classes,
                             n_classes, layer_h=layer_h, noise=noise,
@@ -167,14 +176,17 @@ def train(dataset, learn_step=0.005,
     dae_all_lays = lasagne.layers.get_all_layers(dae)
     if dae_kind != 'contextmod':
         dae_lays = [l for l in dae_all_lays
-                    if (hasattr(l, 'input_layer') and
-                        isinstance(l.input_layer, DePool2D)) or
-                    isinstance(l, Pool2DLayer) or
-                    isinstance(l, Deconv2DLayer) or
-                    l == dae_all_lays[-1]]
+                    if isinstance(l, Pool2DLayer) or
+                        isinstance(l, CroppingLayer) or
+                        isinstance(l, ElemwiseSumLayer) or
+                        l == dae_all_lays[-1]]
         # dae_lays = dae_lays[::2]
     else:
         dae_lays = dae_all_lays[3:-5]
+
+    if ae_h:
+        h_ae_idx = [i for i, el in enumerate(dae_lays) if el.name == 'h_to_recon'][0]
+        h_hat_idx = [i for i, el in enumerate(dae_lays) if el.name == 'h_hat'][0]
 
     dae_prediction_all = lasagne.layers.get_output(dae_lays)
     dae_prediction = dae_prediction_all[-1]
@@ -184,6 +196,13 @@ def train(dataset, learn_step=0.005,
                                                         deterministic=True)
     test_dae_prediction = test_dae_prediction_all[-1]
     test_dae_prediction_h = test_dae_prediction_all[:-1]
+
+    # fetch h and h_hat if needed
+    if ae_h:
+        h = dae_prediction_all[h_ae_idx]
+        h_hat = dae_prediction_all[h_hat_idx]
+        h_test = test_dae_prediction_all[h_ae_idx]
+        h_hat_test = test_dae_prediction_all[h_hat_idx]
 
     # loss
     loss = 0
@@ -197,7 +216,7 @@ def train(dataset, learn_step=0.005,
         test_dae_prediction_2D = test_dae_prediction.dimshuffle((0, 2, 3, 1))
         sh = test_dae_prediction_2D.shape
         test_dae_prediction_2D = test_dae_prediction_2D.reshape((T.prod(sh[:3]),
-                                                         sh[3]))
+                                                                sh[3]))
         # Convert target to 2D
         target_var_2D = target_var.dimshuffle((0, 2, 3, 1))
         sh = target_var_2D.shape
@@ -226,7 +245,10 @@ def train(dataset, learn_step=0.005,
 
         loss += squared_error_h(dae_prediction_h, test_dae_prediction_h_gt)
         test_loss += squared_error_h(test_dae_prediction_h, test_dae_prediction_h_gt)
-
+    # if reconstructing h add the corresponding loss terms
+    if ae_h:
+        loss += squared_error_L(h, h_hat).mean()
+        test_loss += squared_error_L(h_test, h_hat_test).mean()
     # network parameters
     params = lasagne.layers.get_all_params(dae, trainable=True)
 
@@ -267,6 +289,13 @@ def train(dataset, learn_step=0.005,
             X_train_batch, L_train_batch = train_iter.next()
             L_train_batch = L_train_batch.astype(_FLOATX)
 
+            ####
+            # uncomment if you want to control the feasability of pooling
+            max_n_possible_pool = np.floor(np.log2(np.array(X_train_batch.shape[2:]).min()))
+            # check if we don't ask for more poolings than possible
+            assert n_pool+additional_pool < max_n_possible_pool
+            ####
+
             # h prediction
             H_pred_batch = fcn_fn(X_train_batch)
             if from_gt:
@@ -297,6 +326,7 @@ def train(dataset, learn_step=0.005,
                 H_pred_batch = H_pred_batch[:-1]
 
             # Validation step
+
             cost_val = val_fn(*(H_pred_batch + [Y_pred_batch, L_val_batch]))
             cost_val_tot += cost_val
 
@@ -426,12 +456,20 @@ def main():
                         type=str,
                         default='fcn8',
                         help='What kind of AE archictecture to use')
+    parser.add_argument('-bs',
+                        type=list,
+                        default=[10, 1, 1],
+                        help='What kind of AE archictecture to use')
+    parser.add_argument('-ae_h',
+                        type=bool,
+                        default=False,
+                        help='What kind of AE archictecture to use')
     args = parser.parse_args()
 
-    train(args.dataset, float(args.learning_rate),
-          float(args.weight_decay), int(args.num_epochs),
-          int(args.max_patience), float(args.epsilon),
-          args.optimizer, args.training_loss, args.layer_h,
+    train(args.dataset, learn_step=float(args.learning_rate),
+          weight_decay=float(args.weight_decay), num_epochs=int(args.num_epochs),
+          max_patience=int(args.max_patience), epsilon=float(args.epsilon),
+          optimizer=args.optimizer, training_loss=args.training_loss, layer_h=args.layer_h,
           noise=args.noise, n_filters=args.n_filters,
           conv_before_pool=args.conv_before_pool,
           additional_pool=args.additional_pool,
@@ -439,8 +477,8 @@ def main():
           skip=args.skip, unpool_type=args.unpool_type,
           from_gt=args.from_gt, data_augmentation=args.data_augmentation,
           temperature=args.temperature, dae_kind=args.dae_kind,
+          ae_h=args.ae_h, batch_size=args.bs,
           resume=False, savepath=SAVEPATH, loadpath=LOADPATH)
-
 
 if __name__ == "__main__":
     main()

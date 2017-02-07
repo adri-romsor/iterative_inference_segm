@@ -99,6 +99,7 @@ class DePool2D(Upscale2DLayer):
         sh_upscaled = T.shape(upscaled)
         # in case the shape is different left-bottom-pad with zero
         tmp = T.zeros(sh_pool2d_in)
+
         indx = (slice(None),
                 slice(None),
                 slice(0, sh_upscaled[2]),
@@ -109,7 +110,6 @@ class DePool2D(Upscale2DLayer):
                 known_grads={out: T.ones_like(out)})
         # mask values using indices_pool
         f = indices_pool * upscaled
-
         return f
 
 

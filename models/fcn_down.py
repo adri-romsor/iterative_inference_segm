@@ -2,14 +2,14 @@ from lasagne.layers import InputLayer
 from lasagne.layers import Pool2DLayer as PoolLayer, ConcatLayer
 from lasagne.layers import Conv2DLayer as ConvLayer, DropoutLayer
 from layers.mylayers import GaussianNoiseLayerSoftmax
-
+import numpy as np
 import model_helpers
 
 
 def buildFCN_down(input_var, concat_vars,
                   n_classes=21, concat_layers=['pool5'], noise=0.1,
                   n_filters=64, conv_before_pool=1, additional_pool=0,
-                  dropout=0.):
+                  dropout=0., ae_h=False):
 
     '''
     Build fcn contracting path
@@ -29,7 +29,6 @@ def buildFCN_down(input_var, concat_vars,
     # Contracting path
     net['input'] = InputLayer((None, n_classes, None, None),
                               input_var)
-
     # Noise
     if noise > 0:
         net['noisy_input'] = GaussianNoiseLayerSoftmax(net['input'], sigma=noise)
@@ -41,9 +40,11 @@ def buildFCN_down(input_var, concat_vars,
 
     if concat_layers[-1] == 'input' and additional_pool == 0:
         return net, out
-
     for p in range(n_pool+additional_pool):
         # add conv + pool
+        # freeze params of the pre-h layers
+        if ae_h and p == n_pool and net != {}:
+            model_helpers.freezeParameters(net['pool'+str(p)])
         for i in range(1, conv_before_pool+1):
             # Choose padding type: this is defined according to the
             # layers:
@@ -71,7 +72,12 @@ def buildFCN_down(input_var, concat_vars,
                 out += '_drop'
 
         # Define pool
-        net['pool'+str(p+1)] = PoolLayer(net['conv'+str(p+1)+'_'+str(i)], 2)
+        if p == n_pool-1:
+            layer_name = 'h_to_recon'
+        else:
+            layer_name = None
+        net['pool'+str(p+1)] = PoolLayer(net['conv'+str(p+1)+'_'+str(i)], 2,
+                                         name=layer_name)
         out = 'pool'+str(p+1)
         laySize = net['pool'+str(p+1)].input_shape
         n_cl = laySize[1]

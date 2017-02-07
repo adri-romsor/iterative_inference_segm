@@ -13,7 +13,7 @@ def buildDAE(input_repr_var, input_mask_var, n_classes,
              layer_h=['input'], noise=0.1, n_filters=64,
              conv_before_pool=1, additional_pool=0,
              dropout=0., void_labels=[], skip=False,
-             unpool_type='standard',
+             unpool_type='standard', ae_h=False,
              path_weights='/Tmp/romerosa/itinf/models/',
              model_name='dae_model.npz',
              trainable=False, load_weights=False,
@@ -30,7 +30,7 @@ def buildDAE(input_repr_var, input_mask_var, n_classes,
         concat_layers=layer_h,
         noise=noise, n_filters=n_filters,
         conv_before_pool=conv_before_pool,
-        additional_pool=additional_pool)
+        additional_pool=additional_pool, ae_h=ae_h)
 
     dae = fcn_down
 
@@ -44,7 +44,8 @@ def buildDAE(input_repr_var, input_mask_var, n_classes,
     # Unpooling
     fcn_up = buildFCN_up(dae, last_layer_down, n_pool, skip=skip,
                          n_classes=n_classes, unpool_type=unpool_type,
-                         out_nonlin=out_nonlin)
+                         out_nonlin=out_nonlin, ae_h=ae_h,
+                         additional_pool=additional_pool)
 
     dae.update(fcn_up)
 

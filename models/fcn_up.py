@@ -9,7 +9,8 @@ from lasagne.nonlinearities import softmax, linear
 
 
 def UnpoolNet(incoming_net, net, p, unpool, n_classes,
-              incoming_layer, skip, unpool_type='standard'):
+              incoming_layer, skip, unpool_type='standard',
+              layer_name=None):
     # pdb.set_trace()
     if p == 1:
         n_cl = n_classes
@@ -31,7 +32,8 @@ def UnpoolNet(incoming_net, net, p, unpool, n_classes,
             net['fused_up'+str(p)] = \
                 ElemwiseSumLayer((net['up'+str(p)],
                                   incoming_net['pool'+str(p-1)]),
-                                 cropping=[None, None, 'center', 'center'])
+                                 cropping=[None, None, 'center', 'center'],
+                                 name=layer_name)
         else:
             # Crop
             net['fused_up'+str(p)] = \
@@ -40,7 +42,9 @@ def UnpoolNet(incoming_net, net, p, unpool, n_classes,
                                net['up'+str(p)]),
                               merge_function=lambda input, deconv:
                               deconv, cropping=[None, None,
-                                                'center', 'center'])
+                                                'center', 'center'],
+                              name=layer_name)
+
     elif unpool_type == 'trackind':
         # Depool
         net['up'+str(p)] = \
@@ -51,14 +55,15 @@ def UnpoolNet(incoming_net, net, p, unpool, n_classes,
         # Convolve
         net['up_conv'+str(p)] = \
             ConvLayer(net['up'+str(p)], n_cl, 3,
-                      pad='valid', flip_filters=False, nonlinearity=linear)
+                      pad='same', flip_filters=False, nonlinearity=linear)
 
         if skip and p > 1:
             # Merge
             net['fused_up'+str(p)] = \
                 ElemwiseSumLayer((net['up_conv'+str(p)],
                                   incoming_net['pool'+str(p-1)]),
-                                 cropping=[None, None, 'center', 'center'])
+                                 cropping=[None, None, 'center', 'center'],
+                                 name=layer_name)
 
         else:
             # Crop
@@ -68,30 +73,34 @@ def UnpoolNet(incoming_net, net, p, unpool, n_classes,
                                    net['up_conv'+str(p)]),
                                   merge_function=lambda input, deconv:
                                   deconv, cropping=[None, None,
-                                                    'center', 'center'])
+                                                    'center', 'center'],
+                                  name=layer_name)
     else:
         raise ValueError('Unkown unpool type')
 
 
 def buildFCN_up(incoming_net, incoming_layer, unpool,
                 skip=False, unpool_type='standard',
-                n_classes=21, out_nonlin=linear):
+                n_classes=21, out_nonlin=linear,
+                additional_pool=0, ae_h=False):
 
     '''
     Build fcn decontracting path
     '''
     net = {}
     # Upsampling path
-
     # net['score'] = ConvLayer(incoming_net[incoming_layer], n_classes, 1,
     #                          pad='valid', flip_filters=True)
-
-    p = 0
-
     for p in range(unpool, 0, -1):
         # Unpool and Crop if unpool_type='standard' or Depool and Conv
+        if p == unpool-additional_pool+1 and ae_h:
+            layer_name = 'h_hat'
+        else:
+            layer_name = None
+
         UnpoolNet(incoming_net, net, p, unpool, n_classes,
-                  incoming_layer, skip, unpool_type=unpool_type)
+                  incoming_layer, skip, unpool_type=unpool_type,
+                  layer_name=layer_name)
 
     # Final dimshuffle, reshape and softmax
     net['final_dimshuffle'] = DimshuffleLayer(net['fused_up'+str(p) if
