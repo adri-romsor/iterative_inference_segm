@@ -21,7 +21,7 @@ _FLOATX = config.floatX
 if getuser() == 'romerosa':
     SAVEPATH = '/Tmp/romerosa/itinf/models/'
     LOADPATH = '/data/lisatmp4/romerosa/itinf/models/'
-    WEIGHTS_PATH = '/Tmp/romerosa/itinf/models/camvid/fcn8_model.npz'
+    WEIGHTS_PATH = '/data/lisatmp4/romerosa/itinf/models/fcn8_model.npz'
 elif getuser() == 'jegousim':
     SAVEPATH = '/data/lisatmp4/jegousim/iterative_inference/'
     LOADPATH = '/data/lisatmp4/jegousim/iterative_inference/'

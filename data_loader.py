@@ -5,7 +5,10 @@ from dataset_loaders.images.isbi_em_stacks import IsbiEmStacksDataset
 
 
 def load_data(dataset, train_data_augm_kwargs={}, one_hot=False,
-              batch_size=[10, 10, 10], shuffle_train=True, return_0_255=False):
+              batch_size=[10, 10, 10], shuffle_train=True, return_0_255=False,
+              which_set='all'):
+
+    assert which_set in ['all', 'train', 'val', 'test']
 
     # Build dataset iterator
     if dataset == 'polyps912':
@@ -110,4 +113,13 @@ def load_data(dataset, train_data_augm_kwargs={}, one_hot=False,
     else:
         raise NotImplementedError
 
-    return train_iter, val_iter, test_iter
+    if which_set == 'train':
+        ret = train_iter
+    elif which_set == 'val':
+        ret = val_iter
+    elif which_set == 'test':
+        ret = test_iter
+    else:
+        ret = [train_iter, val_iter, test_iter]
+
+    return ret

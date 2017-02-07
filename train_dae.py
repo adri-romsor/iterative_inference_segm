@@ -391,7 +391,7 @@ def main():
                         type=dict,
                         default={'kind': 'fcn8', 'dropout': 0.5, 'skip': True,
                                   'unpool_type': 'trackind', 'noise': 1.0,
-                                  'concat_h': ['pool3'], 'from_gt': False,
+                                  'concat_h': ['pool4'], 'from_gt': False,
                                   'n_filters': 64, 'conv_before_pool': 1,
                                   'additional_pool': 2},
                         help='DAE kind and parameters')
