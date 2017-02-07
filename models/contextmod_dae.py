@@ -9,7 +9,7 @@ import theano.tensor as T
 from lasagne.nonlinearities import linear, rectify
 from lasagne.layers import (DilatedConv2DLayer, Conv2DLayer,
                             ConcatLayer, InputLayer, PadLayer, DimshuffleLayer,
-                            ReshapeLayer, NonlinearityLayer)
+                            ReshapeLayer, NonlinearityLayer, GaussianNoiseLayer)
 from layers.mylayers import GaussianNoiseLayerSoftmax
 from lasagne.init import Initializer
 
@@ -48,8 +48,10 @@ def buildDAE_contextmod(input_concat_h_vars, input_mask_var, n_classes,
 
     # Noise
     if noise > 0:
-        net['noisy_input'] = GaussianNoiseLayerSoftmax(net['input'],
-                                                       sigma=noise)
+        # net['noisy_input'] = GaussianNoiseLayerSoftmax(net['input'],
+        #                                                sigma=noise)
+        net['noisy_input'] = GaussianNoiseLayer(net['input'],
+                                                sigma=noise)
         in_next = 'noisy_input'
     else:
         in_next = 'input'

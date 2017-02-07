@@ -1,4 +1,4 @@
-from lasagne.layers import InputLayer
+from lasagne.layers import InputLayer, GaussianNoiseLayer
 from lasagne.layers import Pool2DLayer as PoolLayer, ConcatLayer
 from lasagne.layers import Conv2DLayer as ConvLayer, DropoutLayer
 from layers.mylayers import GaussianNoiseLayerSoftmax
@@ -54,8 +54,10 @@ def buildFCN_down(input_var, concat_h_vars,
 
     # noise
     if noise > 0:
-        net['noisy_input'] = GaussianNoiseLayerSoftmax(net['input'],
-                                                       sigma=noise)
+        # net['noisy_input'] = GaussianNoiseLayerSoftmax(net['input'],
+        #                                                sigma=noise)
+        net['noisy_input'] = GaussianNoiseLayer(net['input'],
+                                                sigma=noise)
         in_next = 'noisy_input'
     else:
         in_next = 'input'
