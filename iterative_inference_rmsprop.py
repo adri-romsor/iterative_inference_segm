@@ -242,7 +242,7 @@ def inference(dataset, learn_step=0.005, num_iter=500,
         # Iterative inference
         for it in range(num_iter):
             grad = de_fn(*(H_test_batch))
-            y_hat_var.set_value(softmax_fn(y_hat_var.get_value()))
+            # y_hat_var.set_value(softmax_fn(y_hat_var.get_value()))
 
             if save_perstep:
                 # Save images
