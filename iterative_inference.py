@@ -1,3 +1,5 @@
+#!/usr/bin/env python2
+
 import argparse
 import os
 from getpass import getuser
@@ -9,14 +11,17 @@ import theano.tensor as T
 from theano import config
 
 import lasagne
-from lasagne.objectives import squared_error
+from lasagne.nonlinearities import softmax
 
 from data_loader import load_data
-from metrics import accuracy, jaccard
+from metrics import accuracy, jaccard, squared_error
 from models.DAE_h import buildDAE
 from models.fcn8 import buildFCN8
+from models.fcn8_dae import buildFCN8_DAE
+from models.contextmod_dae import buildDAE_contextmod
 from helpers import save_img
-from helpers import build_experiment_name
+from models.model_helpers import softmax4D
+from helpers import build_experiment_name, print_results
 
 _FLOATX = config.floatX
 _EPSILON = 10e-8
@@ -36,55 +41,32 @@ _EPSILON = 1e-3
 
 
 def inference(dataset, learn_step=0.005, num_iter=500,
-              training_loss='squared_error', layer_h=['pool5'],
-              n_filters=64, noise=0.1, conv_before_pool=1, additional_pool=0,
-              dropout=0., skip=False, unpool_type='standard', from_gt=True,
-              save_perstep=False, which_set='test', data_aug=False,
-              savepath=None, loadpath=None):
-    #
-    # Define symbolic variables
-    #
-    input_x_var = T.tensor4('input_x_var')
-    input_h_var = []
-    name = ''
-    for l in layer_h:
-        input_h_var += [T.tensor4()]
-        name += ('_'+l)
-    y_hat_var = T.tensor4('pred_y_var')
-    target_var_4D = T.itensor4('target_var_4D')
+              training_loss='squared_error', dae_dict_updates= {},
+              data_augmentation={}, temperature=1.0, save_perstep=False,
+              which_set='test', savepath=None, loadpath=None,
+              test_from_0_255=False):
 
     #
-    # Build dataset iterator
+    # Update DAE parameters
     #
-    if which_set == 'train':
-        test_iter, _, _ = load_data(dataset, train_crop_size=None,
-                                    one_hot=True, batch_size=[10, 10, 10])
-    elif which_set == 'valid':
-        _, test_iter, _ = load_data(dataset, train_crop_size=None,
-                                    one_hot=True, batch_size=[10, 10, 10])
-    if which_set == 'test':
-        _, _, test_iter = load_data(dataset, train_crop_size=None,
-                                    one_hot=True, batch_size=[10, 10, 10])
+    dae_dict = {'kind': 'fcn8',
+                'dropout': 0.0,
+                'skip': True,
+                'unpool_type':'standard',
+                'n_filters': 64,
+                'conv_before_pool': 1,
+                'additional_pool': 0,
+                'concat_h': ['input'],
+                'noise': 0.0,
+                'from_gt': True}
 
-    colors = test_iter.get_cmap_values()
-    n_batches_test = test_iter.nbatches
-    n_classes = test_iter.non_void_nclasses
-    void_labels = test_iter.void_labels
-    nb_in_channels = test_iter.data_shape[0]
-    void = n_classes if any(void_labels) else n_classes+1
+    dae_dict.update(dae_dict_updates)
 
     #
     # Prepare load/save directories
     #
-    exp_name = '_'.join(layer_h)
-    exp_name += '_f' + str(n_filters) + 'c' + str(conv_before_pool) + \
-        'p' + str(additional_pool) + '_z' + str(noise)
-    exp_name += '_' + training_loss + ('_skip' if skip else '')
-    exp_name += ('_fromgt' if from_gt else '_fromfcn8')
-    exp_name += '_' + unpool_type + ('_dropout' + str(dropout) if
-                                     dropout > 0. else '')
-    exp_name += '_data_aug' if data_aug else ''
-
+    exp_name = build_experiment_name(dae_dict, training_loss,
+                                     bool(data_augmentation), temperature)
     if savepath is None:
         raise ValueError('A saving directory must be specified')
 
@@ -104,35 +86,78 @@ def inference(dataset, learn_step=0.005, num_iter=500,
             f.write('{} = {}\n'.format(key, value))
 
     #
+    # Define symbolic variables
+    #
+    input_x_var = T.tensor4('input_x_var')  # tensor for input image batch
+    input_concat_h_vars = [T.tensor4()] * len(dae_dict['concat_h'])  # tensor for hidden repr batch (input dae)
+    y_hat_var = T.tensor4('pred_y_var')
+    target_var = T.tensor4('target_var')  # tensor for target batch
+
+    #
+    # Build dataset iterator
+    #
+    data_iter = load_data(dataset, {}, one_hot=True, batch_size=[10, 10, 10],
+                          return_0_255=test_from_0_255, which_set=which_set)
+
+    colors = data_iter.cmap
+    n_batches_test = data_iter.nbatches
+    n_classes = data_iter.non_void_nclasses
+    void_labels = data_iter.void_labels
+    nb_in_channels = data_iter.data_shape[0]
+    void = n_classes if any(void_labels) else n_classes+1
+
+    #
     # Build networks
     #
-    print 'Building networks'
-    # Build FCN8  with pre-trained weights up to layer_h + prediction
-    fcn = buildFCN8(nb_in_channels, input_var=input_x_var,
-                    n_classes=n_classes,
-                    void_labels=void_labels,
-                    trainable=False, load_weights=True,
-                    layer=layer_h+['probs_dimshuffle'],
-                    path_weights=WEIGHTS_PATH+dataset+'/fcn8_model.npz')
 
     # Build DAE with pre-trained weights
-    dae = buildDAE(input_h_var, y_hat_var, n_classes, layer_h,
-                   noise, n_filters, conv_before_pool, additional_pool,
-                   dropout=dropout, trainable=True, void_labels=void_labels,
-                   skip=skip, unpool_type=unpool_type, load_weights=True,
-                   path_weights=loadpath, model_name='dae_model.npz')
+    print ' Building DAE network'
+    if dae_dict['kind'] == 'standard':
+        dae = buildDAE(input_concat_h_vars, y_hat_var, n_classes, trainable=True,
+                       void_labels=void_labels, load_weights=True,
+                       path_weights=loadpath, model_name='dae_model_best.npz',
+                       out_nonlin=softmax, concat_h=dae_dict['concat_h'],
+                       noise=dae_dict['noise'], n_filters=dae_dict['n_filters'],
+                       conv_before_pool=dae_dict['conv_before_pool'],
+                       additional_pool=dae_dict['additional_pool'],
+                       dropout=dae_dict['dropout'], skip=dae_dict['skip'],
+                       unpool_type=dae_dict['unpool_type'])
+    elif dae_dict['kind'] == 'fcn8':
+        dae = buildFCN8_DAE(input_concat_h_vars, y_hat_var, n_classes,
+                            nb_in_channels=n_classes, path_weights=loadpath,
+                            model_name='dae_model_best.npz', trainable=True,
+                            load_weights=True, pretrained=True, pascal=False,
+                            concat_h=dae_dict['concat_h'], noise=dae_dict['noise'])
+    elif dae_dict['kind'] == 'contextmod':
+        dae = buildDAE_contextmod(input_concat_h_vars, y_hat_var, n_classes,
+                                  path_weights=loadpath,
+                                  model_name='dae_model_best.npz',
+                                  trainable=True, load_weights=True,
+                                  out_nonlin=softmax, noise=dae_dict['noise'],
+                                  concat_h=dae_dict['concat_h'])
+    else:
+        raise ValueError('Unknown dae kind')
+
+    # Build FCN8  with pre-trained weights up to layer_h + prediction
+    print ' Building FCN network'
+    if not dae_dict['from_gt']:
+        dae_dict['concat_h'] += ['probs_dimshuffle']
+    fcn = buildFCN8(nb_in_channels, input_var=input_x_var,
+                    n_classes=n_classes, void_labels=void_labels,
+                    path_weights=WEIGHTS_PATH+dataset+'/new_fcn8_model_best.npz',
+                    trainable=False, load_weights=True,
+                    layer=dae_dict['concat_h'],temperature=temperature)
 
     #
     # Define and compile theano functions
     #
     print "Defining and compiling theano functions"
-    # Define required theano functions and compile them
-    # predictions of fcn and dae
+
+    # predictions and theano functions
     pred_fcn = lasagne.layers.get_output(fcn, deterministic=True)
     pred_dae = lasagne.layers.get_output(dae, deterministic=True)
-
-    # function to compute outputs of fcn
     pred_fcn_fn = theano.function([input_x_var], pred_fcn)
+    pred_dae_fn = theano.function(input_concat_h_vars+[y_hat_var], pred_dae)
 
     # Reshape iterative inference output to b01,c
     y_hat_dimshuffle = y_hat_var.dimshuffle((0, 2, 3, 1))
@@ -140,135 +165,113 @@ def inference(dataset, learn_step=0.005, num_iter=500,
     y_hat_2D = y_hat_dimshuffle.reshape((T.prod(sh[:3]), sh[3]))
 
     # Reshape iterative inference output to b01,c
-    target_var_dimshuffle = target_var_4D.dimshuffle((0, 2, 3, 1))
+    target_var_dimshuffle = target_var.dimshuffle((0, 2, 3, 1))
     sh2 = target_var_dimshuffle.shape
     target_var_2D = target_var_dimshuffle.reshape((T.prod(sh2[:3]), sh2[3]))
 
-    # derivative of energy wrt input
+    # derivative of energy wrt input and theano function
     de = - (pred_dae - y_hat_var)
+    de_fn = theano.function(input_concat_h_vars+[y_hat_var], de)
 
-    # function to compute de
-    de_fn = theano.function(input_h_var+[y_hat_var], de)
-
-    loss = squared_error(pred_dae, target_var_4D).mean(axis=1)
-    mask = target_var_4D.sum(axis=1)
-    loss = loss * mask
-    loss = loss.sum()/mask.sum()
-    loss_fn = theano.function(input_h_var+[y_hat_var, target_var_4D], loss)
-    pred_dae_fn = theano.function(input_h_var+[y_hat_var], pred_dae)
-
-    # metrics to evaluate iterative inference
+    # metrics and theano functions
+    test_loss =  squared_error(y_hat_var, target_var, void)
     test_acc = accuracy(y_hat_2D, target_var_2D, void_labels, one_hot=True)
     test_jacc = jaccard(y_hat_2D, target_var_2D, n_classes, one_hot=True)
-
-    # functions to compute metrics
-    val_fn = theano.function([y_hat_var, target_var_4D],
-                             [test_acc, test_jacc])
+    val_fn = theano.function([y_hat_var, target_var], [test_acc, test_jacc, test_loss])
 
     #
     # Infer
     #
     print 'Start infering'
+    rec_tot = 0
+    rec_tot_fcn = 0
+    rec_tot_dae = 0
     acc_tot = 0
-    acc_tot_old = 0
+    acc_tot_fcn = 0
     jacc_tot = 0
-    jacc_tot_old = 0
+    jacc_tot_fcn = 0
     acc_tot_dae = 0
     jacc_tot_dae = 0
-    for i in range(1):  # (n_batches_test):
+    for i in range(n_batches_test):
         info_str = "Batch %d out of %d" % (i, n_batches_test)
         print info_str
 
         # Get minibatch
-        X_test_batch, L_test_batch = test_iter.next()
+        X_test_batch, L_test_batch = data_iter.next()
 
         # Compute fcn prediction y and h
         pred_test_batch = pred_fcn_fn(X_test_batch)
         Y_test_batch = pred_test_batch[-1]
         H_test_batch = pred_test_batch[:-1]
+        L_test_batch = L_test_batch.astype(_FLOATX)
 
         # Compute metrics before iterative inference
-        acc_old, jacc_old = val_fn(Y_test_batch, L_test_batch)
-        acc_tot_old += acc_old
-        jacc_tot_old += jacc_old
-        Y_test_batch_old = Y_test_batch
+        acc_fcn, jacc_fcn, rec_fcn = val_fn(Y_test_batch, L_test_batch)
+        acc_tot_fcn += acc_fcn
+        jacc_tot_fcn += jacc_fcn
+        rec_tot_fcn += rec_fcn
+        Y_test_batch_fcn = Y_test_batch
+        print_results('>>>>> BEFORE:', rec_tot_fcn, acc_tot_fcn, jacc_tot_fcn, i+1)
 
+        # Compute dae output and metrics after dae
         Y_test_batch_dae = pred_dae_fn(*(H_test_batch+[Y_test_batch]))
-        acc_dae, jacc_dae = val_fn(Y_test_batch_dae, L_test_batch)
+        acc_dae, jacc_dae, rec_dae = val_fn(Y_test_batch_dae, L_test_batch)
         acc_tot_dae += acc_dae
         jacc_tot_dae += jacc_dae
+        rec_tot_dae += rec_dae
+        print_results('>>>>> DAE:', rec_tot_dae, acc_tot_dae, jacc_tot_dae, i+1)
 
         # Iterative inference
         for it in range(num_iter):
-            rec_loss = loss_fn(*(H_test_batch+[Y_test_batch,
-                                               L_test_batch[:, :void, :, :]]))
-
-            print rec_loss
+            # Compute gradient
             grad = de_fn(*(H_test_batch+[Y_test_batch]))
 
-            # hist = np.histogram(grad, 10)
-            # print hist
-
+            # Update prediction
             Y_test_batch = Y_test_batch - learn_step * grad
 
             if save_perstep:
                 # Save images
-                save_img(X_test_batch, L_test_batch.argmax(1), Y_test_batch,
-                         Y_test_batch_old, savepath, n_classes,
+                save_img(np.copy(X_test_batch),
+                         np.copy(L_test_batch),
+                         np.copy(Y_test_batch),
+                         np.copy(Y_test_batch_fcn),
+                         savepath,
                          'batch' + str(i) + '_' + 'step' + str(it),
                          void_labels, colors)
 
             norm = np.linalg.norm(grad, axis=1).mean()
             if norm < _EPSILON:
                 break
-            # print norm
-            acc_iter, jacc_iter = val_fn(Y_test_batch, L_test_batch)
-            print acc_iter, np.mean(jacc_iter[0, :] / jacc_iter[1, :])
+
+            acc_iter, jacc_iter, rec_iter = val_fn(Y_test_batch, L_test_batch)
+            print rec_iter, acc_iter, np.mean(jacc_iter[0, :]/jacc_iter[1, :])
 
         # Compute metrics
-        acc, jacc = val_fn(Y_test_batch, L_test_batch)
-
+        acc, jacc, rec = val_fn(Y_test_batch, L_test_batch)
         acc_tot += acc
         jacc_tot += jacc
+        rec_tot += rec
+        print_results('>>>>> ITERTIVE INFERENCE:', rec_tot, acc_tot, jacc_tot, i+1)
 
-        jacc_perclass_old = jacc_tot_old[0, :]/jacc_tot_old[1, :]
+        jacc_perclass_fcn = jacc_tot_fcn[0, :]/jacc_tot_fcn[1, :]
         jacc_perclass = jacc_tot[0, :]/jacc_tot[1, :]
-        jacc_perclass_dae = jacc_tot_dae[0, :]/jacc_tot_dae[1, :]
 
-        info_str = "    fcn8 acc %f, iter acc %f, fcn8 jacc %f, iter jacc %f"
-        info_str += ", dae acc  %f, dae jacc % f"
-        info_str = info_str % (acc_tot_old,
-                               acc_tot,
-                               np.mean(jacc_tot_old[0, :]/jacc_tot_old[1, :]),
-                               np.mean(jacc_tot[0, :] / jacc_tot[1, :]),
-                               acc_tot_dae,
-                               np.mean(jacc_tot_dae[0, :]/jacc_tot_dae[1, :])
-                               )
-        print info_str
+        print "   Per class jaccard:"
+        labs = data_iter.mask_labels
 
-        print ">>> Per class jaccard:"
-        labs = test_iter.get_mask_labels()
-
-        for i in range(len(labs)-1):
-            class_str = '    ' + labs[i] + ' : old ->  %f, new %f'
-            class_str = class_str % (jacc_perclass_old[i], jacc_perclass[i])
+        for i in range(len(labs)-len(void_labels)):
+            class_str = '    ' + labs[i] + ' : fcn ->  %f, ii %f'
+            class_str = class_str % (jacc_perclass_fcn[i], jacc_perclass[i])
             print class_str
 
         if not save_perstep:
             # Save images
-            save_img(X_test_batch, L_test_batch.argmax(1), Y_test_batch,
-                     Y_test_batch_old, savepath, n_classes,
-                     'batch' + str(i), void_labels, colors)
-
-    acc_test = acc_tot/n_batches_test
-    jacc_test = np.mean(jacc_tot[0, :] / jacc_tot[1, :])
-    acc_test_old = acc_tot_old/n_batches_test
-    jacc_test_old = np.mean(jacc_tot_old[0, :] / jacc_tot_old[1, :])
-
-    out_str = "TEST: acc  % f, jacc %f, acc old %f, jacc old %f"
-    out_str = out_str % (acc_test, jacc_test,
-                         acc_test_old, jacc_test_old)
-    print out_str
+            save_img(np.copy(X_test_batch),
+                     np.copy(L_test_batch),
+                     np.copy(Y_test_batch),
+                     np.copy(Y_test_batch_fcn),
+                     savepath, 'batch' + str(i),
+                     void_labels, colors)
 
     # Move segmentations
     if savepath != loadpath:
@@ -285,7 +288,7 @@ def main():
                         help='Dataset.')
     parser.add_argument('-step',
                         type=float,
-                        default=.1,
+                        default=.05,
                         help='step')
     parser.add_argument('--num_iter',
                         '-ne',
@@ -294,68 +297,42 @@ def main():
                         help='Max number of iterations')
     parser.add_argument('-training_loss',
                         type=str,
-                        default='squared_error',
+                        default=['squared_error', 'squared_error_h'],
                         help='Training loss')
-    parser.add_argument('-layer_h',
-                        type=list,
-                        default=['pool3'],
-                        help='All h to introduce to the DAE')
-    parser.add_argument('-noise',
-                        type=float,
-                        default=0.1,
-                        help='Noise of DAE input.')
-    parser.add_argument('-n_filters',
-                        type=int,
-                        default=64,
-                        help='Nb filters DAE (1st lay, increases pow 2')
-    parser.add_argument('-conv_before_pool',
-                        type=int,
-                        default=1,
-                        help='Conv. before pool in DAE.')
-    parser.add_argument('-additional_pool',
-                        type=int,
-                        default=4,
-                        help='Additional pool DAE')
-    parser.add_argument('-dropout',
-                        type=float,
-                        default=0.5,
-                        help='Additional pool DAE')
-    parser.add_argument('-skip',
-                        type=bool,
-                        default=True,
-                        help='Whether to skip connections in DAE')
-    parser.add_argument('-unpool_type',
-                        type=str,
-                        default='trackind',
-                        help='Unpooling type - standard or trackind')
-    parser.add_argument('-from_gt',
-                        type=bool,
-                        default=True,
-                        help='Whether to train from GT (true) or fcn' +
-                        'output (False)')
     parser.add_argument('-save_perstep',
                         type=bool,
-                        default=True,
+                        default=False,
                         help='Save new segmentations after each step update')
     parser.add_argument('-which_set',
                         type=str,
-                        default='valid',
+                        default='val',
                         help='Inference set')
-    parser.add_argument('-data_aug',
+    parser.add_argument('-dae_dict',
+                        type=dict,
+                        default={'kind': 'fcn8', 'dropout': 0.5, 'skip': True,
+                                  'unpool_type': 'trackind', 'noise': 1.0,
+                                  'concat_h': ['pool4'], 'from_gt': False,
+                                  'n_filters': 64, 'conv_before_pool': 1,
+                                  'additional_pool': 2},
+                        help='DAE kind and parameters')
+    parser.add_argument('-data_augmentation',
+                        type=dict,
+                        default={'crop_size': (224, 224),
+                                 'horizontal_flip': True, 'vertical_flip': True,
+                                 'fill_mode': 'nearest'},
+                        help='Dictionary of data augmentation to be used')
+    parser.add_argument('-test_from_0_255',
                         type=bool,
                         default=True,
-                        help='Whether to do data augmentation')
+                        help='Whether to train from images within 0-255 range')
 
     args = parser.parse_args()
 
     inference(args.dataset, float(args.step), int(args.num_iter),
-              args.training_loss, args.layer_h, noise=args.noise,
-              n_filters=args.n_filters, conv_before_pool=args.conv_before_pool,
-              additional_pool=args.additional_pool, dropout=args.dropout,
-              skip=args.skip, unpool_type=args.unpool_type,
-              from_gt=args.from_gt, save_perstep=args.save_perstep,
-              which_set=args.which_set, data_aug=args.data_aug,
-              savepath=SAVEPATH, loadpath=LOADPATH)
+              args.training_loss, save_perstep=args.save_perstep,
+              which_set=args.which_set, savepath=SAVEPATH, loadpath=LOADPATH,
+              test_from_0_255=args.test_from_0_255,
+              dae_dict_updates=args.dae_dict, data_augmentation=args.data_augmentation)
 
 
 if __name__ == "__main__":

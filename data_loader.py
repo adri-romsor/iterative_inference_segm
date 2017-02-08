@@ -5,7 +5,10 @@ from dataset_loaders.images.isbi_em_stacks import IsbiEmStacksDataset
 
 
 def load_data(dataset, train_data_augm_kwargs={}, one_hot=False,
-              batch_size=[10, 10, 10], shuffle_train=True):
+              batch_size=[10, 10, 10], shuffle_train=True, return_0_255=False,
+              which_set='all'):
+
+    assert which_set in ['all', 'train', 'val', 'test']
 
     # Build dataset iterator
     if dataset == 'polyps912':
@@ -19,7 +22,8 @@ def load_data(dataset, train_data_augm_kwargs={}, one_hot=False,
                                       overlap=0,
                                       use_threads=False,
                                       shuffle_at_each_epoch=shuffle_train,
-                                      return_list=True)
+                                      return_list=True,
+                                      return_0_255=return_0_255)
         val_iter = Polyps912Dataset(which_set='val',
                                     batch_size=batch_size[1],
                                     seq_per_subset=0,
@@ -29,7 +33,8 @@ def load_data(dataset, train_data_augm_kwargs={}, one_hot=False,
                                     overlap=0,
                                     use_threads=False,
                                     shuffle_at_each_epoch=False,
-                                    return_list=True)
+                                    return_list=True,
+                                    return_0_255=return_0_255)
         test_iter = Polyps912Dataset(which_set='test',
                                      batch_size=batch_size[2],
                                      seq_per_subset=0,
@@ -39,7 +44,8 @@ def load_data(dataset, train_data_augm_kwargs={}, one_hot=False,
                                      overlap=0,
                                      use_threads=False,
                                      shuffle_at_each_epoch=False,
-                                     return_list=True)
+                                     return_list=True,
+                                     return_0_255=return_0_255)
     elif dataset == 'camvid':
         train_iter = CamvidDataset(which_set='train',
                                    batch_size=batch_size[0],
@@ -51,7 +57,8 @@ def load_data(dataset, train_data_augm_kwargs={}, one_hot=False,
                                    overlap=0,
                                    use_threads=True,
                                    shuffle_at_each_epoch=shuffle_train,
-                                   return_list=True)
+                                   return_list=True,
+                                   return_0_255=return_0_255)
         val_iter = CamvidDataset(which_set='val',
                                  batch_size=batch_size[1],
                                  seq_per_subset=0,
@@ -61,7 +68,8 @@ def load_data(dataset, train_data_augm_kwargs={}, one_hot=False,
                                  overlap=0,
                                  use_threads=True,
                                  shuffle_at_each_epoch=False,
-                                 return_list=True)
+                                 return_list=True,
+                                 return_0_255=return_0_255)
         test_iter = CamvidDataset(which_set='test',
                                   batch_size=batch_size[2],
                                   seq_per_subset=0,
@@ -71,7 +79,8 @@ def load_data(dataset, train_data_augm_kwargs={}, one_hot=False,
                                   overlap=0,
                                   use_threads=True,
                                   shuffle_at_each_epoch=False,
-                                  return_list=True)
+                                  return_list=True,
+                                  return_0_255=return_0_255)
     elif dataset == 'em':
         train_iter = IsbiEmStacksDataset(which_set='train',
                                          start=0,
@@ -85,7 +94,8 @@ def load_data(dataset, train_data_augm_kwargs={}, one_hot=False,
                                          overlap=0,
                                          use_threads=True,
                                          shuffle_at_each_epoch=shuffle_train,
-                                         return_list=True)
+                                         return_list=True,
+                                         return_0_255=return_0_255)
 
         val_iter = IsbiEmStacksDataset(which_set='train',
                                        batch_size=batch_size[1],
@@ -97,9 +107,19 @@ def load_data(dataset, train_data_augm_kwargs={}, one_hot=False,
                                        shuffle_at_each_epoch=False,
                                        start=25,
                                        end=30,
-                                       return_list=True)
+                                       return_list=True,
+                                       return_0_255=return_0_255)
         test_iter = None
     else:
         raise NotImplementedError
 
-    return train_iter, val_iter, test_iter
+    if which_set == 'train':
+        ret = train_iter
+    elif which_set == 'val':
+        ret = val_iter
+    elif which_set == 'test':
+        ret = test_iter
+    else:
+        ret = [train_iter, val_iter, test_iter]
+
+    return ret

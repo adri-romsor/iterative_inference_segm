@@ -16,13 +16,13 @@ import model_helpers
 from layers.mylayers import GaussianNoiseLayerSoftmax
 
 
-def buildFCN8_DAE(input_repr_var, input_mask_var, n_classes, nb_in_channels=3,
-                  layer_h=['input'], noise=0.1,
+def buildFCN8_DAE(input_concat_h_vars, input_mask_var, n_classes, nb_in_channels=3,
                   path_weights='/Tmp/romerosa/itinf/models/',
                   model_name='fcn8_model.npz', trainable=False,
                   load_weights=False, pretrained=False, freeze=False,
                   pretrained_path='/data/lisatmp4/romerosa/itinf/models/camvid/',
-                  pascal=False, return_layer='probs_dimshuffle'):
+                  pascal=False, return_layer='probs_dimshuffle',
+                  concat_h=['input'], noise=0.1):
 
     '''
     Build fcn8 model as DAE
@@ -32,7 +32,7 @@ def buildFCN8_DAE(input_repr_var, input_mask_var, n_classes, nb_in_channels=3,
     pos = 0
 
     assert all([el in ['pool1', 'pool2', 'pool3', 'pool4', 'input']
-                for el in layer_h])
+                for el in concat_h])
 
     # Contracting path
     net['input'] = InputLayer((None, nb_in_channels, None, None),
@@ -44,12 +44,12 @@ def buildFCN8_DAE(input_repr_var, input_mask_var, n_classes, nb_in_channels=3,
         #                                                sigma=noise)
         net['noisy_input'] = GaussianNoiseLayer(net['input'],
                                                 sigma=noise)
-        in_next = 'noisy_input'
+        in_layer = 'noisy_input'
     else:
-        in_next = 'input'
+        in_layer = 'input'
 
-    pos, out = model_helpers.concatenate(net, in_next, layer_h,
-                                         input_repr_var, pos)
+    pos, out = model_helpers.concatenate(net, in_layer, concat_h,
+                                         input_concat_h_vars, pos)
 
     # pool 1
     net['conv1_1'] = ConvLayer(
@@ -58,8 +58,8 @@ def buildFCN8_DAE(input_repr_var, input_mask_var, n_classes, nb_in_channels=3,
         net['conv1_1'], 64, 3, pad='same', flip_filters=False)
     net['pool1'] = PoolLayer(net['conv1_2'], 2)
 
-    pos, out = model_helpers.concatenate(net, 'pool1', layer_h,
-                                         input_repr_var, pos)
+    pos, out = model_helpers.concatenate(net, 'pool1', concat_h,
+                                         input_concat_h_vars, pos)
 
     # pool 2
     net['conv2_1'] = ConvLayer(
@@ -68,8 +68,8 @@ def buildFCN8_DAE(input_repr_var, input_mask_var, n_classes, nb_in_channels=3,
         net['conv2_1'], 128, 3, pad='same', flip_filters=False)
     net['pool2'] = PoolLayer(net['conv2_2'], 2)
 
-    pos, out = model_helpers.concatenate(net, 'pool2', layer_h,
-                                         input_repr_var, pos)
+    pos, out = model_helpers.concatenate(net, 'pool2', concat_h,
+                                         input_concat_h_vars, pos)
 
     # pool 3
     net['conv3_1'] = ConvLayer(
@@ -80,8 +80,8 @@ def buildFCN8_DAE(input_repr_var, input_mask_var, n_classes, nb_in_channels=3,
         net['conv3_2'], 256, 3, pad='same', flip_filters=False)
     net['pool3'] = PoolLayer(net['conv3_3'], 2)
 
-    pos, out = model_helpers.concatenate(net, 'pool3', layer_h,
-                                         input_repr_var, pos)
+    pos, out = model_helpers.concatenate(net, 'pool3', concat_h,
+                                         input_concat_h_vars, pos)
 
     # pool 4
     net['conv4_1'] = ConvLayer(
@@ -92,8 +92,8 @@ def buildFCN8_DAE(input_repr_var, input_mask_var, n_classes, nb_in_channels=3,
         net['conv4_2'], 512, 3, pad='same', flip_filters=False)
     net['pool4'] = PoolLayer(net['conv4_3'], 2)
 
-    pos, out = model_helpers.concatenate(net, 'pool4', layer_h,
-                                         input_repr_var, pos)
+    pos, out = model_helpers.concatenate(net, 'pool4', concat_h,
+                                         input_concat_h_vars, pos)
 
     # pool 5
     net['conv5_1'] = ConvLayer(
@@ -104,8 +104,8 @@ def buildFCN8_DAE(input_repr_var, input_mask_var, n_classes, nb_in_channels=3,
         net['conv5_2'], 512, 3, pad='same', flip_filters=False)
     net['pool5'] = PoolLayer(net['conv5_3'], 2)
 
-    pos, out = model_helpers.concatenate(net, 'pool5', layer_h,
-                                         input_repr_var, pos)
+    pos, out = model_helpers.concatenate(net, 'pool5', concat_h,
+                                         input_concat_h_vars, pos)
 
     # fc6
     net['fc6'] = ConvLayer(
@@ -187,8 +187,10 @@ def buildFCN8_DAE(input_repr_var, input_mask_var, n_classes, nb_in_channels=3,
 
             # Load the parameter values into the net
             num_params = W.get('params').shape[1]
-            str_ind = [''.join(x for x in concat if x.isdigit()) for concat in layer_h]
+            str_ind = [''.join(x for x in concat if x.isdigit()) for concat in concat_h]
             list_of_lays = ['conv' + str(int(x)+1) + '_1' for x in str_ind if x]
+            list_of_lays += ['conv1_1'] if nb_in_channels != 3 or 'input' in concat_h else []
+            print list_of_lays
 
             for i in range(num_params):
                 # Get layer name from the saved model

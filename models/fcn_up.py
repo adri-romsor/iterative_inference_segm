@@ -11,7 +11,22 @@ from lasagne.nonlinearities import softmax, linear
 def UnpoolNet(incoming_net, net, p, unpool, n_classes,
               incoming_layer, skip, unpool_type='standard',
               layer_name=None):
-    # pdb.set_trace()
+    '''
+    Add upsampling layer
+
+    Parameters
+    ----------
+    incoming_net: contracting path network
+    net: upsampling path network been built here
+    p: int, the corresponding unpooling
+    unpool: int, total number of unpoolings
+    n_classes: int, number of classes
+    incoming_layer: string, name of the last layer of the contracting path
+    skip: bool, whether to skip connections
+    unpool_type: string, unpooling type
+    '''
+
+    # last unpooling must have n_filters = number of classes
     if p == 1:
         n_cl = n_classes
     else:
@@ -19,14 +34,16 @@ def UnpoolNet(incoming_net, net, p, unpool, n_classes,
         n_cl = laySize[1]
     print('Number of feature maps (out):', n_cl)
 
-    if unpool_type == 'standard':
-        # Unpool
-        # pdb.set_trace()
+    if unpool_type == 'standard':  # that would be standard deconv, with zeros
+        # Unpool: the unpooling will use the last layer of the contracting path
+        # if it is the first unpooling, otherwise it will use the last merged
+        # layer (resulting from the previous unpooling)
         net['up'+str(p)] = \
                 DeconvLayer(incoming_net[incoming_layer] if p == unpool else
                             net['fused_up' + str(p+1)],
                             n_cl, 4, stride=2,
                             crop='valid', nonlinearity=linear)
+        # Add skip connection if required (sum)
         if skip and p > 1:
             # Merge
             net['fused_up'+str(p)] = \
@@ -35,7 +52,7 @@ def UnpoolNet(incoming_net, net, p, unpool, n_classes,
                                  cropping=[None, None, 'center', 'center'],
                                  name=layer_name)
         else:
-            # Crop
+            # Crop to ensure the right output size
             net['fused_up'+str(p)] = \
                 CroppingLayer((incoming_net['pool'+str(p-1) if p >
                                             1 else 'input'],
@@ -46,7 +63,10 @@ def UnpoolNet(incoming_net, net, p, unpool, n_classes,
                               name=layer_name)
 
     elif unpool_type == 'trackind':
-        # Depool
+        # that would be index tracking as in SegNet
+        # Depool: the unpooling will use the last layer of the contracting path
+        # if it is the first unpooling, otherwise it will use the last merged
+        # layer (resulting from the previous unpooling)
         net['up'+str(p)] = \
                 DePool2D(incoming_net[incoming_layer] if p == unpool else
                          net['fused_up'+str(p+1)],
@@ -56,7 +76,7 @@ def UnpoolNet(incoming_net, net, p, unpool, n_classes,
         net['up_conv'+str(p)] = \
             ConvLayer(net['up'+str(p)], n_cl, 3,
                       pad='same', flip_filters=False, nonlinearity=linear)
-
+        # Add skip connection if required (sum)
         if skip and p > 1:
             # Merge
             net['fused_up'+str(p)] = \
@@ -66,7 +86,7 @@ def UnpoolNet(incoming_net, net, p, unpool, n_classes,
                                  name=layer_name)
 
         else:
-            # Crop
+            # Crop to ensure the right output size
             net['fused_up'+str(p)] = \
                     CroppingLayer((incoming_net['pool'+str(p-1) if p >
                                                 1 else 'input'],
@@ -83,26 +103,38 @@ def buildFCN_up(incoming_net, incoming_layer, unpool,
                 skip=False, unpool_type='standard',
                 n_classes=21, out_nonlin=linear,
                 additional_pool=0, ae_h=False):
-
     '''
     Build fcn decontracting path
+
+    Parameters
+    ----------
+    incoming_net: contracting path network
+    incoming_layer: string, name of last layer of the contracting path
+    unpool: int, number of unpooling/upsampling layers we need
+    skip: bool, whether to skip connections
+    unpool_type: string, unpooling type
+    n_classes: int, number of classes
+    out_nonlin: output nonlinearity
     '''
-    net = {}
+
     # Upsampling path
+    net = {}
+
     # net['score'] = ConvLayer(incoming_net[incoming_layer], n_classes, 1,
     #                          pad='valid', flip_filters=True)
+
+    # for loop to add upsampling layers
     for p in range(unpool, 0, -1):
         # Unpool and Crop if unpool_type='standard' or Depool and Conv
         if p == unpool-additional_pool+1 and ae_h:
             layer_name = 'h_hat'
         else:
             layer_name = None
-
         UnpoolNet(incoming_net, net, p, unpool, n_classes,
                   incoming_layer, skip, unpool_type=unpool_type,
                   layer_name=layer_name)
 
-    # Final dimshuffle, reshape and softmax
+    # final dimshuffle, reshape and softmax
     net['final_dimshuffle'] = DimshuffleLayer(net['fused_up'+str(p) if
                                                   unpool > 0 else 'score'],
                                               (0, 2, 3, 1))
@@ -113,7 +145,7 @@ def buildFCN_up(incoming_net, incoming_layer, unpool,
     net['probs'] = NonlinearityLayer(net['final_reshape'],
                                      nonlinearity=out_nonlin)
 
-    # Go back to 4D
+    # go back to 4D
     net['probs_reshape'] = ReshapeLayer(net['probs'], (laySize[0], laySize[1],
                                                        laySize[2], n_classes))
 

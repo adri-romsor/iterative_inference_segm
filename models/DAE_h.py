@@ -9,25 +9,21 @@ from fcn_down import buildFCN_down
 from lasagne.nonlinearities import linear
 
 
-def buildDAE(input_repr_var, input_mask_var, n_classes,
-             layer_h=['input'], noise=0.1, n_filters=64,
-             conv_before_pool=1, additional_pool=0,
-             dropout=0., void_labels=[], skip=False,
-             unpool_type='standard', ae_h=False,
-             path_weights='/Tmp/romerosa/itinf/models/',
-             model_name='dae_model.npz',
-             trainable=False, load_weights=False,
-             out_nonlin=linear):
-
+def buildDAE(input_concat_h_vars, input_mask_var, n_classes, ae_h=False,
+             void_labels=[], path_weights='/Tmp/romerosa/itinf/models/',
+             model_name='dae_model.npz', trainable=False, load_weights=False,
+             out_nonlin=linear, concat_h=['input'], noise=0.1, n_filters=64,
+             conv_before_pool=1, additional_pool=0, dropout=0., skip=False,
+             unpool_type='standard'):
     '''
     Build score model
     '''
 
-    # Build fcn to extract representation from y
+    # Build fcn contracting path
     fcn_down, last_layer_down = buildFCN_down(
-        input_mask_var, input_repr_var,
+        input_mask_var, input_concat_h_vars,
         n_classes=n_classes,
-        concat_layers=layer_h,
+        concat_layers=concat_h,
         noise=noise, n_filters=n_filters,
         conv_before_pool=conv_before_pool,
         additional_pool=additional_pool, ae_h=ae_h)
@@ -36,8 +32,8 @@ def buildDAE(input_repr_var, input_mask_var, n_classes,
 
     # Count the number of pooling layers to know how many upsamplings we
     # should perform
-    if 'pool' in layer_h[-1]:
-        n_pool = int(layer_h[-1][-1]) + additional_pool
+    if 'pool' in concat_h[-1]:
+        n_pool = int(concat_h[-1][-1]) + additional_pool
     else:
         n_pool = additional_pool
 
