@@ -12,6 +12,7 @@ from theano import config
 
 import lasagne
 from lasagne.nonlinearities import softmax
+from lasagne.updates import sgd, adam, rmsprop
 
 from data_loader import load_data
 from metrics import accuracy, jaccard, squared_error
@@ -40,8 +41,8 @@ else:
 _EPSILON = 1e-3
 
 
-def inference(dataset, learn_step=0.005, num_iter=500,
-              training_loss='squared_error', dae_dict_updates= {},
+def inference(dataset, learn_step=0.005, num_iter=500, optimizer=sgd,
+              training_loss=['squared_error'], dae_dict_updates= {},
               data_augmentation={}, temperature=1.0, save_perstep=False,
               which_set='test', savepath=None, loadpath=None,
               test_from_0_255=False):
@@ -234,8 +235,8 @@ def inference(dataset, learn_step=0.005, num_iter=500,
         print_results('>>>>> DAE:', rec_tot_dae, acc_tot_dae, jacc_tot_dae, i+1)
 
         # Updates (grad, shared variable to update, learning_rate)
-        updates = lasagne.updates.rmsprop([de], [y_hat_var],
-                                           learning_rate=learn_step)
+        updates = optimizer([de], [y_hat_var], learning_rate=learn_step)
+
         # function to compute de
         de_fn = theano.function(input_concat_h_vars, de, updates=updates)
 
@@ -275,7 +276,7 @@ def inference(dataset, learn_step=0.005, num_iter=500,
         labs = data_iter.mask_labels
 
         for i in range(len(labs)-len(void_labels)):
-            class_str = '    ' + labs[i] + ' : fcn ->  %f, ii %f'
+            class_str = '    ' + labs[i] + ' : fcn ->  %f, ii ->  %f'
             class_str = class_str % (jacc_perclass_fcn[i], jacc_perclass[i])
             print class_str
 
@@ -310,8 +311,11 @@ def main():
                         type=int,
                         default=10,
                         help='Max number of iterations')
+    parser.add_argument('-optimizer',
+                        default=sgd,
+                        help='Optimizer (sgd, rmsprop or adam)')
     parser.add_argument('-training_loss',
-                        type=str,
+                        type=list,
                         default=['squared_error', 'squared_error_h'],
                         help='Training loss')
     parser.add_argument('-save_perstep',
@@ -343,7 +347,7 @@ def main():
 
     args = parser.parse_args()
 
-    inference(args.dataset, float(args.step), int(args.num_iter),
+    inference(args.dataset, float(args.step), int(args.num_iter), args.optimizer,
               args.training_loss, save_perstep=args.save_perstep,
               which_set=args.which_set, savepath=SAVEPATH, loadpath=LOADPATH,
               test_from_0_255=args.test_from_0_255,

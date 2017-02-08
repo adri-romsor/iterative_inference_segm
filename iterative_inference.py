@@ -41,7 +41,7 @@ _EPSILON = 1e-3
 
 
 def inference(dataset, learn_step=0.005, num_iter=500,
-              training_loss='squared_error', dae_dict_updates= {},
+              training_loss=['squared_error'], dae_dict_updates= {},
               data_augmentation={}, temperature=1.0, save_perstep=False,
               which_set='test', savepath=None, loadpath=None,
               test_from_0_255=False):
@@ -260,7 +260,7 @@ def inference(dataset, learn_step=0.005, num_iter=500,
         labs = data_iter.mask_labels
 
         for i in range(len(labs)-len(void_labels)):
-            class_str = '    ' + labs[i] + ' : fcn ->  %f, ii %f'
+            class_str = '    ' + labs[i] + ' : fcn ->  %f, ii ->  %f'
             class_str = class_str % (jacc_perclass_fcn[i], jacc_perclass[i])
             print class_str
 
@@ -296,7 +296,7 @@ def main():
                         default=10,
                         help='Max number of iterations')
     parser.add_argument('-training_loss',
-                        type=str,
+                        type=list,
                         default=['squared_error', 'squared_error_h'],
                         help='Training loss')
     parser.add_argument('-save_perstep',

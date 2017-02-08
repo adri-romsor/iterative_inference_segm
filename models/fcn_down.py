@@ -56,8 +56,7 @@ def buildFCN_down(input_var, concat_h_vars,
     if noise > 0:
         # net['noisy_input'] = GaussianNoiseLayerSoftmax(net['input'],
         #                                                sigma=noise)
-        net['noisy_input'] = GaussianNoiseLayer(net['input'],
-                                                sigma=noise)
+        net['noisy_input'] = GaussianNoiseLayer(net['input'], sigma=noise)
         in_next = 'noisy_input'
     else:
         in_next = 'input'

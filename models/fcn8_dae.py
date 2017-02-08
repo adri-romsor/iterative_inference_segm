@@ -42,8 +42,7 @@ def buildFCN8_DAE(input_concat_h_vars, input_mask_var, n_classes, nb_in_channels
     if noise > 0:
         # net['noisy_input'] = GaussianNoiseLayerSoftmax(net['input'],
         #                                                sigma=noise)
-        net['noisy_input'] = GaussianNoiseLayer(net['input'],
-                                                sigma=noise)
+        net['noisy_input'] = GaussianNoiseLayer(net['input'], sigma=noise)
         in_layer = 'noisy_input'
     else:
         in_layer = 'input'

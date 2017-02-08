@@ -47,7 +47,7 @@ else:
     raise ValueError('Unknown user : {}'.format(getuser()))
 
 
-def train(dataset, learn_step=0.005,
+def train(dataset, learning_rate=0.005, lr_anneal=1.0,
           weight_decay=1e-4, num_epochs=500, max_patience=100,
           optimizer='rmsprop', training_loss=['squared_error'],
           batch_size=[10, 1, 1], ae_h=False,
@@ -99,6 +99,8 @@ def train(dataset, learn_step=0.005,
     input_mask_var = T.tensor4('input_mask_var')  # tensor for segmentation bach (input dae)
     input_concat_h_vars = [T.tensor4()] * len(dae_dict['concat_h'])  # tensor for hidden repr batch (input dae)
     target_var = T.tensor4('target_var')  # tensor for target batch
+    lr = theano.shared(np.float32(learning_rate), 'learning_rate')
+
     #
     # Only for debugging
     #
@@ -274,11 +276,9 @@ def train(dataset, learn_step=0.005,
 
     # optimizer
     if optimizer == 'rmsprop':
-        updates = lasagne.updates.rmsprop(loss, params,
-                                          learning_rate=learn_step)
+        updates = lasagne.updates.rmsprop(loss, params, learning_rate=lr)
     elif optimizer == 'adam':
-        updates = lasagne.updates.adam(loss, params,
-                                       learning_rate=learn_step)
+        updates = lasagne.updates.adam(loss, params, learning_rate=lr)
     else:
         raise ValueError('Unknown optimizer')
 
@@ -361,6 +361,9 @@ def train(dataset, learn_step=0.005,
         with open(os.path.join(savepath, "output.log"), "a") as f:
             f.write(out_str + "\n")
 
+        # update learning rate
+        lr.set_value(float(lr.get_value() * lr_anneal))
+
         # Early stopping and saving stuff
         if epoch == 0:
             best_err_val = err_valid[epoch]
@@ -400,9 +403,13 @@ def main():
                         type=float,
                         default=0.0001,
                         help='Learning rate')
+    parser.add_argument('-lr_anneal',
+                        type=float,
+                        default=.99,
+                        help='Learning rate annealing')
     parser.add_argument('-weight_decay',
                         type=float,
-                        default=.0,
+                        default=.0001,
                         help='Weight decay')
     parser.add_argument('--num_epochs',
                         '-ne',
@@ -442,19 +449,19 @@ def main():
                         help='Apply temperature')
     parser.add_argument('-bs',
                         type=list,
-                        default=[10, 1, 1],
-                        help='What kind of AE archictecture to use')
+                        default=[10, 10, 10],
+                        help='Batch size list [train, valid, test]')
     parser.add_argument('-ae_h',
                         type=bool,
                         default=False,
-                        help='What kind of AE archictecture to use')
+                        help='Whether to reconstruct intermediate h')
     parser.add_argument('-train_from_0_255',
                         type=bool,
                         default=True,
                         help='Whether to train from images within 0-255 range')
     args = parser.parse_args()
 
-    train(args.dataset, learn_step=float(args.learning_rate),
+    train(args.dataset, learning_rate=float(args.learning_rate), lr_anneal=float(args.lr_anneal),
           weight_decay=float(args.weight_decay), num_epochs=int(args.num_epochs),
           max_patience=int(args.max_patience), optimizer=args.optimizer,
           training_loss=args.training_loss, dae_dict_updates=args.dae_dict,
