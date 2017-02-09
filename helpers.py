@@ -160,4 +160,4 @@ def print_results(st, rec, acc, jacc, nbatches):
         print st
         print '    Loss: ' + str(rec/nbatches)
         print '    Acc: ' + str(acc/nbatches)
-        print '    Jaccard: ' + str(jacc_mean/nbatches)
+        print '    Jaccard: ' + str(jacc_mean)

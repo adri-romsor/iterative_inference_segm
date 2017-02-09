@@ -211,7 +211,7 @@ def inference(dataset, learn_step=0.005, num_iter=500,
         jacc_tot_fcn += jacc_fcn
         rec_tot_fcn += rec_fcn
         Y_test_batch_fcn = Y_test_batch
-        print_results('>>>>> BEFORE:', rec_tot_fcn, acc_tot_fcn, jacc_tot_fcn, i+1)
+        print_results('>>>>> FCN:', rec_tot_fcn, acc_tot_fcn, jacc_tot_fcn, i+1)
 
         # Compute dae output and metrics after dae
         Y_test_batch_dae = pred_dae_fn(*(H_test_batch+[Y_test_batch]))
@@ -219,7 +219,7 @@ def inference(dataset, learn_step=0.005, num_iter=500,
         acc_tot_dae += acc_dae
         jacc_tot_dae += jacc_dae
         rec_tot_dae += rec_dae
-        print_results('>>>>> DAE:', rec_tot_dae, acc_tot_dae, jacc_tot_dae, i+1)
+        print_results('>>>>> FCN+DAE:', rec_tot_dae, acc_tot_dae, jacc_tot_dae, i+1)
 
         # Iterative inference
         for it in range(num_iter):
@@ -228,6 +228,9 @@ def inference(dataset, learn_step=0.005, num_iter=500,
 
             # Update prediction
             Y_test_batch = Y_test_batch - learn_step * grad
+
+            # Clip prediction
+            Y_test_batch = np.clip(Y_test_batch, 0.0, 1.0)
 
             if save_perstep:
                 # Save images
@@ -253,17 +256,6 @@ def inference(dataset, learn_step=0.005, num_iter=500,
         rec_tot += rec
         print_results('>>>>> ITERTIVE INFERENCE:', rec_tot, acc_tot, jacc_tot, i+1)
 
-        jacc_perclass_fcn = jacc_tot_fcn[0, :]/jacc_tot_fcn[1, :]
-        jacc_perclass = jacc_tot[0, :]/jacc_tot[1, :]
-
-        print "   Per class jaccard:"
-        labs = data_iter.mask_labels
-
-        for i in range(len(labs)-len(void_labels)):
-            class_str = '    ' + labs[i] + ' : fcn ->  %f, ii ->  %f'
-            class_str = class_str % (jacc_perclass_fcn[i], jacc_perclass[i])
-            print class_str
-
         if not save_perstep:
             # Save images
             save_img(np.copy(X_test_batch),
@@ -272,6 +264,25 @@ def inference(dataset, learn_step=0.005, num_iter=500,
                      np.copy(Y_test_batch_fcn),
                      savepath, 'batch' + str(i),
                      void_labels, colors)
+
+    # Print summary of how things went
+    print('-------------------------------------------------------------------')
+    print('------------------------------SUMMARY------------------------------')
+    print('-------------------------------------------------------------------')
+    print_results('>>>>> FCN:', rec_tot_fcn, acc_tot_fcn, jacc_tot_fcn, i+1)
+    print_results('>>>>> ITERTIVE INFERENCE:', rec_tot, acc_tot, jacc_tot, i+1)
+
+    # Compute per class jaccard
+    jacc_perclass_fcn = jacc_tot_fcn[0, :]/jacc_tot_fcn[1, :]
+    jacc_perclass = jacc_tot[0, :]/jacc_tot[1, :]
+
+    print ">>>>> Per class jaccard:"
+    labs = data_iter.mask_labels
+
+    for i in range(len(labs)-len(void_labels)):
+        class_str = '    ' + labs[i] + ' : fcn ->  %f, ii ->  %f'
+        class_str = class_str % (jacc_perclass_fcn[i], jacc_perclass[i])
+        print class_str
 
     # Move segmentations
     if savepath != loadpath:
@@ -297,7 +308,7 @@ def main():
                         help='Max number of iterations')
     parser.add_argument('-training_loss',
                         type=list,
-                        default=['squared_error', 'squared_error_h'],
+                        default=['crossentropy'],
                         help='Training loss')
     parser.add_argument('-save_perstep',
                         type=bool,
@@ -310,7 +321,7 @@ def main():
     parser.add_argument('-dae_dict',
                         type=dict,
                         default={'kind': 'fcn8', 'dropout': 0.5, 'skip': True,
-                                  'unpool_type': 'trackind', 'noise': 1.0,
+                                  'unpool_type': 'standard', 'noise': 0.0,
                                   'concat_h': ['pool4'], 'from_gt': False,
                                   'n_filters': 64, 'conv_before_pool': 1,
                                   'additional_pool': 2},

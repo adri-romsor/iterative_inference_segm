@@ -187,8 +187,12 @@ def inference(dataset, learn_step=0.005, num_iter=500, optimizer=sgd,
                              [test_acc, test_jacc, test_loss])
 
     # Softmax function
-    softmax_fn = theano.function([y_hat_var_metrics],
-                                 softmax4D(y_hat_var_metrics))
+    # softmax_fn = theano.function([y_hat_var_metrics],
+    #                              softmax4D(y_hat_var_metrics))
+
+    # Clip function
+    clip_fn = theano.function([y_hat_var_metrics],
+                              T.clip(y_hat_var_metrics, 0.0, 1.0))
 
     #
     # Infer
@@ -203,7 +207,7 @@ def inference(dataset, learn_step=0.005, num_iter=500, optimizer=sgd,
     jacc_tot = 0
     jacc_tot_fcn = 0
     jacc_tot_dae = 0
-    for i in range(n_batches_test):
+    for i in range(2):
         info_str = "Batch %d out of %d" % (i, n_batches_test)
         print info_str
 
@@ -222,17 +226,16 @@ def inference(dataset, learn_step=0.005, num_iter=500, optimizer=sgd,
         acc_tot_fcn += acc_fcn
         jacc_tot_fcn += jacc_fcn
         rec_tot_fcn += rec_fcn
-        print_results('>>>>> BEFORE:', rec_tot_fcn, acc_tot_fcn, jacc_tot_fcn, i+1)
+        print_results('>>>>> FCN:', rec_tot_fcn, acc_tot_fcn, jacc_tot_fcn, i+1)
 
         # Compute rec loss by using DAE in a standard way
         Y_test_batch_dae = pred_dae_fn(*(H_test_batch))
-        # Y_test_batch_dae = softmax_fn(Y_test_batch_dae)
 
         acc_dae, jacc_dae, rec_dae = val_fn(Y_test_batch_dae, L_test_batch)
         acc_tot_dae += acc_dae
         jacc_tot_dae += jacc_dae
         rec_tot_dae += rec_dae
-        print_results('>>>>> DAE:', rec_tot_dae, acc_tot_dae, jacc_tot_dae, i+1)
+        print_results('>>>>> FCN+DAE:', rec_tot_dae, acc_tot_dae, jacc_tot_dae, i+1)
 
         # Updates (grad, shared variable to update, learning_rate)
         updates = optimizer([de], [y_hat_var], learning_rate=learn_step)
@@ -243,7 +246,7 @@ def inference(dataset, learn_step=0.005, num_iter=500, optimizer=sgd,
         # Iterative inference
         for it in range(num_iter):
             grad = de_fn(*(H_test_batch))
-            # y_hat_var.set_value(softmax_fn(y_hat_var.get_value()))
+            y_hat_var.set_value(clip_fn(y_hat_var.get_value()))
 
             if save_perstep:
                 # Save images
@@ -269,17 +272,6 @@ def inference(dataset, learn_step=0.005, num_iter=500, optimizer=sgd,
         rec_tot += rec
         print_results('>>>>> ITERTIVE INFERENCE:', rec_tot, acc_tot, jacc_tot, i+1)
 
-        jacc_perclass_fcn = jacc_tot_fcn[0, :]/jacc_tot_fcn[1, :]
-        jacc_perclass = jacc_tot[0, :]/jacc_tot[1, :]
-
-        print "   Per class jaccard:"
-        labs = data_iter.mask_labels
-
-        for i in range(len(labs)-len(void_labels)):
-            class_str = '    ' + labs[i] + ' : fcn ->  %f, ii ->  %f'
-            class_str = class_str % (jacc_perclass_fcn[i], jacc_perclass[i])
-            print class_str
-
         if not save_perstep:
             # Save images
             save_img(np.copy(X_test_batch),
@@ -288,6 +280,25 @@ def inference(dataset, learn_step=0.005, num_iter=500, optimizer=sgd,
                      np.copy(Y_test_batch),
                      savepath, 'batch' + str(i),
                      void_labels, colors)
+
+    # Print summary of how things went
+    print('-------------------------------------------------------------------')
+    print('------------------------------SUMMARY------------------------------')
+    print('-------------------------------------------------------------------')
+    print_results('>>>>> FCN:', rec_tot_fcn, acc_tot_fcn, jacc_tot_fcn, i+1)
+    print_results('>>>>> ITERTIVE INFERENCE:', rec_tot, acc_tot, jacc_tot, i+1)
+
+    # Compute per class jaccard
+    jacc_perclass_fcn = jacc_tot_fcn[0, :]/jacc_tot_fcn[1, :]
+    jacc_perclass = jacc_tot[0, :]/jacc_tot[1, :]
+
+    print ">>>>> Per class jaccard:"
+    labs = data_iter.mask_labels
+
+    for i in range(len(labs)-len(void_labels)):
+        class_str = '    ' + labs[i] + ' : fcn ->  %f, ii ->  %f'
+        class_str = class_str % (jacc_perclass_fcn[i], jacc_perclass[i])
+        print class_str
 
     # Move segmentations
     if savepath != loadpath:
@@ -316,7 +327,7 @@ def main():
                         help='Optimizer (sgd, rmsprop or adam)')
     parser.add_argument('-training_loss',
                         type=list,
-                        default=['squared_error', 'squared_error_h'],
+                        default=['crossentropy'],
                         help='Training loss')
     parser.add_argument('-save_perstep',
                         type=bool,
@@ -329,7 +340,7 @@ def main():
     parser.add_argument('-dae_dict',
                         type=dict,
                         default={'kind': 'fcn8', 'dropout': 0.5, 'skip': True,
-                                  'unpool_type': 'trackind', 'noise': 1.0,
+                                  'unpool_type': 'standard', 'noise': 0.0,
                                   'concat_h': ['pool4'], 'from_gt': False,
                                   'n_filters': 64, 'conv_before_pool': 1,
                                   'additional_pool': 2},
