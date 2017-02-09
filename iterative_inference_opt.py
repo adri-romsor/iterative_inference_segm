@@ -207,7 +207,7 @@ def inference(dataset, learn_step=0.005, num_iter=500, optimizer=sgd,
     jacc_tot = 0
     jacc_tot_fcn = 0
     jacc_tot_dae = 0
-    for i in range(2):
+    for i in range(n_batches_test):
         info_str = "Batch %d out of %d" % (i, n_batches_test)
         print info_str
 
