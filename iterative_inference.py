@@ -270,7 +270,8 @@ def inference(dataset, learn_step=0.005, num_iter=500,
     print('------------------------------SUMMARY------------------------------')
     print('-------------------------------------------------------------------')
     print_results('>>>>> FCN:', rec_tot_fcn, acc_tot_fcn, jacc_tot_fcn, i+1)
-    print_results('>>>>> ITERTIVE INFERENCE:', rec_tot, acc_tot, jacc_tot, i+1)
+    print_results('>>>>> FCN+DAE:', rec_tot_dae, acc_tot_dae, jacc_tot_dae, i+1)
+    print_results('>>>>> ITERATIVE INFERENCE:', rec_tot, acc_tot, jacc_tot, i+1)
 
     # Compute per class jaccard
     jacc_perclass_fcn = jacc_tot_fcn[0, :]/jacc_tot_fcn[1, :]

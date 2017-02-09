@@ -270,7 +270,7 @@ def inference(dataset, learn_step=0.005, num_iter=500, optimizer=sgd,
         acc_tot += acc
         jacc_tot += jacc
         rec_tot += rec
-        print_results('>>>>> ITERTIVE INFERENCE:', rec_tot, acc_tot, jacc_tot, i+1)
+        print_results('>>>>> ITERATIVE INFERENCE:', rec_tot, acc_tot, jacc_tot, i+1)
 
         if not save_perstep:
             # Save images
@@ -286,6 +286,7 @@ def inference(dataset, learn_step=0.005, num_iter=500, optimizer=sgd,
     print('------------------------------SUMMARY------------------------------')
     print('-------------------------------------------------------------------')
     print_results('>>>>> FCN:', rec_tot_fcn, acc_tot_fcn, jacc_tot_fcn, i+1)
+    print_results('>>>>> FCN+DAE:', rec_tot_dae, acc_tot_dae, jacc_tot_dae, i+1)
     print_results('>>>>> ITERTIVE INFERENCE:', rec_tot, acc_tot, jacc_tot, i+1)
 
     # Compute per class jaccard
