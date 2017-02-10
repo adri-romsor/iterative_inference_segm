@@ -19,7 +19,7 @@ def buildFCN8(nb_in_channels, input_var,
               n_classes=21, load_weights=True,
               void_labels=[], trainable=False,
               layer=['probs_dimshuffle'], pascal=False,
-              temperature=1.0):
+              temperature=1.0, dropout=0.5):
     '''
     Build fcn8 model
     '''
@@ -74,12 +74,12 @@ def buildFCN8(nb_in_channels, input_var,
     # fc6
     net['fc6'] = ConvLayer(
         net['pool5'], 4096, 7, pad='valid', flip_filters=False)
-    net['fc6_dropout'] = DropoutLayer(net['fc6'])
+    net['fc6_dropout'] = DropoutLayer(net['fc6'], p=dropout)
 
     # fc7
     net['fc7'] = ConvLayer(
         net['fc6_dropout'], 4096, 1, pad='valid', flip_filters=False)
-    net['fc7_dropout'] = DropoutLayer(net['fc7'], p=0.5)
+    net['fc7_dropout'] = DropoutLayer(net['fc7'], p=dropout)
 
     net['score_fr'] = ConvLayer(
         net['fc7_dropout'], n_classes, 1, pad='valid', flip_filters=False)

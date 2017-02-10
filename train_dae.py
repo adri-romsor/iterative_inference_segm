@@ -162,7 +162,8 @@ def train(dataset, learning_rate=0.005, lr_anneal=1.0,
                             nb_in_channels=n_classes, path_weights=loadpath,
                             model_name='dae_model.npz', trainable=True,
                             load_weights=resume, pretrained=True, pascal=True,
-                            concat_h=dae_dict['concat_h'], noise=dae_dict['noise'])
+                            concat_h=dae_dict['concat_h'], noise=dae_dict['noise'],
+                            dropout=dae_dict['dropout'])
     elif dae_dict['kind'] == 'contextmod':
         dae = buildDAE_contextmod(input_concat_h_vars, input_mask_var, n_classes,
                                   path_weights=loadpath,
