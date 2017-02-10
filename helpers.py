@@ -150,7 +150,7 @@ def build_experiment_name(dae_dict, training_loss, data_aug, temperature=1.0):
     exp_name += '_data_aug' if bool(data_aug) else ''
     exp_name += ('_T' + str(temperature)) if not dae_dict['from_gt'] else ''
 
-    print(exp_name)
+    # print(exp_name)
 
     return exp_name
 
