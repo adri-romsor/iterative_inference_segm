@@ -22,7 +22,7 @@ def buildFCN8_DAE(input_concat_h_vars, input_mask_var, n_classes, nb_in_channels
                   load_weights=False, pretrained=False, freeze=False,
                   pretrained_path='/data/lisatmp4/romerosa/itinf/models/camvid/',
                   pascal=False, return_layer='probs_dimshuffle',
-                  concat_h=['input'], noise=0.1):
+                  concat_h=['input'], noise=0.1, dropout=0.5):
 
     '''
     Build fcn8 model as DAE
@@ -109,12 +109,12 @@ def buildFCN8_DAE(input_concat_h_vars, input_mask_var, n_classes, nb_in_channels
     # fc6
     net['fc6'] = ConvLayer(
         net[out], 4096, 7, pad='valid', flip_filters=False)
-    net['fc6_dropout'] = DropoutLayer(net['fc6'])
+    net['fc6_dropout'] = DropoutLayer(net['fc6'], p=dropout)
 
     # fc7
     net['fc7'] = ConvLayer(
         net['fc6_dropout'], 4096, 1, pad='valid', flip_filters=False)
-    net['fc7_dropout'] = DropoutLayer(net['fc7'], p=0.5)
+    net['fc7_dropout'] = DropoutLayer(net['fc7'], p=dropout)
 
     net['score_fr'] = ConvLayer(
         net['fc7_dropout'], n_classes, 1, pad='valid', flip_filters=False)

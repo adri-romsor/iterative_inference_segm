@@ -41,10 +41,9 @@ _EPSILON = 1e-3
 
 
 def inference(dataset, learn_step=0.005, num_iter=500,
-              training_loss=['squared_error'], dae_dict_updates= {},
-              data_augmentation={}, temperature=1.0, save_perstep=False,
-              which_set='test', savepath=None, loadpath=None,
-              test_from_0_255=False):
+              dae_dict_updates= {}, training_dict={}, data_augmentation=False,
+              save_perstep=False, which_set='test',
+              savepath=None, loadpath=None, test_from_0_255=False):
 
     #
     # Update DAE parameters
@@ -58,15 +57,16 @@ def inference(dataset, learn_step=0.005, num_iter=500,
                 'additional_pool': 0,
                 'concat_h': ['input'],
                 'noise': 0.0,
-                'from_gt': True}
+                'from_gt': True,
+                'temperature': 1.0}
 
     dae_dict.update(dae_dict_updates)
 
     #
     # Prepare load/save directories
     #
-    exp_name = build_experiment_name(dae_dict, training_loss,
-                                     bool(data_augmentation), temperature)
+    exp_name = build_experiment_name(data_aug=data_augmentation,
+                                     **dict(dae_dict.items() + training_dict.items()))
     if savepath is None:
         raise ValueError('A saving directory must be specified')
 
@@ -146,7 +146,7 @@ def inference(dataset, learn_step=0.005, num_iter=500,
                     n_classes=n_classes, void_labels=void_labels,
                     path_weights=WEIGHTS_PATH+dataset+'/new_fcn8_model_best.npz',
                     trainable=False, load_weights=True,
-                    layer=dae_dict['concat_h'],temperature=temperature)
+                    layer=dae_dict['concat_h'],temperature=dae_dict['temperature'])
 
     #
     # Define and compile theano functions
@@ -300,17 +300,13 @@ def main():
                         help='Dataset.')
     parser.add_argument('-step',
                         type=float,
-                        default=.05,
+                        default=0.08,
                         help='step')
     parser.add_argument('--num_iter',
                         '-ne',
                         type=int,
-                        default=10,
+                        default=8,
                         help='Max number of iterations')
-    parser.add_argument('-training_loss',
-                        type=list,
-                        default=['crossentropy'],
-                        help='Training loss')
     parser.add_argument('-save_perstep',
                         type=bool,
                         default=False,
@@ -323,15 +319,19 @@ def main():
                         type=dict,
                         default={'kind': 'fcn8', 'dropout': 0.5, 'skip': True,
                                   'unpool_type': 'standard', 'noise': 0.0,
-                                  'concat_h': ['pool4'], 'from_gt': False,
+                                  'concat_h': ['input'], 'from_gt': False,
                                   'n_filters': 64, 'conv_before_pool': 1,
                                   'additional_pool': 2},
                         help='DAE kind and parameters')
-    parser.add_argument('-data_augmentation',
+    parser.add_argument('-training_dict',
                         type=dict,
-                        default={'crop_size': (224, 224),
-                                 'horizontal_flip': True, 'vertical_flip': True,
-                                 'fill_mode': 'nearest'},
+                        default={'training_loss': ['crossentropy', 'squared_error', 'squared_error_h'],
+                                 'learning_rate': 0.0001, 'lr_anneal': 0.99,
+                                 'weight_decay':0.0001, 'optimizer': 'rmsprop'},
+                        help='Training parameters')
+    parser.add_argument('-data_augmentation',
+                        type=bool,
+                        default=True,
                         help='Dictionary of data augmentation to be used')
     parser.add_argument('-test_from_0_255',
                         type=bool,
@@ -341,10 +341,11 @@ def main():
     args = parser.parse_args()
 
     inference(args.dataset, float(args.step), int(args.num_iter),
-              args.training_loss, save_perstep=args.save_perstep,
-              which_set=args.which_set, savepath=SAVEPATH, loadpath=LOADPATH,
+              save_perstep=args.save_perstep, which_set=args.which_set,
+              savepath=SAVEPATH, loadpath=LOADPATH,
               test_from_0_255=args.test_from_0_255,
-              dae_dict_updates=args.dae_dict, data_augmentation=args.data_augmentation)
+              dae_dict_updates=args.dae_dict, data_augmentation=args.data_augmentation,
+              training_dict=args.training_dict)
 
 
 if __name__ == "__main__":

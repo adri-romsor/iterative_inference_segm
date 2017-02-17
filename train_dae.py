@@ -51,7 +51,7 @@ def train(dataset, learning_rate=0.005, lr_anneal=1.0,
           weight_decay=1e-4, num_epochs=500, max_patience=100,
           optimizer='rmsprop', training_loss=['squared_error'],
           batch_size=[10, 1, 1], ae_h=False,
-          dae_dict_updates={}, data_augmentation={}, temperature=1.0,
+          dae_dict_updates={}, data_augmentation={},
           savepath=None, loadpath=None, resume=False, train_from_0_255=False):
 
     #
@@ -66,15 +66,20 @@ def train(dataset, learning_rate=0.005, lr_anneal=1.0,
                 'additional_pool': 0,
                 'concat_h': ['input'],
                 'noise': 0.0,
-                'from_gt': True}
+                'from_gt': True,
+                'temperature': 1.0}
 
     dae_dict.update(dae_dict_updates)
 
     #
     # Prepare load/save directories
     #
-    exp_name = build_experiment_name(dae_dict, training_loss,
-                                     bool(data_augmentation), temperature)
+    exp_name = build_experiment_name(training_loss=training_loss,
+                                     data_aug=bool(data_augmentation),
+                                     learning_rate=learning_rate,
+                                     lr_anneal=lr_anneal,
+                                     weight_decay=weight_decay,
+                                     optimizer=optimizer, **dae_dict)
     if savepath is None:
         raise ValueError('A saving directory must be specified')
 
@@ -182,7 +187,7 @@ def train(dataset, learning_rate=0.005, lr_anneal=1.0,
                     void_labels=void_labels,
                     path_weights=WEIGHTS_PATH+dataset+'/fcn8_model.npz',
                     trainable=True, load_weights=True, layer=dae_dict['concat_h'],
-                    temperature=temperature)
+                    temperature=dae_dict['temperature'])
 
     #
     # Define and compile theano functions
@@ -400,43 +405,21 @@ def main():
                         type=str,
                         default='camvid',
                         help='Dataset.')
-    parser.add_argument('-learning_rate',
-                        type=float,
-                        default=0.0001,
-                        help='Learning rate')
-    parser.add_argument('-lr_anneal',
-                        type=float,
-                        default=.99,
-                        help='Learning rate annealing')
-    parser.add_argument('-weight_decay',
-                        type=float,
-                        default=.0001,
-                        help='Weight decay')
-    parser.add_argument('--num_epochs',
-                        '-ne',
-                        type=int,
-                        default=1000,
-                        help='Max number of epochs')
-    parser.add_argument('--max_patience',
-                        '-mp',
-                        type=int,
-                        default=100,
-                        help='Max patience')
-    parser.add_argument('-optimizer',
-                        type=str,
-                        default='rmsprop',
-                        help='Optimizer (adam or rmsprop)')
-    parser.add_argument('-training_loss',
-                        type=list,
-                        default=['crossentropy'],
-                        help='Training loss')
+    parser.add_argument('-train_dict',
+                        type=dict,
+                        default={'learning_rate': 0.001, 'lr_anneal': 0.99,
+                                 'weight_decay': 0.0001, 'num_epochs': 1000,
+                                 'max_patience': 100, 'optimizer': 'rmsprop',
+                                 'batch_size': [10, 10, 10],
+                                 'training_loss': ['crossentropy', 'squared_error', 'squared_error_h']},
+                        help='Training configuration')
     parser.add_argument('-dae_dict',
                         type=dict,
-                        default={'kind': 'standard', 'dropout': 0.5, 'skip': True,
+                        default={'kind': 'fcn8', 'dropout': 0.5, 'skip': True,
                                  'unpool_type': 'standard', 'noise': 0.0,
-                                 'concat_h': ['pool4'], 'from_gt': False,
+                                 'concat_h': ['input'], 'from_gt': False,
                                  'n_filters': 64, 'conv_before_pool': 1,
-                                 'additional_pool': 2},
+                                 'additional_pool': 2, 'temperature': 1.0},
                         help='DAE kind and parameters')
     parser.add_argument('-data_augmentation',
                         type=dict,
@@ -444,14 +427,6 @@ def main():
                                  'horizontal_flip': True,
                                  'fill_mode':'constant'},
                         help='Dictionary of data augmentation to be used')
-    parser.add_argument('-temperature',
-                        type=float,
-                        default=1.0,
-                        help='Apply temperature')
-    parser.add_argument('-bs',
-                        type=list,
-                        default=[10, 10, 10],
-                        help='Batch size list [train, valid, test]')
     parser.add_argument('-ae_h',
                         type=bool,
                         default=False,
@@ -462,14 +437,10 @@ def main():
                         help='Whether to train from images within 0-255 range')
     args = parser.parse_args()
 
-    train(args.dataset, learning_rate=float(args.learning_rate), lr_anneal=float(args.lr_anneal),
-          weight_decay=float(args.weight_decay), num_epochs=int(args.num_epochs),
-          max_patience=int(args.max_patience), optimizer=args.optimizer,
-          training_loss=args.training_loss, dae_dict_updates=args.dae_dict,
+    train(dataset=args.dataset, dae_dict_updates=args.dae_dict,
           data_augmentation=args.data_augmentation,
-          temperature=args.temperature, train_from_0_255=args.train_from_0_255,
-          ae_h=args.ae_h, batch_size=args.bs, resume=False,
-          savepath=SAVEPATH, loadpath=LOADPATH)
+          train_from_0_255=args.train_from_0_255, ae_h=args.ae_h, resume=False,
+          savepath=SAVEPATH, loadpath=LOADPATH, **args.train_dict)
 
 if __name__ == "__main__":
     main()

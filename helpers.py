@@ -113,7 +113,13 @@ def save_img(image_batch, mask_batch, prediction_ii, prediction_fcn,
     return images
 
 
-def build_experiment_name(dae_dict, training_loss, data_aug, temperature=1.0):
+def build_experiment_name(kind='fcn8', concat_h=[], optimizer='rmsprop',
+                          training_loss=['crossentropy'],
+                          learning_rate=0.0001, lr_anneal=0.99, data_aug=False,
+                          weight_decay=0.0001, dropout=0.5, noise=0.0,
+                          from_gt=False, temperature=1.0, n_filters=64,
+                          conv_before_pool=1, skip=True, additional_pool=0,
+                          unpool_type='standard'):
     """
     Build experiment name
 
@@ -125,32 +131,31 @@ def build_experiment_name(dae_dict, training_loss, data_aug, temperature=1.0):
         Training loss
     data_aug: bool
         Whether or not we do data augmentation
-    temperature: float
-        Temperature to reduce the network confidence - default: 1.0 (does not
-        change the output)
     """
 
-    all_concat_h = '_'.join(dae_dict['concat_h'])
+    all_concat_h = '_'.join(concat_h)
     all_loss = '_'.join(training_loss)
 
-    exp_name = dae_dict['kind'] + '_' + all_concat_h
+    exp_name = kind + '_' + all_concat_h
 
-    if dae_dict['kind'] == 'standard':
-        exp_name += '_f' + str(dae_dict['n_filters']) + 'c' + \
-            str(dae_dict['conv_before_pool']) + 'p' + \
-            str(dae_dict['additional_pool']) + \
-            ('_skip' if dae_dict['skip'] else '')
-        exp_name += '_' + dae_dict['unpool_type'] + \
-                    ('_dropout' + str(dae_dict['dropout']) if
-                    dae_dict['dropout'] > 0. else '')
+    if kind == 'standard':
+        exp_name += '_f' + str(n_filters) + 'c' + \
+            str(conv_before_pool) + 'p' + \
+            str(additional_pool) + \
+            ('_skip' if skip else '')
+        exp_name += '_' + unpool_type
 
+    exp_name += ('_dropout' + str(dropout) if dropout > 0. else '')
     exp_name += '_' +  all_loss
-    exp_name += ('_fromgt' if dae_dict['from_gt'] else '_fromfcn8') + '_z' + \
-                str(dae_dict['noise'])
+    exp_name += ('_fromgt' if from_gt else '_fromfcn8') + '_z' + \
+                str(noise)
     exp_name += '_data_aug' if bool(data_aug) else ''
-    exp_name += ('_T' + str(temperature)) if not dae_dict['from_gt'] else ''
+    exp_name += ('_T' + str(temperature)) if not from_gt else ''
 
-    # print(exp_name)
+    exp_name += ('_' + optimizer + '_lr' + str(learning_rate) + '_anneal' +
+                str(lr_anneal) + '_decay' + str(weight_decay))
+
+    print(exp_name)
 
     return exp_name
 
