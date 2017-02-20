@@ -119,7 +119,8 @@ def build_experiment_name(kind='fcn8', concat_h=[], optimizer='rmsprop',
                           weight_decay=0.0001, dropout=0.5, noise=0.0,
                           from_gt=False, temperature=1.0, n_filters=64,
                           conv_before_pool=1, skip=True, additional_pool=0,
-                          unpool_type='standard'):
+                          unpool_type='standard',
+                          path_weights=''):
     """
     Build experiment name
 
@@ -154,6 +155,8 @@ def build_experiment_name(kind='fcn8', concat_h=[], optimizer='rmsprop',
 
     exp_name += ('_' + optimizer + '_lr' + str(learning_rate) + '_anneal' +
                 str(lr_anneal) + '_decay' + str(weight_decay))
+
+    exp_name += '_pretrained' if len(path_weights) > 0 else ''
 
     print(exp_name)
 

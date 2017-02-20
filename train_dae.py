@@ -67,7 +67,8 @@ def train(dataset, learning_rate=0.005, lr_anneal=1.0,
                 'concat_h': ['input'],
                 'noise': 0.0,
                 'from_gt': True,
-                'temperature': 1.0}
+                'temperature': 1.0,
+                'path_weights': ''}
 
     dae_dict.update(dae_dict_updates)
 
@@ -140,9 +141,8 @@ def train(dataset, learning_rate=0.005, lr_anneal=1.0,
     void = n_classes if any(void_labels) else n_classes+1
 
     # Number of feasible pools
-    layer_h=dae_dict['concat_h']
-    if 'pool' in layer_h[-1]:
-        n_pool = int(layer_h[-1][-1])
+    if len(dae_dict['concat_h']) > 0 and 'pool' in dae_dict['concat_h'][-1]:
+        n_pool = int(dae_dict['concat_h'][-1][-1])
     else:
         n_pool = 0
 
@@ -155,7 +155,7 @@ def train(dataset, learning_rate=0.005, lr_anneal=1.0,
     if dae_dict['kind'] == 'standard':
         dae = buildDAE(input_concat_h_vars, input_mask_var, n_classes, trainable=True,
                        void_labels=void_labels, load_weights=resume,
-                       path_weights=loadpath, model_name='dae_model.npz',
+                       path_weights=loadpath, model_name='dae_model_best.npz',
                        out_nonlin=softmax, concat_h=dae_dict['concat_h'],
                        noise=dae_dict['noise'], n_filters=dae_dict['n_filters'],
                        conv_before_pool=dae_dict['conv_before_pool'],
@@ -164,11 +164,13 @@ def train(dataset, learning_rate=0.005, lr_anneal=1.0,
                        unpool_type=dae_dict['unpool_type'], ae_h=ae_h)
     elif dae_dict['kind'] == 'fcn8':
         dae = buildFCN8_DAE(input_concat_h_vars, input_mask_var, n_classes,
-                            nb_in_channels=n_classes, path_weights=loadpath,
-                            model_name='dae_model.npz', trainable=True,
+                            nb_in_channels=n_classes, trainable=True,
                             load_weights=resume, pretrained=True, pascal=True,
                             concat_h=dae_dict['concat_h'], noise=dae_dict['noise'],
-                            dropout=dae_dict['dropout'])
+                            dropout=dae_dict['dropout'],
+                            path_weights=os.path.join('/'.join(loadpath.split('/')[:-1]),
+                            dae_dict['path_weights']),
+                            model_name='dae_model_best.npz')
     elif dae_dict['kind'] == 'contextmod':
         dae = buildDAE_contextmod(input_concat_h_vars, input_mask_var, n_classes,
                                   path_weights=loadpath,
@@ -407,7 +409,7 @@ def main():
                         help='Dataset.')
     parser.add_argument('-train_dict',
                         type=dict,
-                        default={'learning_rate': 0.001, 'lr_anneal': 0.99,
+                        default={'learning_rate': 0.0001, 'lr_anneal': 0.99,
                                  'weight_decay': 0.0001, 'num_epochs': 1000,
                                  'max_patience': 100, 'optimizer': 'rmsprop',
                                  'batch_size': [10, 10, 10],
@@ -416,10 +418,11 @@ def main():
     parser.add_argument('-dae_dict',
                         type=dict,
                         default={'kind': 'fcn8', 'dropout': 0.5, 'skip': True,
-                                 'unpool_type': 'standard', 'noise': 0.0,
-                                 'concat_h': ['input'], 'from_gt': False,
+                                 'unpool_type': 'standard', 'noise': 0.1,
+                                 'concat_h': ['input'], 'from_gt': True,
                                  'n_filters': 64, 'conv_before_pool': 1,
-                                 'additional_pool': 2, 'temperature': 1.0},
+                                 'additional_pool': 2, 'temperature': 1.0,
+                                 'path_weights': ''},
                         help='DAE kind and parameters')
     parser.add_argument('-data_augmentation',
                         type=dict,

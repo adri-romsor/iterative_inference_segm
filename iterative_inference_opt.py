@@ -143,8 +143,7 @@ def inference(dataset, learn_step=0.005, num_iter=500, optimizer=sgd,
 
     # Build FCN8  with pre-trained weights up to layer_h + prediction
     print ' Building FCN network'
-    if not dae_dict['from_gt']:
-        dae_dict['concat_h'] += ['probs_dimshuffle']
+    dae_dict['concat_h'] += ['probs_dimshuffle']
     fcn = buildFCN8(nb_in_channels, input_var=input_x_var,
                     n_classes=n_classes, void_labels=void_labels,
                     path_weights=WEIGHTS_PATH+dataset+'/new_fcn8_model_best.npz',
@@ -213,12 +212,12 @@ def inference(dataset, learn_step=0.005, num_iter=500, optimizer=sgd,
 
         # Get minibatch
         X_test_batch, L_test_batch = data_iter.next()
+        L_test_batch = L_test_batch.astype(_FLOATX)
 
         # Compute fcn prediction y and h
         pred_test_batch = pred_fcn_fn(X_test_batch)
         Y_test_batch = pred_test_batch[-1]
         H_test_batch = pred_test_batch[:-1]
-        L_test_batch = L_test_batch.astype(_FLOATX)
         y_hat_var.set_value(Y_test_batch)
 
         # Compute metrics before iterative inference

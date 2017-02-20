@@ -140,8 +140,7 @@ def inference(dataset, learn_step=0.005, num_iter=500,
 
     # Build FCN8  with pre-trained weights up to layer_h + prediction
     print ' Building FCN network'
-    if not dae_dict['from_gt']:
-        dae_dict['concat_h'] += ['probs_dimshuffle']
+    dae_dict['concat_h'] += ['probs_dimshuffle']
     fcn = buildFCN8(nb_in_channels, input_var=input_x_var,
                     n_classes=n_classes, void_labels=void_labels,
                     path_weights=WEIGHTS_PATH+dataset+'/new_fcn8_model_best.npz',
@@ -198,12 +197,12 @@ def inference(dataset, learn_step=0.005, num_iter=500,
 
         # Get minibatch
         X_test_batch, L_test_batch = data_iter.next()
+        L_test_batch = L_test_batch.astype(_FLOATX)
 
         # Compute fcn prediction y and h
         pred_test_batch = pred_fcn_fn(X_test_batch)
         Y_test_batch = pred_test_batch[-1]
         H_test_batch = pred_test_batch[:-1]
-        L_test_batch = L_test_batch.astype(_FLOATX)
 
         # Compute metrics before iterative inference
         acc_fcn, jacc_fcn, rec_fcn = val_fn(Y_test_batch, L_test_batch)
@@ -305,7 +304,7 @@ def main():
     parser.add_argument('--num_iter',
                         '-ne',
                         type=int,
-                        default=8,
+                        default=10,
                         help='Max number of iterations')
     parser.add_argument('-save_perstep',
                         type=bool,
@@ -321,12 +320,13 @@ def main():
                                   'unpool_type': 'standard', 'noise': 0.0,
                                   'concat_h': ['input'], 'from_gt': False,
                                   'n_filters': 64, 'conv_before_pool': 1,
-                                  'additional_pool': 2},
+                                  'additional_pool': 2,
+                                  'path_weights': ''},
                         help='DAE kind and parameters')
     parser.add_argument('-training_dict',
                         type=dict,
                         default={'training_loss': ['crossentropy', 'squared_error', 'squared_error_h'],
-                                 'learning_rate': 0.0001, 'lr_anneal': 0.99,
+                                 'learning_rate': 0.001, 'lr_anneal': 0.99,
                                  'weight_decay':0.0001, 'optimizer': 'rmsprop'},
                         help='Training parameters')
     parser.add_argument('-data_augmentation',
