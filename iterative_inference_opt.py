@@ -35,6 +35,10 @@ elif getuser() == 'jegousim':
     SAVEPATH = '/data/lisatmp4/jegousim/iterative_inference/'
     LOADPATH = '/data/lisatmp4/jegousim/iterative_inference/'
     WEIGHTS_PATH = '/data/lisatmp4/romerosa/rnncnn/fcn8_model.npz'
+elif getuser() == 'erraqaba':
+    SAVEPATH = '/Tmp/erraqaba/iterative_inference/models/'
+    LOADPATH = '/data/lisatmp4/erraqabi/iterative_inference/models/'
+    WEIGHTS_PATH = LOADPATH
 else:
     raise ValueError('Unknown user : {}'.format(getuser()))
 
@@ -351,6 +355,10 @@ def main():
                         type=bool,
                         default=True,
                         help='Whether we performed any kind of data augmentation during training.')
+    parser.add_argument('-ae_h',
+                        type=bool,
+                        default=False,
+                        help='Whether to reconstruct intermediate h')
     parser.add_argument('-test_from_0_255',
                         type=bool,
                         default=True,
@@ -361,7 +369,7 @@ def main():
     inference(args.dataset, float(args.step), int(args.num_iter), args.optimizer,
               save_perstep=args.save_perstep, which_set=args.which_set,
               savepath=SAVEPATH, loadpath=LOADPATH,
-              test_from_0_255=args.test_from_0_255,
+              test_from_0_255=args.test_from_0_255, ae_h=args.ae_h,
               dae_dict_updates=args.dae_dict, data_augmentation=args.data_augmentation,
               training_dict=args.training_dict)
 

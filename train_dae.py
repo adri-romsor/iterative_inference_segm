@@ -80,7 +80,8 @@ def train(dataset, learning_rate=0.005, lr_anneal=1.0,
                                      learning_rate=learning_rate,
                                      lr_anneal=lr_anneal,
                                      weight_decay=weight_decay,
-                                     optimizer=optimizer, **dae_dict)
+                                     optimizer=optimizer, ae_h=ae_h,
+                                     **dae_dict)
     if savepath is None:
         raise ValueError('A saving directory must be specified')
 
@@ -140,18 +141,17 @@ def train(dataset, learning_rate=0.005, lr_anneal=1.0,
     nb_in_channels = train_iter.data_shape[0]
     void = n_classes if any(void_labels) else n_classes+1
 
-    # Number of feasible pools
-    if len(dae_dict['concat_h']) > 0 and 'pool' in dae_dict['concat_h'][-1]:
-        n_pool = int(dae_dict['concat_h'][-1][-1])
-    else:
-        n_pool = 0
-
     # Build networks
     #
     # DAE
     print ' Building DAE network'
+
     if ae_h and dae_dict['kind'] != 'standard':
         raise ValueError('Plug&Play not implemented for ' + dae_dict['kind'])
+    if ae_h and 'pool' not in dae_dict['concat_h'][-1]:
+        raise ValueError('Plug&Play version needs concat_h to be different than input')
+    ae_h = ae_h and 'pool' in dae_dict['concat_h'][-1]
+
     if dae_dict['kind'] == 'standard':
         dae = buildDAE(input_concat_h_vars, input_mask_var, n_classes, trainable=True,
                        void_labels=void_labels, load_weights=resume,
@@ -413,13 +413,13 @@ def main():
                                  'weight_decay': 0.0001, 'num_epochs': 1000,
                                  'max_patience': 100, 'optimizer': 'rmsprop',
                                  'batch_size': [10, 10, 10],
-                                 'training_loss': ['crossentropy', 'squared_error', 'squared_error_h']},
+                                 'training_loss': ['crossentropy']},
                         help='Training configuration')
     parser.add_argument('-dae_dict',
                         type=dict,
-                        default={'kind': 'fcn8', 'dropout': 0.5, 'skip': True,
-                                 'unpool_type': 'standard', 'noise': 0.1,
-                                 'concat_h': ['input'], 'from_gt': True,
+                        default={'kind': 'standard', 'dropout': 0.5, 'skip': True,
+                                 'unpool_type': 'standard', 'noise': 0,
+                                 'concat_h': ['pool3'], 'from_gt': False,
                                  'n_filters': 64, 'conv_before_pool': 1,
                                  'additional_pool': 2, 'temperature': 1.0,
                                  'path_weights': ''},

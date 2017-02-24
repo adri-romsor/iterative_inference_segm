@@ -34,6 +34,10 @@ elif getuser() == 'jegousim':
     SAVEPATH = '/data/lisatmp4/jegousim/iterative_inference/'
     LOADPATH = '/data/lisatmp4/jegousim/iterative_inference/'
     WEIGHTS_PATH = '/data/lisatmp4/romerosa/rnncnn/fcn8_model.npz'
+elif getuser() == 'erraqaba':
+    SAVEPATH = '/Tmp/erraqaba/iterative_inference/models/'
+    LOADPATH = '/data/lisatmp4/erraqabi/iterative_inference/models/'
+    WEIGHTS_PATH = LOADPATH
 else:
     raise ValueError('Unknown user : {}'.format(getuser()))
 
@@ -42,7 +46,7 @@ _EPSILON = 1e-3
 
 def inference(dataset, learn_step=0.005, num_iter=500,
               dae_dict_updates= {}, training_dict={}, data_augmentation=False,
-              save_perstep=False, which_set='test',
+              save_perstep=False, which_set='test', ae_h=False,
               savepath=None, loadpath=None, test_from_0_255=False):
 
     #
@@ -65,7 +69,7 @@ def inference(dataset, learn_step=0.005, num_iter=500,
     #
     # Prepare load/save directories
     #
-    exp_name = build_experiment_name(data_aug=data_augmentation,
+    exp_name = build_experiment_name(data_aug=data_augmentation, ae_h=ae_h,
                                      **dict(dae_dict.items() + training_dict.items()))
     if savepath is None:
         raise ValueError('A saving directory must be specified')
@@ -316,19 +320,23 @@ def main():
                         help='Inference set')
     parser.add_argument('-dae_dict',
                         type=dict,
-                        default={'kind': 'fcn8', 'dropout': 0.5, 'skip': True,
-                                  'unpool_type': 'standard', 'noise': 0.0,
-                                  'concat_h': ['input'], 'from_gt': False,
+                        default={'kind': 'standard', 'dropout': 0.5, 'skip': True,
+                                  'unpool_type': 'standard', 'noise': 0.1,
+                                  'concat_h': ['pool3'], 'from_gt': False,
                                   'n_filters': 64, 'conv_before_pool': 1,
                                   'additional_pool': 2,
                                   'path_weights': ''},
                         help='DAE kind and parameters')
     parser.add_argument('-training_dict',
                         type=dict,
-                        default={'training_loss': ['crossentropy', 'squared_error', 'squared_error_h'],
-                                 'learning_rate': 0.001, 'lr_anneal': 0.99,
+                        default={'training_loss': ['crossentropy', 'squared_error'],
+                                 'learning_rate': 0.0001, 'lr_anneal': 0.99,
                                  'weight_decay':0.0001, 'optimizer': 'rmsprop'},
                         help='Training parameters')
+    parser.add_argument('-ae_h',
+                        type=bool,
+                        default=False,
+                        help='Whether to reconstruct intermediate h')
     parser.add_argument('-data_augmentation',
                         type=bool,
                         default=True,
@@ -343,7 +351,7 @@ def main():
     inference(args.dataset, float(args.step), int(args.num_iter),
               save_perstep=args.save_perstep, which_set=args.which_set,
               savepath=SAVEPATH, loadpath=LOADPATH,
-              test_from_0_255=args.test_from_0_255,
+              test_from_0_255=args.test_from_0_255, ae_h=args.ae_h,
               dae_dict_updates=args.dae_dict, data_augmentation=args.data_augmentation,
               training_dict=args.training_dict)
 

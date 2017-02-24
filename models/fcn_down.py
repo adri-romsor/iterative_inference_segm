@@ -72,7 +72,7 @@ def buildFCN_down(input_var, concat_h_vars,
     for p in range(n_pool+additional_pool):
         # add conv + pool
         # freeze params of the pre-h layers
-        if ae_h and p == n_pool and net != {}:
+        if ae_h and p == n_pool and net != {} and 'pool' in concat_layers[-1]:
             model_helpers.freezeParameters(net['pool'+str(p)])
         for i in range(1, conv_before_pool+1):
             # Choose padding type: this is defined according to the
