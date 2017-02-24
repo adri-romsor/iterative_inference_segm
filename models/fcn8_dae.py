@@ -173,6 +173,7 @@ def buildFCN8_DAE(input_concat_h_vars, input_mask_var, n_classes, nb_in_channels
 
     # In case we want to re-use the weights of an FCN8 model pretrained from images (not GT)
     if pretrained:
+        print 'Loading pretrained weights'
         if pascal:
             path_weights = '/data/lisatmp4/romerosa/itinf/models/camvid/pascal-fcn8s-tvg-dag.mat'
             if 'tvg' in path_weights:

@@ -31,36 +31,26 @@ else:
     raise ValueError('Unknown user : {}'.format(getuser()))
 
 
-def test(dataset, which_set='test', data_aug=False,
+def test(dataset, which_set='val', data_aug=False,
          savepath=None, loadpath=None, test_from_0_255=False):
 
     #
     # Define symbolic variables
     #
     input_x_var = T.tensor4('input_var')
-    target_var_3D = T.itensor3('target_var_4D')
+    target_var = T.ivector('target_var')
 
     #
     # Build dataset iterator
     #
-    if which_set == 'train':
-        test_iter, _, _ = load_data(dataset, one_hot=False,
-                                    batch_size=[10, 10, 10],
-                                    return_0_255=test_from_0_255)
-    elif which_set == 'valid':
-        _, test_iter, _ = load_data(dataset, one_hot=False,
-                                    batch_size=[10, 10, 10],
-                                    return_0_255=test_from_0_255)
-    if which_set == 'test':
-        _, _, test_iter = load_data(dataset, one_hot=False,
-                                    batch_size=[10, 10, 10],
-                                    return_0_255=test_from_0_255)
+    data_iter = load_data(dataset, {}, one_hot=False, batch_size=[10, 10, 10],
+                          return_0_255=test_from_0_255, which_set=which_set)
 
-    colors = test_iter.cmap
-    n_batches_test = test_iter.nbatches
-    n_classes = test_iter.non_void_nclasses
-    void_labels = test_iter.void_labels
-    nb_in_channels = test_iter.data_shape[0]
+    colors = data_iter.cmap
+    n_batches_test = data_iter.nbatches
+    n_classes = data_iter.non_void_nclasses
+    void_labels = data_iter.void_labels
+    nb_in_channels = data_iter.data_shape[0]
     void = n_classes if any(void_labels) else n_classes+1
 
     #
@@ -77,9 +67,9 @@ def test(dataset, which_set='test', data_aug=False,
                     n_classes=n_classes,
                     void_labels=void_labels,
                     trainable=False, load_weights=True,
-                    layer=['probs_dimshuffle'],
-                    pascal=(dataset == 'pascal'),
-                    path_weights=WEIGHTS_PATH+dataset+'/fcn8_model.npz')
+                    layer=['probs'],
+                    path_weights=WEIGHTS_PATH+dataset+'/fcn8_model.npz')  # new_fcn8_model_best.npz
+    print WEIGHTS_PATH+dataset+'/fcn8_data_aug/new_fcn8_model_best.npz'
 
     #
     # Define and compile theano functions
@@ -87,19 +77,10 @@ def test(dataset, which_set='test', data_aug=False,
     print "Defining and compiling test functions"
     test_prediction = lasagne.layers.get_output(fcn, deterministic=True)[0]
 
-    test_prediction_dimshuffle = test_prediction.dimshuffle((0, 2, 3, 1))
-    sh = test_prediction_dimshuffle.shape
-    test_prediction_2D = \
-        test_prediction_dimshuffle.reshape((T.prod(sh[:3]), sh[3]))
+    test_acc = accuracy(test_prediction, target_var, void_labels)
+    test_jacc = jaccard(test_prediction, target_var, n_classes)
 
-    # Reshape iterative inference output to b01,c
-    target_var_2D = target_var_3D.flatten()
-
-    test_acc = accuracy(test_prediction_2D, target_var_2D, void_labels)
-    test_jacc = jaccard(test_prediction_2D, target_var_2D, n_classes)
-
-    val_fn = theano.function([input_x_var, target_var_3D], [test_acc,
-                                                            test_jacc])
+    val_fn = theano.function([input_x_var, target_var], [test_acc, test_jacc])
     pred_fcn_fn = theano.function([input_x_var], test_prediction)
 
     # Iterate over test and compute metrics
@@ -109,8 +90,9 @@ def test(dataset, which_set='test', data_aug=False,
     jacc_denom_test_tot = np.zeros((1, n_classes))
     for i in range(n_batches_test):
         # Get minibatch
-        X_test_batch, L_test_batch = test_iter.next()
+        X_test_batch, L_test_batch = data_iter.next()
         Y_test_batch = pred_fcn_fn(X_test_batch)
+        L_test_batch = np.reshape(L_test_batch, np.prod(L_test_batch.shape))
 
         # Test step
         acc_test, jacc_test = val_fn(X_test_batch, L_test_batch)
@@ -136,7 +118,7 @@ def test(dataset, which_set='test', data_aug=False,
     print out_str
 
     print ">>> Per class jaccard:"
-    labs = test_iter.mask_labels
+    labs = data_iter.mask_labels
 
     for i in range(len(labs)-len(void_labels)):
         class_str = '    ' + labs[i] + ' : %f'
