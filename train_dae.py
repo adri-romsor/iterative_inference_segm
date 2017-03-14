@@ -398,6 +398,7 @@ def train(dataset, learning_rate=0.005, lr_anneal=1.0,
                     loadpath))
                 copy_tree(savepath, loadpath)
             # End
+            print(' Training Done !')
             return
 
 

@@ -195,9 +195,12 @@ def inference(dataset, learn_step=0.005, num_iter=500,
     jacc_tot_fcn = 0
     acc_tot_dae = 0
     jacc_tot_dae = 0
+    print 'Inference step: '+str(learn_step)+ 'num iter '+str(num_iter)
     for i in range(n_batches_test):
         info_str = "Batch %d out of %d" % (i, n_batches_test)
-        print info_str
+        print '-'*30
+        print '*'*5 + info_str + '*'*5
+        print '-'*30
 
         # Get minibatch
         X_test_batch, L_test_batch = data_iter.next()
@@ -235,15 +238,15 @@ def inference(dataset, learn_step=0.005, num_iter=500,
             # Clip prediction
             Y_test_batch = np.clip(Y_test_batch, 0.0, 1.0)
 
-            if save_perstep:
-                # Save images
-                save_img(np.copy(X_test_batch),
-                         np.copy(L_test_batch),
-                         np.copy(Y_test_batch),
-                         np.copy(Y_test_batch_fcn),
-                         savepath,
-                         'batch' + str(i) + '_' + 'step' + str(it),
-                         void_labels, colors)
+            # if save_perstep:
+            #     # Save images
+            #     save_img(np.copy(X_test_batch),
+            #              np.copy(L_test_batch),
+            #              np.copy(Y_test_batch),
+            #              np.copy(Y_test_batch_fcn),
+            #              savepath,
+            #              'batch' + str(i) + '_' + 'step' + str(it),
+            #              void_labels, colors)
 
             norm = np.linalg.norm(grad, axis=1).mean()
             if norm < _EPSILON:
@@ -259,22 +262,22 @@ def inference(dataset, learn_step=0.005, num_iter=500,
         rec_tot += rec
         print_results('>>>>> ITERTIVE INFERENCE:', rec_tot, acc_tot, jacc_tot, i+1)
 
-        if not save_perstep:
-            # Save images
-            save_img(np.copy(X_test_batch),
-                     np.copy(L_test_batch),
-                     np.copy(Y_test_batch),
-                     np.copy(Y_test_batch_fcn),
-                     savepath, 'batch' + str(i),
-                     void_labels, colors)
+        # if not save_perstep:
+        #     # Save images
+        #     save_img(np.copy(X_test_batch),
+        #              np.copy(L_test_batch),
+        #              np.copy(Y_test_batch),
+        #              np.copy(Y_test_batch_fcn),
+        #              savepath, 'batch' + str(i),
+        #              void_labels, colors)
 
     # Print summary of how things went
     print('-------------------------------------------------------------------')
     print('------------------------------SUMMARY------------------------------')
     print('-------------------------------------------------------------------')
-    print_results('>>>>> FCN:', rec_tot_fcn, acc_tot_fcn, jacc_tot_fcn, n_batches_test)
-    print_results('>>>>> FCN+DAE:', rec_tot_dae, acc_tot_dae, jacc_tot_dae, n_batches_test)
-    print_results('>>>>> ITERATIVE INFERENCE:', rec_tot, acc_tot, jacc_tot, n_batches_test)
+    print_results('>>>>> FCN:', rec_tot_fcn, acc_tot_fcn, jacc_tot_fcn, i+1)
+    print_results('>>>>> FCN+DAE:', rec_tot_dae, acc_tot_dae, jacc_tot_dae, i+1)
+    print_results('>>>>> ITERATIVE INFERENCE:', rec_tot, acc_tot, jacc_tot, i+1)
 
     # Compute per class jaccard
     jacc_perclass_fcn = jacc_tot_fcn[0, :]/jacc_tot_fcn[1, :]

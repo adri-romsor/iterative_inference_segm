@@ -27,6 +27,10 @@ elif getuser() == 'michal':
     SAVEPATH = '/home/michal/Experiments/iter_inf/'
     LOADPATH = SAVEPATH
     WEIGHTS_PATH = '/home/michal/model_earlyjacc.npz'
+elif getuser() == 'erraqaba':
+    SAVEPATH = '/Tmp/erraqaba/iterative_inference/models/'
+    LOADPATH = '/data/lisatmp4/erraqabi/iterative_inference/models/'
+    WEIGHTS_PATH = LOADPATH
 else:
     raise ValueError('Unknown user : {}'.format(getuser()))
 
