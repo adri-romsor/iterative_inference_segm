@@ -147,7 +147,7 @@ def inference(dataset, learn_step=0.005, num_iter=500,
     dae_dict['concat_h'] += ['probs_dimshuffle']
     fcn = buildFCN8(nb_in_channels, input_var=input_x_var,
                     n_classes=n_classes, void_labels=void_labels,
-                    path_weights=WEIGHTS_PATH+dataset+'/new_fcn8_model_best.npz',
+                    path_weights=WEIGHTS_PATH+dataset+'/fcn8_model.npz',
                     trainable=False, load_weights=True,
                     layer=dae_dict['concat_h'],temperature=dae_dict['temperature'])
 
@@ -346,7 +346,7 @@ def main():
                         help='Dictionary of data augmentation to be used')
     parser.add_argument('-test_from_0_255',
                         type=bool,
-                        default=True,
+                        default=False,
                         help='Whether to train from images within 0-255 range')
 
     args = parser.parse_args()

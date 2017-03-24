@@ -437,7 +437,7 @@ def main():
                         help='Whether to reconstruct intermediate h')
     parser.add_argument('-train_from_0_255',
                         type=bool,
-                        default=True,
+                        default=False,
                         help='Whether to train from images within 0-255 range')
     args = parser.parse_args()
 
