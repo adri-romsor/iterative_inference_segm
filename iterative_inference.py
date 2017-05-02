@@ -62,7 +62,9 @@ def inference(dataset, learn_step=0.005, num_iter=500,
                 'concat_h': ['input'],
                 'noise': 0.0,
                 'from_gt': True,
-                'temperature': 1.0}
+                'temperature': 1.0,
+                'layer': 'probs_dimshuffle',
+                'exp_name': ''}
 
     dae_dict.update(dae_dict_updates)
 
@@ -306,12 +308,12 @@ def main():
                         help='Dataset.')
     parser.add_argument('-step',
                         type=float,
-                        default=0.08,
+                        default=0.1,
                         help='step')
     parser.add_argument('--num_iter',
                         '-ne',
                         type=int,
-                        default=10,
+                        default=5,
                         help='Max number of iterations')
     parser.add_argument('-save_perstep',
                         type=bool,
@@ -324,15 +326,16 @@ def main():
     parser.add_argument('-dae_dict',
                         type=dict,
                         default={'kind': 'standard', 'dropout': 0.5, 'skip': True,
-                                  'unpool_type': 'standard', 'noise': 0.1,
-                                  'concat_h': ['pool3'], 'from_gt': False,
+                                  'unpool_type': 'trackind', 'noise': 0,
+                                  'concat_h': ['pool4'], 'from_gt': False,
                                   'n_filters': 64, 'conv_before_pool': 1,
                                   'additional_pool': 2,
-                                  'path_weights': ''},
+                                  'path_weights': '', 'layer': 'probs_dimshuffle',
+                                  'exp_name' : ''},
                         help='DAE kind and parameters')
     parser.add_argument('-training_dict',
                         type=dict,
-                        default={'training_loss': ['crossentropy', 'squared_error'],
+                        default={'training_loss': ['crossentropy'],
                                  'learning_rate': 0.0001, 'lr_anneal': 0.99,
                                  'weight_decay':0.0001, 'optimizer': 'rmsprop'},
                         help='Training parameters')

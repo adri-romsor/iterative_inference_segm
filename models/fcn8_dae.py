@@ -48,7 +48,8 @@ def buildFCN8_DAE(input_concat_h_vars, input_mask_var, n_classes, nb_in_channels
         in_layer = 'input'
 
     pos, out = model_helpers.concatenate(net, in_layer, concat_h,
-                                         input_concat_h_vars, pos)
+                                         input_concat_h_vars, pos,
+                                         net['input'].output_shape[1])
 
     # pool 1
     net['conv1_1'] = ConvLayer(
@@ -58,7 +59,8 @@ def buildFCN8_DAE(input_concat_h_vars, input_mask_var, n_classes, nb_in_channels
     net['pool1'] = PoolLayer(net['conv1_2'], 2)
 
     pos, out = model_helpers.concatenate(net, 'pool1', concat_h,
-                                         input_concat_h_vars, pos)
+                                         input_concat_h_vars, pos,
+                                         net['pool1'].output_shape[1])
 
     # pool 2
     net['conv2_1'] = ConvLayer(
@@ -68,7 +70,8 @@ def buildFCN8_DAE(input_concat_h_vars, input_mask_var, n_classes, nb_in_channels
     net['pool2'] = PoolLayer(net['conv2_2'], 2)
 
     pos, out = model_helpers.concatenate(net, 'pool2', concat_h,
-                                         input_concat_h_vars, pos)
+                                         input_concat_h_vars, pos,
+                                         net['pool2'].output_shape[1])
 
     # pool 3
     net['conv3_1'] = ConvLayer(
@@ -80,7 +83,8 @@ def buildFCN8_DAE(input_concat_h_vars, input_mask_var, n_classes, nb_in_channels
     net['pool3'] = PoolLayer(net['conv3_3'], 2)
 
     pos, out = model_helpers.concatenate(net, 'pool3', concat_h,
-                                         input_concat_h_vars, pos)
+                                         input_concat_h_vars, pos,
+                                         net['pool3'].output_shape[1])
 
     # pool 4
     net['conv4_1'] = ConvLayer(
@@ -92,7 +96,8 @@ def buildFCN8_DAE(input_concat_h_vars, input_mask_var, n_classes, nb_in_channels
     net['pool4'] = PoolLayer(net['conv4_3'], 2)
 
     pos, out = model_helpers.concatenate(net, 'pool4', concat_h,
-                                         input_concat_h_vars, pos)
+                                         input_concat_h_vars, pos,
+                                         net['pool4'].output_shape[1])
 
     # pool 5
     net['conv5_1'] = ConvLayer(
@@ -104,7 +109,8 @@ def buildFCN8_DAE(input_concat_h_vars, input_mask_var, n_classes, nb_in_channels
     net['pool5'] = PoolLayer(net['conv5_3'], 2)
 
     pos, out = model_helpers.concatenate(net, 'pool5', concat_h,
-                                         input_concat_h_vars, pos)
+                                         input_concat_h_vars, pos,
+                                         net['pool5'].output_shape[1])
 
     # fc6
     net['fc6'] = ConvLayer(

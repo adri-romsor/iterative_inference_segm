@@ -56,7 +56,7 @@ def buildDAE_contextmod(input_concat_h_vars, input_mask_var, n_classes,
     else:
         in_next = 'input'
 
-    pos, out = model_helpers.concatenate(net, in_next, concat_h, input_concat_h_vars, pos)
+    pos, out = model_helpers.concatenate(net, in_next, concat_h, input_concat_h_vars, pos, 3)
 
     class IdentityInit(Initializer):
         """ We adapt the same initializiation method than in the paper"""

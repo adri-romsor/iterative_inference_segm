@@ -18,7 +18,7 @@ from layers.mylayers import CroppingLayer
 from lasagne.objectives import squared_error as squared_error_L
 
 from data_loader import load_data
-from metrics import crossentropy, entropy, squared_error_h, squared_error
+from metrics import crossentropy, entropy, squared_error_h, squared_error, jaccard
 from models.DAE_h import buildDAE
 from models.fcn8 import buildFCN8
 from models.fcn8_dae import buildFCN8_DAE
@@ -68,7 +68,9 @@ def train(dataset, learning_rate=0.005, lr_anneal=1.0,
                 'noise': 0.0,
                 'from_gt': True,
                 'temperature': 1.0,
-                'path_weights': ''}
+                'path_weights': '',
+                'layer': 'probs_dimshuffle',
+                'exp_name': ''}
 
     dae_dict.update(dae_dict_updates)
 
@@ -141,8 +143,18 @@ def train(dataset, learning_rate=0.005, lr_anneal=1.0,
     nb_in_channels = train_iter.data_shape[0]
     void = n_classes if any(void_labels) else n_classes+1
 
+    #
     # Build networks
     #
+
+    # FCN
+    print ' Building FCN network'
+    fcn = buildFCN8(nb_in_channels, input_x_var, n_classes=n_classes,
+                    void_labels=void_labels,
+                    path_weights=WEIGHTS_PATH+dataset+'/fcn8_model.npz',
+                    trainable=True, load_weights=True, layer=dae_dict['concat_h']+[dae_dict['layer']],
+                    temperature=dae_dict['temperature'])
+
     # DAE
     print ' Building DAE network'
 
@@ -153,7 +165,8 @@ def train(dataset, learning_rate=0.005, lr_anneal=1.0,
     ae_h = ae_h and 'pool' in dae_dict['concat_h'][-1]
 
     if dae_dict['kind'] == 'standard':
-        dae = buildDAE(input_concat_h_vars, input_mask_var, n_classes, trainable=True,
+        dae = buildDAE(input_concat_h_vars, input_mask_var, n_classes,
+                       nb_features_to_concat=fcn[0].output_shape[1], trainable=True,
                        void_labels=void_labels, load_weights=resume,
                        path_weights=loadpath, model_name='dae_model_best.npz',
                        out_nonlin=softmax, concat_h=dae_dict['concat_h'],
@@ -180,16 +193,6 @@ def train(dataset, learning_rate=0.005, lr_anneal=1.0,
                                   concat_h=dae_dict['concat_h'])
     else:
         raise ValueError('Unknown dae kind')
-
-    # FCN
-    print ' Building FCN network'
-    if not dae_dict['from_gt']:
-        dae_dict['concat_h'] += ['probs_dimshuffle']
-    fcn = buildFCN8(nb_in_channels, input_x_var, n_classes=n_classes,
-                    void_labels=void_labels,
-                    path_weights=WEIGHTS_PATH+dataset+'/fcn8_model.npz',
-                    trainable=True, load_weights=True, layer=dae_dict['concat_h'],
-                    temperature=dae_dict['temperature'])
 
     #
     # Define and compile theano functions
@@ -237,28 +240,33 @@ def train(dataset, learning_rate=0.005, lr_anneal=1.0,
     # loss
     loss = 0
     test_loss = 0
-    if 'crossentropy' in training_loss:
-        # Convert DAE prediction to 2D
-        dae_prediction_2D = dae_prediction.dimshuffle((0, 2, 3, 1))
-        sh = dae_prediction_2D.shape
-        dae_prediction_2D = dae_prediction_2D.reshape((T.prod(sh[:3]), sh[3]))
 
-        test_dae_prediction_2D = test_dae_prediction.dimshuffle((0, 2, 3, 1))
-        sh = test_dae_prediction_2D.shape
-        test_dae_prediction_2D = test_dae_prediction_2D.reshape((T.prod(sh[:3]),
-                                                                sh[3]))
-        # Convert target to 2D
-        target_var_2D = target_var.dimshuffle((0, 2, 3, 1))
-        sh = target_var_2D.shape
-        target_var_2D = target_var_2D.reshape((T.prod(sh[:3]), sh[3]))
+    # Convert DAE prediction to 2D
+    dae_prediction_2D = dae_prediction.dimshuffle((0, 2, 3, 1))
+    sh = dae_prediction_2D.shape
+    dae_prediction_2D = dae_prediction_2D.reshape((T.prod(sh[:3]), sh[3]))
+
+    test_dae_prediction_2D = test_dae_prediction.dimshuffle((0, 2, 3, 1))
+    sh = test_dae_prediction_2D.shape
+    test_dae_prediction_2D = test_dae_prediction_2D.reshape((T.prod(sh[:3]),
+                                                            sh[3]))
+    # Convert target to 2D
+    target_var_2D = target_var.dimshuffle((0, 2, 3, 1))
+    sh = target_var_2D.shape
+    target_var_2D = target_var_2D.reshape((T.prod(sh[:3]), sh[3]))
+
+    if 'crossentropy' in training_loss:
         # Compute loss
         loss += crossentropy(dae_prediction_2D, target_var_2D, void_labels,
                              one_hot=True)
         test_loss += crossentropy(test_dae_prediction_2D, target_var_2D,
                                   void_labels, one_hot=True)
+
+    test_mse_loss = squared_error(test_dae_prediction, target_var, void)
     if 'squared_error' in training_loss:
-        loss += squared_error(dae_prediction, target_var, void)
-        test_loss += squared_error(test_dae_prediction, target_var, void)
+        mse_loss = squared_error(dae_prediction, target_var, void)
+        loss += mse_loss
+        test_loss += test_mse_loss
 
     # Add intermediate losses
     if 'squared_error_h' in training_loss:
@@ -275,10 +283,17 @@ def train(dataset, learning_rate=0.005, lr_anneal=1.0,
 
         loss += squared_error_h(dae_prediction_h, test_dae_prediction_h_gt)
         test_loss += squared_error_h(test_dae_prediction_h, test_dae_prediction_h_gt)
+
+    # compute jaccard
+    jacc = jaccard(dae_prediction_2D, target_var_2D, n_classes, one_hot=True)
+    test_jacc = jaccard(test_dae_prediction_2D, target_var_2D, n_classes, one_hot=True)
+
     # if reconstructing h add the corresponding loss terms
     if ae_h:
         loss += squared_error_L(h, h_hat).mean()
         test_loss += squared_error_L(h_test, h_hat_test).mean()
+
+
     # network parameters
     params = lasagne.layers.get_all_params(dae, trainable=True)
 
@@ -294,10 +309,12 @@ def train(dataset, learning_rate=0.005, lr_anneal=1.0,
     train_fn = theano.function(input_concat_h_vars + [input_mask_var, target_var],
                                loss, updates=updates)
     fcn_fn = theano.function([input_x_var], fcn_prediction)
-    val_fn = theano.function(input_concat_h_vars + [input_mask_var, target_var], test_loss)
+    val_fn = theano.function(input_concat_h_vars + [input_mask_var, target_var], [test_loss, test_jacc, test_mse_loss])
 
     err_train = []
     err_valid = []
+    jacc_val_arr = []
+    mse_val_arr = []
     patience = 0
 
     #
@@ -339,6 +356,8 @@ def train(dataset, learning_rate=0.005, lr_anneal=1.0,
 
         # Validation
         cost_val_tot = 0
+        jacc_val_tot = 0
+        mse_val_tot = 0
         for i in range(n_batches_val):
             # Get minibatch
             X_val_batch, L_val_batch = val_iter.next()
@@ -353,16 +372,21 @@ def train(dataset, learning_rate=0.005, lr_anneal=1.0,
                 H_pred_batch = H_pred_batch[:-1]
 
             # Validation step
-
-            cost_val = val_fn(*(H_pred_batch + [Y_pred_batch, L_val_batch]))
+            cost_val, jacc_val, mse_val = val_fn(*(H_pred_batch + [Y_pred_batch, L_val_batch]))
             cost_val_tot += cost_val
+            jacc_val_tot += jacc_val
+            mse_val_tot += mse_val
 
         err_valid += [cost_val_tot / n_batches_val]
+        jacc_val_arr += [np.mean(jacc_val_tot[0, :] / jacc_val_tot[1, :])]
+        mse_val_arr += [mse_val_tot /  n_batches_val]
 
-        out_str = "EPOCH %i: Avg epoch training cost train %f, cost val %f" + \
-                  " took %f s"
+        out_str = "EPOCH %i: Avg epoch training cost train %f, cost val %f," + \
+                  " jacc val %f, mse val % f took %f s"
         out_str = out_str % (epoch, err_train[epoch],
                              err_valid[epoch],
+                             jacc_val_arr[epoch],
+                             mse_val_arr[epoch],
                              time.time() - start_time)
         print out_str
 
@@ -375,19 +399,21 @@ def train(dataset, learning_rate=0.005, lr_anneal=1.0,
         # Early stopping and saving stuff
         if epoch == 0:
             best_err_val = err_valid[epoch]
-        elif epoch > 0 and err_valid[epoch] < best_err_val:
+            best_jacc_val = jacc_val_arr[epoch]
+        elif epoch > 0 and jacc_val_arr[epoch] > best_jacc_val: #  and err_valid[epoch] < best_err_val
             best_err_val = err_valid[epoch]
+            best_jacc_val = jacc_val_arr[epoch]
             patience = 0
             np.savez(os.path.join(savepath, 'dae_model_best.npz'),
                      *lasagne.layers.get_all_param_values(dae))
             np.savez(os.path.join(savepath, 'dae_errors_best.npz'),
-                     err_valid, err_train)
+                     err_train, err_valid, jacc_val_arr)
         else:
             patience += 1
             np.savez(os.path.join(savepath, 'dae_model_last.npz'),
                      *lasagne.layers.get_all_param_values(dae))
             np.savez(os.path.join(savepath, 'dae_errors_last.npz'),
-                     err_valid, err_train)
+                     err_train, err_valid, jacc_val_arr)
 
         # Finish training if patience has expired or max nber of epochs
         # reached
@@ -418,12 +444,13 @@ def main():
                         help='Training configuration')
     parser.add_argument('-dae_dict',
                         type=dict,
-                        default={'kind': 'standard', 'dropout': 0.5, 'skip': True,
-                                 'unpool_type': 'standard', 'noise': 0,
-                                 'concat_h': ['pool3'], 'from_gt': False,
-                                 'n_filters': 64, 'conv_before_pool': 1,
+                        default={'kind': 'contextmod', 'dropout': 0.5, 'skip': True,
+                                 'unpool_type': 'trackind', 'noise': 0,
+                                 'concat_h': ['input'], 'from_gt': False,
+                                 'n_filters': 32, 'conv_before_pool': 1,
                                  'additional_pool': 2, 'temperature': 1.0,
-                                 'path_weights': ''},
+                                 'path_weights': '',  'layer': 'probs_dimshuffle',
+                                 'exp_name' : ''},
                         help='DAE kind and parameters')
     parser.add_argument('-data_augmentation',
                         type=dict,

@@ -9,8 +9,8 @@ from fcn_down import buildFCN_down
 from lasagne.nonlinearities import linear
 
 
-def buildDAE(input_concat_h_vars, input_mask_var, n_classes, ae_h=False,
-             void_labels=[], path_weights='/Tmp/romerosa/itinf/models/',
+def buildDAE(input_concat_h_vars, input_mask_var, n_classes, nb_features_to_concat,
+             ae_h=False, void_labels=[], path_weights='/Tmp/romerosa/itinf/models/',
              model_name='dae_model.npz', trainable=False, load_weights=False,
              out_nonlin=linear, concat_h=['input'], noise=0.1, n_filters=64,
              conv_before_pool=1, additional_pool=0, dropout=0., skip=False,
@@ -22,6 +22,7 @@ def buildDAE(input_concat_h_vars, input_mask_var, n_classes, ae_h=False,
     # Build fcn contracting path
     fcn_down, last_layer_down = buildFCN_down(
         input_mask_var, input_concat_h_vars,
+        nb_features_to_concat=nb_features_to_concat,
         n_classes=n_classes,
         concat_layers=concat_h,
         noise=noise, n_filters=n_filters,

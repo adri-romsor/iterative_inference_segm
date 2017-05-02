@@ -6,7 +6,7 @@ import numpy as np
 import model_helpers
 
 
-def buildFCN_down(input_var, concat_h_vars,
+def buildFCN_down(input_var, concat_h_vars, nb_features_to_concat,
                   n_classes=21, concat_layers=['pool5'], noise=0.1,
                   n_filters=64, conv_before_pool=1, additional_pool=0,
                   dropout=0., ae_h=False):
@@ -21,6 +21,8 @@ def buildFCN_down(input_var, concat_h_vars,
     ----------
     input_var: theano tensor, input of the network
     concat_h_vars: list of theano tensors, intermediate inputs of the network
+    nb_features_to_concat: number of feature maps that the layer that we want to
+        concatenate has
     n_classes: int, number of classes
     concat_layers: list intermediate layers names (layers we want to
         concatenate)
@@ -63,7 +65,7 @@ def buildFCN_down(input_var, concat_h_vars,
 
     # check whether we need to concatenate concat_h
     pos, out = model_helpers.concatenate(net, in_next, concat_layers,
-                                         concat_h_vars, pos)
+                                         concat_h_vars, pos, nb_features_to_concat)
 
     if concat_layers[-1] == 'input' and additional_pool == 0:
         raise ValueError('It seems your DAE will have no conv/pooling layers!')
@@ -74,6 +76,7 @@ def buildFCN_down(input_var, concat_h_vars,
         # freeze params of the pre-h layers
         if ae_h and p == n_pool and net != {} and 'pool' in concat_layers[-1]:
             model_helpers.freezeParameters(net['pool'+str(p)])
+
         for i in range(1, conv_before_pool+1):
             # Choose padding type: this is defined according to the
             # layers:
@@ -83,7 +86,7 @@ def buildFCN_down(input_var, concat_h_vars,
             # don't pad
             if p == 0 and i == 1 and len(concat_layers) == 1 and \
                concat_layers[-1] != 'input':
-                pad_type = 100
+                pad_type = 100  # be careful: that only works with fcn8 concatenation!!
             else:
                 pad_type = 'same'
 
@@ -121,7 +124,7 @@ def buildFCN_down(input_var, concat_h_vars,
         if p < n_pool:
             pos, out = model_helpers.concatenate(net, 'pool'+str(p+1),
                                                  concat_layers, concat_h_vars,
-                                                 pos)
+                                                 pos, nb_features_to_concat)
 
         last_layer = out
 

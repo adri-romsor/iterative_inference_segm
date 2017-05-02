@@ -1,7 +1,7 @@
 import theano.tensor as T
 import lasagne
 from lasagne.layers import ReshapeLayer
-from lasagne.layers import NonlinearityLayer, DimshuffleLayer, ElemwiseSumLayer
+from lasagne.layers import NonlinearityLayer, DimshuffleLayer, ElemwiseSumLayer, InverseLayer
 from layers.mylayers import CroppingLayer, DePool2D
 from lasagne.layers import Deconv2DLayer as DeconvLayer
 from lasagne.layers import Conv2DLayer as ConvLayer
@@ -68,10 +68,10 @@ def UnpoolNet(incoming_net, net, p, unpool, n_classes,
         # if it is the first unpooling, otherwise it will use the last merged
         # layer (resulting from the previous unpooling)
         net['up'+str(p)] = \
-                DePool2D(incoming_net[incoming_layer] if p == unpool else
-                         net['fused_up'+str(p+1)],
-                         2, incoming_net['pool'+str(p)],
-                         incoming_net['pool'+str(p)].input_layer)
+            DePool2D(incoming_net[incoming_layer] if p == unpool else
+            net['fused_up'+str(p+1)],
+            2, incoming_net['pool'+str(p)],
+            incoming_net['pool'+str(p)].input_layer)
         # Convolve
         net['up_conv'+str(p)] = \
             ConvLayer(net['up'+str(p)], n_cl, 3,

@@ -120,7 +120,7 @@ def build_experiment_name(kind='fcn8', concat_h=[], optimizer='rmsprop',
                           from_gt=False, temperature=1.0, n_filters=64,
                           conv_before_pool=1, skip=True, additional_pool=0,
                           unpool_type='standard', ae_h=False,
-                          path_weights=''):
+                          path_weights='', layer='probs_dimshuffle', exp_name=''):
     """
     Build experiment name
 
@@ -137,7 +137,7 @@ def build_experiment_name(kind='fcn8', concat_h=[], optimizer='rmsprop',
     all_concat_h = '_'.join(concat_h)
     all_loss = '_'.join(training_loss)
 
-    exp_name = kind + '_' + all_concat_h
+    exp_name = exp_name + '_' + kind + '_' + all_concat_h
 
     if kind == 'standard':
         exp_name += '_f' + str(n_filters) + 'c' + \
@@ -158,6 +158,7 @@ def build_experiment_name(kind='fcn8', concat_h=[], optimizer='rmsprop',
 
     exp_name += '_pretrained' if len(path_weights) > 0 else ''
     exp_name += '_PlugPlay' if ae_h else ''
+    exp_name += '_' + layer
     print(exp_name)
 
     return exp_name

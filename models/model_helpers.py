@@ -69,7 +69,7 @@ def softmax4D(x):
     return softmax_x
 
 
-def concatenate(net, in_layer, concat_h, concat_vars, pos):
+def concatenate(net, in_layer, concat_h, concat_vars, pos, nb_concat_features):
     """
     Auxiliary function that checks whether we should concatenate the output of
     a layer `in_layer` of a network `net` to some a tensor in `concat_vars`
@@ -81,6 +81,7 @@ def concatenate(net, in_layer, concat_h, concat_vars, pos):
     concat_h: list of layers to concatenate
     concat_vars: list of variables (tensors) to concatenate
     pos: position in lists `concat_h` and `concat_vars` we want to check
+    nb_concat_features: number of features in the layer we want to concatenate
     """
     if pos < len(concat_h) and concat_h[pos] == 'input':
         concat_h[pos] = in_layer
@@ -88,10 +89,7 @@ def concatenate(net, in_layer, concat_h, concat_vars, pos):
     # if this is the layer we want to concatenate, create an InputLayer with the
     # tensor we want to concatenate and a ConcatLayer that does the job afterwards
     if in_layer in concat_h:
-        net[in_layer + '_h'] = InputLayer((None, net[in_layer].input_shape[1] if
-                                      (concat_h[pos] != 'noisy_input' and
-                                      concat_h[pos] != 'input')
-                                      else 3, None, None), concat_vars[pos])
+        net[in_layer + '_h'] = InputLayer((None, nb_concat_features, None, None), concat_vars[pos])
         net[in_layer + '_concat'] = ConcatLayer((net[in_layer + '_h'],
                                             net[in_layer]), axis=1, cropping=None)
         pos += 1
