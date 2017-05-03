@@ -30,62 +30,16 @@ Pre-trained models for semantic segmentation and pre-trained DAE for iterative i
 ## Relevant papers
 See wiki
 
-## TODO list
-- [ ] Code VGG plug and play
-- [ ] Experiments
+## TODO code list
+- [ ] Check what is wrong with the context module
+- [ ] Prepare code to load h and ŷ of SOTA pre-trained model
+- [ ] Extract h and ŷ of DenseNet
+- [ ] Extract h and ŷ of FCN-FC-ResNet
+- [ ] Check InverseLayer (ongoing, Adriana)
 
-### TODO experiments
-**Camvid:**
-
-| Layer h | Extra depth | Error | Input y | Skip | Upsampling |
-|---------|-------------|-------|---------|------|------------|
-| Pool 3  | +2          | CE    | FCN8    | No   | standard   |
-| Pool 3  | +2          | MSE   | FCN8    | No   | standard   |
-| Pool 3  | +2          | MSE   | GT      | No   | standard   |
-| Pool 3  | +2          | MSE   | GT      | Yes  | standard   |
-| Pool 3  | +2          | MSE   | FCN8    | Yes  | standard   |
-| Pool 4  | +1          | MSE   | GT      | No   | standard   |
-| Input   | +5          | MSE   | GT      | No   | standard   |
-| Input   | +5          | MSE   | GT      | Yes  | standard   |
-| Pool 1  | +4          | MSE   | GT      | No   | standard   |
-
-
-
-**Future datasets:**
-- [ ] PascalVOC
-- [ ] Polyps 
-- [ ] Nerve ultrasound?
-
-## Some results
-### CamVid
-| **Ours** | Gl. Accuracy | Jaccard Ind. |
-|-------------------|--------------|--------------|
-| FCN-8 baseline     |88.06|57.03|
-| FCN-8 + CRF     |||
-| FCN-8 + DAE (input, 256)     |||
-| FCN-8 + DAE (pool1, 512)     |||
-| FCN-8 + DAE (pool3, 1024)     |88.48|57.78|
-| FCN-8 + DAE (pool5, 4096)     |||
-| FCN-8 + DAE (pool1, pool3, 1024)     |||
-| FCN-8 + DAE (pool1, pool3, pool5, 4096)     |||
-
-
-| **SOTA methods** | Gl. Accuracy | Jaccard Ind. |
-|------------------|--------------|--------------|
-|SegNet Basic          |82.8|46.3|
-|SegNet                |88.6|50.2|
-|Bayesian SegNet Basic |81.6|55.8|
-|Reseg                 |**88.7**|58.8|
-|Bayesian SegNet       |86.9|**63.1**|
-
-### PascalVOC
-| **Ours** | Gl. Accuracy | Jaccard Ind. |
-|-------------------|--------------|--------------|
-| FCN-8 baseline     |||
-
-
-| **SOTA methods** | Gl. Accuracy | Jaccard Ind. |
-|------------------|--------------|--------------|
-
-
-
+### TODO experiments list
+- [ ] Try different h (so far, pool4 seems to be the best option)
+- [ ] Try different noise z (ongoing, Adriana)
+- [ ] Explore more architectures
+- [ ] Run CRF
+- [ ] Experiments from ground truth instead of pre-trained network output (ongoing, Adriana)

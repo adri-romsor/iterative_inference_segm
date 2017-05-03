@@ -346,7 +346,7 @@ def train(dataset, learning_rate=0.005, lr_anneal=1.0,
                 Y_pred_batch = L_train_batch[:, :void, :, :]
             else:
                 Y_pred_batch = H_pred_batch[-1]
-                H_pred_batch = H_pred_batch[:-1]
+            H_pred_batch = H_pred_batch[:-1]
 
             # Training step
             cost_train = train_fn(*(H_pred_batch + [Y_pred_batch, L_train_batch]))
@@ -369,7 +369,7 @@ def train(dataset, learning_rate=0.005, lr_anneal=1.0,
                 Y_pred_batch = L_val_batch[:, :void, :, :]
             else:
                 Y_pred_batch = H_pred_batch[-1]
-                H_pred_batch = H_pred_batch[:-1]
+            H_pred_batch = H_pred_batch[:-1]
 
             # Validation step
             cost_val, jacc_val, mse_val = val_fn(*(H_pred_batch + [Y_pred_batch, L_val_batch]))

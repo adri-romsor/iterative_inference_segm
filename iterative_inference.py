@@ -211,7 +211,11 @@ def inference(dataset, learn_step=0.005, num_iter=500,
 
         # Compute fcn prediction y and h
         pred_test_batch = pred_fcn_fn(X_test_batch)
-        Y_test_batch = pred_test_batch[-1]
+        if dae_dict['from_gt']:
+            Y_test_batch = L_test_batch[:, :void, :, :]
+        else:
+            Y_test_batch = pred_test_batch[-1]
+        # Y_test_batch = pred_test_batch[-1]
         H_test_batch = pred_test_batch[:-1]
 
         # Compute metrics before iterative inference
