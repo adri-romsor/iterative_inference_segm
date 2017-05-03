@@ -116,10 +116,20 @@ def inference(dataset, learn_step=0.005, num_iter=500,
     # Build networks
     #
 
+    # Build FCN8  with pre-trained weights up to layer_h + prediction
+    print ' Building FCN network'
+    fcn = buildFCN8(nb_in_channels, input_var=input_x_var,
+                    n_classes=n_classes, void_labels=void_labels,
+                    path_weights=WEIGHTS_PATH+dataset+'/fcn8_model.npz',
+                    trainable=False, load_weights=True,
+                    layer=dae_dict['concat_h']+[dae_dict['layer']],
+                    temperature=dae_dict['temperature'])
+
     # Build DAE with pre-trained weights
     print ' Building DAE network'
     if dae_dict['kind'] == 'standard':
-        dae = buildDAE(input_concat_h_vars, y_hat_var, n_classes, trainable=True,
+        dae = buildDAE(input_concat_h_vars, y_hat_var, n_classes,
+                       nb_features_to_concat=fcn[0].output_shape[1], trainable=True,
                        void_labels=void_labels, load_weights=True,
                        path_weights=loadpath, model_name='dae_model_best.npz',
                        out_nonlin=softmax, concat_h=dae_dict['concat_h'],
@@ -143,15 +153,6 @@ def inference(dataset, learn_step=0.005, num_iter=500,
                                   concat_h=dae_dict['concat_h'])
     else:
         raise ValueError('Unknown dae kind')
-
-    # Build FCN8  with pre-trained weights up to layer_h + prediction
-    print ' Building FCN network'
-    dae_dict['concat_h'] += ['probs_dimshuffle']
-    fcn = buildFCN8(nb_in_channels, input_var=input_x_var,
-                    n_classes=n_classes, void_labels=void_labels,
-                    path_weights=WEIGHTS_PATH+dataset+'/fcn8_model.npz',
-                    trainable=False, load_weights=True,
-                    layer=dae_dict['concat_h'],temperature=dae_dict['temperature'])
 
     #
     # Define and compile theano functions
@@ -308,12 +309,12 @@ def main():
                         help='Dataset.')
     parser.add_argument('-step',
                         type=float,
-                        default=0.1,
+                        default=0.08,
                         help='step')
     parser.add_argument('--num_iter',
                         '-ne',
                         type=int,
-                        default=5,
+                        default=10,
                         help='Max number of iterations')
     parser.add_argument('-save_perstep',
                         type=bool,
@@ -328,7 +329,7 @@ def main():
                         default={'kind': 'standard', 'dropout': 0.5, 'skip': True,
                                   'unpool_type': 'trackind', 'noise': 0,
                                   'concat_h': ['pool4'], 'from_gt': False,
-                                  'n_filters': 64, 'conv_before_pool': 1,
+                                  'n_filters': 32, 'conv_before_pool': 1,
                                   'additional_pool': 2,
                                   'path_weights': '', 'layer': 'probs_dimshuffle',
                                   'exp_name' : ''},

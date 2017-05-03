@@ -137,7 +137,7 @@ def build_experiment_name(kind='fcn8', concat_h=[], optimizer='rmsprop',
     all_concat_h = '_'.join(concat_h)
     all_loss = '_'.join(training_loss)
 
-    exp_name = exp_name + '_' + kind + '_' + all_concat_h
+    exp_name = exp_name + kind + '_' + all_concat_h
 
     if kind == 'standard':
         exp_name += '_f' + str(n_filters) + 'c' + \

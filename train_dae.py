@@ -444,9 +444,9 @@ def main():
                         help='Training configuration')
     parser.add_argument('-dae_dict',
                         type=dict,
-                        default={'kind': 'contextmod', 'dropout': 0.5, 'skip': True,
+                        default={'kind': 'standard', 'dropout': 0.5, 'skip': True,
                                  'unpool_type': 'trackind', 'noise': 0,
-                                 'concat_h': ['input'], 'from_gt': False,
+                                 'concat_h': ['pool4'], 'from_gt': False,
                                  'n_filters': 32, 'conv_before_pool': 1,
                                  'additional_pool': 2, 'temperature': 1.0,
                                  'path_weights': '',  'layer': 'probs_dimshuffle',
