@@ -72,6 +72,7 @@ def UnpoolNet(incoming_net, net, p, unpool, n_classes,
             net['fused_up'+str(p+1)],
             2, incoming_net['pool'+str(p)],
             incoming_net['pool'+str(p)].input_layer)
+
         # Convolve
         net['up_conv'+str(p)] = \
             ConvLayer(net['up'+str(p)], n_cl, 3,

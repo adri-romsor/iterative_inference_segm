@@ -6,7 +6,7 @@ import numpy as np
 import model_helpers
 
 
-def buildFCN_down(input_var, concat_h_vars, nb_features_to_concat,
+def buildFCN_down(input_var, concat_h_vars, nb_features_to_concat, padding,
                   n_classes=21, concat_layers=['pool5'], noise=0.1,
                   n_filters=64, conv_before_pool=1, additional_pool=0,
                   dropout=0., ae_h=False):
@@ -23,6 +23,7 @@ def buildFCN_down(input_var, concat_h_vars, nb_features_to_concat,
     concat_h_vars: list of theano tensors, intermediate inputs of the network
     nb_features_to_concat: number of feature maps that the layer that we want to
         concatenate has
+    padding: padding of the input layer
     n_classes: int, number of classes
     concat_layers: list intermediate layers names (layers we want to
         concatenate)
@@ -85,8 +86,8 @@ def buildFCN_down(input_var, concat_h_vars, nb_features_to_concat,
             # - if concatenation is only performed at the input, we
             # don't pad
             if p == 0 and i == 1 and len(concat_layers) == 1 and \
-               concat_layers[-1] != 'input':
-                pad_type = 100  # be careful: that only works with fcn8 concatenation!!
+               concat_layers[-1] != 'input' and padding > 0:
+                pad_type = padding
             else:
                 pad_type = 'same'
 

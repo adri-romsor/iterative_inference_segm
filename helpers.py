@@ -113,7 +113,7 @@ def save_img(image_batch, mask_batch, prediction_ii, prediction_fcn,
     return images
 
 
-def build_experiment_name(kind='fcn8', concat_h=[], optimizer='rmsprop',
+def build_experiment_name(segm_net='fcn8', kind='fcn8', concat_h=[], optimizer='rmsprop',
                           training_loss=['crossentropy'],
                           learning_rate=0.0001, lr_anneal=0.99, data_aug=False,
                           weight_decay=0.0001, dropout=0.5, noise=0.0,
@@ -137,7 +137,7 @@ def build_experiment_name(kind='fcn8', concat_h=[], optimizer='rmsprop',
     all_concat_h = '_'.join(concat_h)
     all_loss = '_'.join(training_loss)
 
-    exp_name = exp_name + kind + '_' + all_concat_h
+    exp_name = exp_name + segm_net + '_' + kind + '_' + all_concat_h
 
     if kind == 'standard':
         exp_name += '_f' + str(n_filters) + 'c' + \

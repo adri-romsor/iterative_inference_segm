@@ -19,8 +19,9 @@ from lasagne.objectives import squared_error as squared_error_L
 
 from data_loader import load_data
 from metrics import crossentropy, entropy, squared_error_h, squared_error, jaccard
-from models.DAE_h import buildDAE
 from models.fcn8 import buildFCN8
+from models.FCDenseNet import build_fcdensenet
+from models.DAE_h import buildDAE
 from models.fcn8_dae import buildFCN8_DAE
 from models.contextmod_dae import buildDAE_contextmod
 from layers.mylayers import DePool2D
@@ -47,7 +48,7 @@ else:
     raise ValueError('Unknown user : {}'.format(getuser()))
 
 
-def train(dataset, learning_rate=0.005, lr_anneal=1.0,
+def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
           weight_decay=1e-4, num_epochs=500, max_patience=100,
           optimizer='rmsprop', training_loss=['squared_error'],
           batch_size=[10, 1, 1], ae_h=False,
@@ -77,7 +78,8 @@ def train(dataset, learning_rate=0.005, lr_anneal=1.0,
     #
     # Prepare load/save directories
     #
-    exp_name = build_experiment_name(training_loss=training_loss,
+    exp_name = build_experiment_name(segm_net,
+                                     training_loss=training_loss,
                                      data_aug=bool(data_augmentation),
                                      learning_rate=learning_rate,
                                      lr_anneal=lr_anneal,
@@ -111,22 +113,6 @@ def train(dataset, learning_rate=0.005, lr_anneal=1.0,
     lr = theano.shared(np.float32(learning_rate), 'learning_rate')
 
     #
-    # Only for debugging
-    #
-    test_values = False
-    if test_values:
-        theano.config.compute_test_value = 'raise'
-        if dataset == 'camvid':
-            input_x_var.tag.test_value = np.zeros((1, 3, 224, 224), dtype="float32")
-            input_mask_var.tag.test_value = np.zeros((1, 11, 224, 224),
-                                                     dtype="float32")
-            input_repr_var[0].tag.test_value = np.zeros((1, 256, 52, 52),
-                                                        dtype="float32")
-        if dataset == 'polyps912':
-            input_mask_var.tag.test_value = np.zeros((10, 2, 224, 224), dtype='float32')
-            input_x_var.tag.test_value = np.zeros((10, 3, 224, 224), dtype='float32')
-            # target_var.tag.test_value = np.zeros((10, 3, 224, 224), dtype='int32')
-    #
     # Build dataset iterator
     #
     train_iter, val_iter, _ = load_data(dataset,
@@ -147,15 +133,30 @@ def train(dataset, learning_rate=0.005, lr_anneal=1.0,
     # Build networks
     #
 
-    # FCN
-    print ' Building FCN network'
-    fcn = buildFCN8(nb_in_channels, input_x_var, n_classes=n_classes,
-                    void_labels=void_labels,
-                    path_weights=WEIGHTS_PATH+dataset+'/fcn8_model.npz',
-                    trainable=True, load_weights=True, layer=dae_dict['concat_h']+[dae_dict['layer']],
-                    temperature=dae_dict['temperature'])
+    # Check that model and dataset get along
+    print ' Checking options'
+    assert (segm_net == 'fcn8' and dataset == 'camvid') or \
+        (segm_net == 'densenet' and dataset == 'camvid') or \
+        (segm_net == 'fcn_fcresnet' and dataset == 'em')
 
-    # DAE
+    # Build segmentation network
+    print ' Building segmentation network'
+    if segm_net == 'fcn8':
+        fcn = buildFCN8(nb_in_channels, input_x_var, n_classes=n_classes,
+                        void_labels=void_labels,
+                        path_weights=WEIGHTS_PATH+dataset+'/fcn8_model.npz',
+                        load_weights=True, layer=dae_dict['concat_h']+[dae_dict['layer']])
+        padding = 100
+    elif segm_net == 'densenet':
+        fcn  = build_fcdensenet(input_x_var, nb_in_channels=nb_in_channels,
+                                n_classes=n_classes, layer=dae_dict['concat_h'])
+        padding = 0
+    elif segm_net == 'fcn_fcresnet':
+        raise NotImplementedError
+    else:
+        raise ValueError
+
+    # Build DAE network
     print ' Building DAE network'
 
     if ae_h and dae_dict['kind'] != 'standard':
@@ -166,7 +167,8 @@ def train(dataset, learning_rate=0.005, lr_anneal=1.0,
 
     if dae_dict['kind'] == 'standard':
         dae = buildDAE(input_concat_h_vars, input_mask_var, n_classes,
-                       nb_features_to_concat=fcn[0].output_shape[1], trainable=True,
+                       nb_features_to_concat=fcn[0].output_shape[1], padding=padding,
+                       trainable=True,
                        void_labels=void_labels, load_weights=resume,
                        path_weights=loadpath, model_name='dae_model_best.npz',
                        out_nonlin=softmax, concat_h=dae_dict['concat_h'],
@@ -202,7 +204,7 @@ def train(dataset, learning_rate=0.005, lr_anneal=1.0,
     print "Defining and compiling training functions"
 
     # fcn prediction
-    fcn_prediction = lasagne.layers.get_output(fcn, deterministic=True)
+    fcn_prediction = lasagne.layers.get_output(fcn, deterministic=True, batch_norm_use_averages=False)
 
     # select prediction layers (pooling and upsampling layers)
     dae_all_lays = lasagne.layers.get_all_layers(dae)
@@ -434,20 +436,24 @@ def main():
                         type=str,
                         default='camvid',
                         help='Dataset.')
+    parser.add_argument('-segmentation_net',
+                        type=str,
+                        default='fcn8',
+                        help='Segmentation network.')
     parser.add_argument('-train_dict',
                         type=dict,
-                        default={'learning_rate': 0.0001, 'lr_anneal': 0.99,
+                        default={'learning_rate': 0.001, 'lr_anneal': 0.99,
                                  'weight_decay': 0.0001, 'num_epochs': 1000,
                                  'max_patience': 100, 'optimizer': 'rmsprop',
                                  'batch_size': [10, 10, 10],
-                                 'training_loss': ['crossentropy']},
+                                 'training_loss': ['crossentropy', 'squared_error']},
                         help='Training configuration')
     parser.add_argument('-dae_dict',
                         type=dict,
                         default={'kind': 'standard', 'dropout': 0.5, 'skip': True,
                                  'unpool_type': 'trackind', 'noise': 0,
                                  'concat_h': ['pool4'], 'from_gt': False,
-                                 'n_filters': 32, 'conv_before_pool': 1,
+                                 'n_filters': 64, 'conv_before_pool': 1,
                                  'additional_pool': 2, 'temperature': 1.0,
                                  'path_weights': '',  'layer': 'probs_dimshuffle',
                                  'exp_name' : ''},
@@ -468,8 +474,8 @@ def main():
                         help='Whether to train from images within 0-255 range')
     args = parser.parse_args()
 
-    train(dataset=args.dataset, dae_dict_updates=args.dae_dict,
-          data_augmentation=args.data_augmentation,
+    train(dataset=args.dataset, segm_net=args.segmentation_net,
+          dae_dict_updates=args.dae_dict, data_augmentation=args.data_augmentation,
           train_from_0_255=args.train_from_0_255, ae_h=args.ae_h, resume=False,
           savepath=SAVEPATH, loadpath=LOADPATH, **args.train_dict)
 

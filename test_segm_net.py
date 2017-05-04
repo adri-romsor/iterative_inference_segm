@@ -10,6 +10,7 @@ from theano import config
 import lasagne
 
 from models.fcn8 import buildFCN8
+from models.FCDenseNet import build_fcdensenet
 from data_loader import load_data
 
 from metrics import jaccard, accuracy
@@ -35,7 +36,7 @@ else:
     raise ValueError('Unknown user : {}'.format(getuser()))
 
 
-def test(dataset, which_set='val', data_aug=False,
+def test(dataset, segm_net, which_set='test', data_aug=False,
          savepath=None, loadpath=None, test_from_0_255=False):
 
     #
@@ -58,28 +59,28 @@ def test(dataset, which_set='val', data_aug=False,
     void = n_classes if any(void_labels) else n_classes+1
 
     #
-    # Prepare load/save directories
+    # Build segmentation network
     #
-    exp_name = 'fcn8'
-
-    #
-    # Build networks
-    #
-    print 'Building networks'
-    # Build FCN8  with pre-trained weights up to layer_h + prediction
-    fcn = buildFCN8(nb_in_channels, input_var=input_x_var,
-                    n_classes=n_classes,
-                    void_labels=void_labels,
-                    trainable=False, load_weights=True,
-                    layer=['probs'],
-                    path_weights=WEIGHTS_PATH+dataset+'/fcn8_model.npz')  # new_fcn8_model_best.npz
-    print WEIGHTS_PATH+dataset+'/fcn8_data_aug/new_fcn8_model_best.npz'
+    print ' Building segmentation network'
+    if segm_net == 'fcn8':
+        fcn = buildFCN8(nb_in_channels, input_var=input_x_var,
+                        n_classes=n_classes, void_labels=void_labels,
+                        path_weights=WEIGHTS_PATH+dataset+'/fcn8_model.npz',
+                        trainable=False, load_weights=True,
+                        layer=['probs'])
+    elif segm_net == 'densenet':
+        fcn  = build_fcdensenet(input_x_var, nb_in_channels=nb_in_channels,
+                                n_classes=n_classes, layer=[], output_d='2d')
+    elif segm_net == 'fcn_fcresnet':
+        raise NotImplementedError
+    else:
+        raise ValueError
 
     #
     # Define and compile theano functions
     #
     print "Defining and compiling test functions"
-    test_prediction = lasagne.layers.get_output(fcn, deterministic=True)[0]
+    test_prediction = lasagne.layers.get_output(fcn, deterministic=True, batch_norm_use_averages=False)[0]
 
     test_acc = accuracy(test_prediction, target_var, void_labels)
     test_jacc = jaccard(test_prediction, target_var, n_classes)
@@ -135,6 +136,10 @@ def main():
     parser.add_argument('-dataset',
                         default='camvid',
                         help='Dataset.')
+    parser.add_argument('-segmentation_net',
+                        type=str,
+                        default='densenet',
+                        help='Segmentation network.')
     parser.add_argument('-test_from_0_255',
                         type=bool,
                         default=False,
@@ -142,7 +147,7 @@ def main():
 
     args = parser.parse_args()
 
-    test(args.dataset,savepath=SAVEPATH, loadpath=LOADPATH,
+    test(args.dataset, args.segmentation_net, savepath=SAVEPATH, loadpath=LOADPATH,
          test_from_0_255=args.test_from_0_255)
 
 if __name__ == "__main__":

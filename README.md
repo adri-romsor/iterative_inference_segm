@@ -31,15 +31,29 @@ Pre-trained models for semantic segmentation and pre-trained DAE for iterative i
 See wiki
 
 ## TODO code list
-- [ ] Check what is wrong with the context module
-- [ ] Prepare code to load h and ŷ of SOTA pre-trained model
-- [ ] Extract h and ŷ of DenseNet
-- [ ] Extract h and ŷ of FCN-FC-ResNet
+- [ x ] Check what is wrong with the context module
+- [ x ] Add code to use DenseNet
+- [ ] Add code to use FCN-FC-ResNet
 - [ ] Check InverseLayer (ongoing, Adriana)
 
 ### TODO experiments list
 - [ ] Try different h (so far, pool4 seems to be the best option)
+- [ ] Try context module (ongoing, Adriana)
 - [ ] Try different noise z (ongoing, Adriana)
 - [ ] Explore more architectures
 - [ ] Run CRF
 - [ ] Experiments from ground truth instead of pre-trained network output (ongoing, Adriana)
+
+## How to run experiments
+
+**Using DenseNets**:
+```
+THEANO_FLAGS='device=cuda,optimizer=fast_compile,optimizer_including=fusion' python train_dae.py
+THEANO_FLAGS='device=cuda,optimizer=fast_compile,optimizer_including=fusion' python iterative_inference.py
+```
+
+**For other networks**:
+```
+THEANO_FLAGS='device=cuda' python train_dae.py
+THEANO_FLAGS='device=cuda' python iterative_inference.py
+```

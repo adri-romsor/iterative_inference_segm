@@ -44,7 +44,7 @@ else:
 _EPSILON = 1e-3
 
 
-def inference(dataset, learn_step=0.005, num_iter=500,
+def inference(dataset, segm_net, learn_step=0.005, num_iter=500,
               dae_dict_updates= {}, training_dict={}, data_augmentation=False,
               save_perstep=False, which_set='test', ae_h=False,
               savepath=None, loadpath=None, test_from_0_255=False):
@@ -71,7 +71,7 @@ def inference(dataset, learn_step=0.005, num_iter=500,
     #
     # Prepare load/save directories
     #
-    exp_name = build_experiment_name(data_aug=data_augmentation, ae_h=ae_h,
+    exp_name = build_experiment_name(segm_net, data_aug=data_augmentation, ae_h=ae_h,
                                      **dict(dae_dict.items() + training_dict.items()))
     if savepath is None:
         raise ValueError('A saving directory must be specified')
@@ -116,20 +116,30 @@ def inference(dataset, learn_step=0.005, num_iter=500,
     # Build networks
     #
 
-    # Build FCN8  with pre-trained weights up to layer_h + prediction
-    print ' Building FCN network'
-    fcn = buildFCN8(nb_in_channels, input_var=input_x_var,
-                    n_classes=n_classes, void_labels=void_labels,
-                    path_weights=WEIGHTS_PATH+dataset+'/fcn8_model.npz',
-                    trainable=False, load_weights=True,
-                    layer=dae_dict['concat_h']+[dae_dict['layer']],
-                    temperature=dae_dict['temperature'])
+    # Build segmentation network
+    print ' Building segmentation network'
+    if segm_net == 'fcn8':
+        fcn = buildFCN8(nb_in_channels, input_var=input_x_var,
+                        n_classes=n_classes, void_labels=void_labels,
+                        path_weights=WEIGHTS_PATH+dataset+'/fcn8_model.npz',
+                        trainable=False, load_weights=True,
+                        layer=dae_dict['concat_h']+[dae_dict['layer']])
+        padding = 100
+    elif segm_net == 'densenet':
+        fcn  = build_fcdensenet(input_x_var, nb_in_channels=nb_in_channels,
+                                n_classes=n_classes, layer=dae_dict['concat_h'])
+        padding = 0
+    elif segm_net == 'fcn_fcresnet':
+        raise NotImplementedError
+    else:
+        raise ValueError
 
     # Build DAE with pre-trained weights
     print ' Building DAE network'
     if dae_dict['kind'] == 'standard':
         dae = buildDAE(input_concat_h_vars, y_hat_var, n_classes,
-                       nb_features_to_concat=fcn[0].output_shape[1], trainable=True,
+                       nb_features_to_concat=fcn[0].output_shape[1],
+                       padding=padding, trainable=True,
                        void_labels=void_labels, load_weights=True,
                        path_weights=loadpath, model_name='dae_model_best.npz',
                        out_nonlin=softmax, concat_h=dae_dict['concat_h'],
@@ -160,7 +170,7 @@ def inference(dataset, learn_step=0.005, num_iter=500,
     print "Defining and compiling theano functions"
 
     # predictions and theano functions
-    pred_fcn = lasagne.layers.get_output(fcn, deterministic=True)
+    pred_fcn = lasagne.layers.get_output(fcn, deterministic=True, batch_norm_use_averages=False)
     pred_dae = lasagne.layers.get_output(dae, deterministic=True)
     pred_fcn_fn = theano.function([input_x_var], pred_fcn)
     pred_dae_fn = theano.function(input_concat_h_vars+[y_hat_var], pred_dae)
@@ -311,6 +321,10 @@ def main():
                         type=str,
                         default='camvid',
                         help='Dataset.')
+    parser.add_argument('-segmentation_net',
+                        type=str,
+                        default='fcn8',
+                        help='Segmentation network.')
     parser.add_argument('-step',
                         type=float,
                         default=0.08,
@@ -333,15 +347,15 @@ def main():
                         default={'kind': 'standard', 'dropout': 0.5, 'skip': True,
                                   'unpool_type': 'trackind', 'noise': 0,
                                   'concat_h': ['pool4'], 'from_gt': False,
-                                  'n_filters': 32, 'conv_before_pool': 1,
+                                  'n_filters': 64, 'conv_before_pool': 1,
                                   'additional_pool': 2,
                                   'path_weights': '', 'layer': 'probs_dimshuffle',
                                   'exp_name' : ''},
                         help='DAE kind and parameters')
     parser.add_argument('-training_dict',
                         type=dict,
-                        default={'training_loss': ['crossentropy'],
-                                 'learning_rate': 0.0001, 'lr_anneal': 0.99,
+                        default={'training_loss': ['crossentropy', 'squared_error'],
+                                 'learning_rate': 0.001, 'lr_anneal': 0.99,
                                  'weight_decay':0.0001, 'optimizer': 'rmsprop'},
                         help='Training parameters')
     parser.add_argument('-ae_h',
@@ -359,8 +373,8 @@ def main():
 
     args = parser.parse_args()
 
-    inference(args.dataset, float(args.step), int(args.num_iter),
-              save_perstep=args.save_perstep, which_set=args.which_set,
+    inference(args.dataset, args.segmentation_net, float(args.step),
+              int(args.num_iter), save_perstep=args.save_perstep, which_set=args.which_set,
               savepath=SAVEPATH, loadpath=LOADPATH,
               test_from_0_255=args.test_from_0_255, ae_h=args.ae_h,
               dae_dict_updates=args.dae_dict, data_augmentation=args.data_augmentation,
