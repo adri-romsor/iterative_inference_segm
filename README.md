@@ -31,8 +31,8 @@ Pre-trained models for semantic segmentation and pre-trained DAE for iterative i
 See wiki
 
 ## TODO code list
-- [ x ] Check what is wrong with the context module
-- [ x ] Add code to use DenseNet
+- [x] Check what is wrong with the context module
+- [x] Add code to use DenseNet
 - [ ] Add code to use FCN-FC-ResNet
 - [ ] Check InverseLayer (ongoing, Adriana)
 
