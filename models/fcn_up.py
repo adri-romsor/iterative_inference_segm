@@ -62,16 +62,22 @@ def UnpoolNet(incoming_net, net, p, unpool, n_classes,
                                                 'center', 'center'],
                               name=layer_name)
 
-    elif unpool_type == 'trackind':
+    elif unpool_type == 'trackind' or unpool_type == 'inverse':
         # that would be index tracking as in SegNet
         # Depool: the unpooling will use the last layer of the contracting path
         # if it is the first unpooling, otherwise it will use the last merged
         # layer (resulting from the previous unpooling)
-        net['up'+str(p)] = \
-            DePool2D(incoming_net[incoming_layer] if p == unpool else
-            net['fused_up'+str(p+1)],
-            2, incoming_net['pool'+str(p)],
-            incoming_net['pool'+str(p)].input_layer)
+        if unpool_type == 'trackind':
+            net['up'+str(p)] = \
+                DePool2D(incoming_net[incoming_layer] if p == unpool else
+                net['fused_up'+str(p+1)],
+                2, incoming_net['pool'+str(p)],
+                incoming_net['pool'+str(p)].input_layer)
+        else:
+            net['up'+str(p)] = \
+                InverseLayer(incoming_net[incoming_layer] if p == unpool else
+                    net['fused_up'+str(p+1)], incoming_net['pool'+str(p)])
+
 
         # Convolve
         net['up_conv'+str(p)] = \
