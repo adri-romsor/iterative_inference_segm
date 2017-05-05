@@ -5,6 +5,7 @@ import argparse
 import time
 from getpass import getuser
 from distutils.dir_util import copy_tree
+from collections import OrderedDict
 
 import numpy as np
 import theano
@@ -20,12 +21,17 @@ from lasagne.objectives import squared_error as squared_error_L
 from data_loader import load_data
 from metrics import crossentropy, entropy, squared_error_h, squared_error, jaccard
 from models.fcn8 import buildFCN8
-from models.FCDenseNet import build_fcdensenet
+# from models.FCDenseNet import build_fcdensenet
 from models.DAE_h import buildDAE
 from models.fcn8_dae import buildFCN8_DAE
 from models.contextmod_dae import buildDAE_contextmod
 from layers.mylayers import DePool2D
 from helpers import build_experiment_name
+
+from deepliver.models.model import assemble_model
+from deepliver.models.blocks import (bottleneck,
+                           basic_block,
+                           basic_block_mp)
 
 _FLOATX = config.floatX
 if getuser() == 'romerosa':
@@ -115,6 +121,16 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
     #
     # Build dataset iterator
     #
+    if dataset == 'em':
+        data_augmentation = {'rotation_range':25,
+                             'shear_range':0.41,
+                             'horizontal_flip':True,
+                             'vertical_flip':True,
+                             'fill_mode':'reflect',
+                             'spline_warp':True,
+                             'warp_sigma':10,
+                             'warp_grid_size':3}
+
     train_iter, val_iter, _ = load_data(dataset,
                                         data_augmentation,
                                         one_hot=True,
@@ -137,7 +153,8 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
     print ' Checking options'
     assert (segm_net == 'fcn8' and dataset == 'camvid') or \
         (segm_net == 'densenet' and dataset == 'camvid') or \
-        (segm_net == 'fcn_fcresnet' and dataset == 'em')
+        (segm_net == 'fcn_fcresnet' and dataset == 'em') or \
+        (segm_net == 'resunet' and dataset == 'em')
 
     # Build segmentation network
     print ' Building segmentation network'
@@ -148,9 +165,30 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
                         load_weights=True, layer=dae_dict['concat_h']+[dae_dict['layer']])
         padding = 100
     elif segm_net == 'densenet':
-        fcn  = build_fcdensenet(input_x_var, nb_in_channels=nb_in_channels,
+        fcn = build_fcdensenet(input_x_var, nb_in_channels=nb_in_channels,
                                 n_classes=n_classes, layer=dae_dict['concat_h'])
         padding = 0
+    elif segm_net == 'resunet':
+        resunet_model_kwargs = OrderedDict((
+            ('input_shape', (1, None, None)),
+            ('num_classes', 2),
+            ('input_num_filters', 32),
+            ('main_block_depth', [3, 8, 10, 3]),
+            ('num_main_blocks', 3),
+            ('num_init_blocks', 2),
+            ('weight_decay', None),
+            ('dropout', 0.5),
+            ('short_skip', True),
+            ('long_skip', True),
+            ('long_skip_merge_mode', 'sum'),
+            ('use_skip_blocks', False),
+            ('relative_num_across_filters', 1),
+            ('mainblock', bottleneck),
+            ('initblock', basic_block_mp),
+            ('hidden_outputs', [4])
+            ))
+        resunet = assemble_model(**resunet_model_kwargs)
+        resunet.load_weights("best_weights.hdf5")
     elif segm_net == 'fcn_fcresnet':
         raise NotImplementedError
     else:
@@ -343,7 +381,10 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
             ####################################################################
 
             # h prediction
-            H_pred_batch = fcn_fn(X_train_batch)
+            if segm_net == 'resunet':
+                H_pred_batch = resunet.predict(X_train_batch)
+            else:
+                H_pred_batch = fcn_fn(X_train_batch)
             if dae_dict['from_gt']:
                 Y_pred_batch = L_train_batch[:, :void, :, :]
             else:
@@ -434,11 +475,11 @@ def main():
     parser = argparse.ArgumentParser(description='DAE training')
     parser.add_argument('-dataset',
                         type=str,
-                        default='camvid',
+                        default='em',
                         help='Dataset.')
     parser.add_argument('-segmentation_net',
                         type=str,
-                        default='fcn8',
+                        default='resunet',
                         help='Segmentation network.')
     parser.add_argument('-train_dict',
                         type=dict,
