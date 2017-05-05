@@ -134,13 +134,13 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
     #
 
     # Check that model and dataset get along
-    print ' Checking options'
+    print 'Checking options'
     assert (segm_net == 'fcn8' and dataset == 'camvid') or \
         (segm_net == 'densenet' and dataset == 'camvid') or \
         (segm_net == 'fcn_fcresnet' and dataset == 'em')
 
     # Build segmentation network
-    print ' Building segmentation network'
+    print 'Building segmentation network'
     if segm_net == 'fcn8':
         fcn = buildFCN8(nb_in_channels, input_x_var, n_classes=n_classes,
                         void_labels=void_labels,
@@ -157,7 +157,7 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
         raise ValueError
 
     # Build DAE network
-    print ' Building DAE network'
+    print 'Building DAE network'
 
     if ae_h and dae_dict['kind'] != 'standard':
         raise ValueError('Plug&Play not implemented for ' + dae_dict['kind'])

@@ -7,6 +7,8 @@ import numpy as np
 import theano
 import theano.tensor as T
 from theano import config
+from getpass import getuser
+from distutils.dir_util import copy_tree
 
 import lasagne
 
@@ -14,6 +16,7 @@ from data_loader import load_data
 from metrics import accuracy, jaccard
 from models.DAE_h import buildDAE
 from models.fcn8_void import buildFCN8
+from models.FCDenseNet import build_fcdensenet
 from helpers import save_img
 
 import sys
@@ -23,101 +26,140 @@ from pydensecrf.utils import compute_unary, create_pairwise_bilateral,\
 
 _FLOATX = config.floatX
 
+if getuser() == 'romerosa':
+    SAVEPATH = '/Tmp/romerosa/itinf/models/'
+    LOADPATH = '/data/lisatmp4/romerosa/itinf/models/'
+    WEIGHTS_PATH = '/data/lisatmp4/romerosa/itinf/models/'
+elif getuser() == 'jegousim':
+    SAVEPATH = '/data/lisatmp4/jegousim/iterative_inference/'
+    LOADPATH = '/data/lisatmp4/jegousim/iterative_inference/'
+    WEIGHTS_PATH = '/data/lisatmp4/romerosa/rnncnn/fcn8_model.npz'
+elif getuser() == 'erraqaba':
+    SAVEPATH = '/Tmp/erraqaba/iterative_inference/models/'
+    LOADPATH = '/data/lisatmp4/erraqabi/iterative_inference/models/'
+    WEIGHTS_PATH = LOADPATH
+else:
+    raise ValueError('Unknown user : {}'.format(getuser()))
 
-def inference(dataset, layer_name=None, learn_step=0.005, num_iter=5, Bilateral=True,
-              num_filters=[256], skip=False, filter_size=[3], savepath=None,
-              test_from_0_255=False):
 
+def inference(dataset, segm_net, which_set='val', num_iter=5, Bilateral=True,
+              savepath=None, loadpath=None, test_from_0_255=False):
+
+    #
     # Define symbolic variables
+    #
     input_x_var = T.tensor4('input_x_var')
-    name = ''
-    for l in layer_name:
-        name += ('_'+l)
     y_hat_var = T.tensor4('pred_y_var')
-    target_var = T.ivector('target_var')
+    target_var = T.tensor4('target_var')
 
+    #
     # Build dataset iterator
-    _, _, test_iter = load_data(dataset, train_crop_size=None, one_hot=True,
-            batch_size=[1, 1, 1], return_0_255=test_from_0_255)
+    #
+    data_iter = load_data(dataset, {}, one_hot=True, batch_size=[1, 1, 1],
+                          return_0_255=test_from_0_255, which_set=which_set)
 
-    n_batches_test = test_iter.nbatches
-    n_classes = test_iter.non_void_nclasses
-    void_labels = test_iter.void_labels
+    colors = data_iter.cmap
+    n_batches_test = data_iter.nbatches
+    n_classes = data_iter.non_void_nclasses
+    void_labels = data_iter.void_labels
 
+    #
     # Prepare saving directory
-    savepath = savepath + dataset + "/"
+    #
+    savepath = os.path.join(savepath, dataset, segm_net, 'img_plots', which_set)
+    loadpath = os.path.join(loadpath, dataset, segm_net, 'img_plots', which_set)
     if not os.path.exists(savepath):
         os.makedirs(savepath)
 
-    print 'Building networks'
-    # Build FCN8 with pre-trained weights (network to initialize
-    # inference)
-    fcn_y = buildFCN8(3, input_var=input_x_var,
-                      n_classes=n_classes,
-                      void_labels=void_labels,
-                      path_weights='/home/michal/model_earlyjacc.npz',
-                      trainable=False, load_weights=True)
+    #
+    # Build network
+    #
+    print 'Building segmentation network'
+    if segm_net == 'fcn8':
+        fcn = buildFCN8(3, input_var=input_x_var,
+                        n_classes=n_classes, void_labels=void_labels,
+                        path_weights=WEIGHTS_PATH+dataset+'/fcn8_model.npz',
+                        trainable=False, load_weights=True,
+                        layer=['probs_dimshuffle'])
+        padding = 100
+    elif segm_net == 'densenet':
+        fcn  = build_fcdensenet(input_x_var, nb_in_channels=3,
+                                n_classes=n_classes, layer=[])
+        padding = 0
+    elif segm_net == 'fcn_fcresnet':
+        raise NotImplementedError
+    else:
+        raise ValueError
 
-
+    #
+    # Define and compile theano functions
+    #
     print "Defining and compiling theano functions"
-    # Define required theano functions and compile them
+
     # predictions of fcn
-    pred_fcn_y = lasagne.layers.get_output(fcn_y, deterministic=True)[0]
+    pred_fcn = lasagne.layers.get_output(fcn, deterministic=True, batch_norm_use_averages=False)[0]
 
-    # function to compute output of fcn_y
-    pred_fcn_y_fn = theano.function([input_x_var], pred_fcn_y)
+    # function to compute output of fcn
+    pred_fcn_fn = theano.function([input_x_var], pred_fcn)
 
-    # Reshape iterative inference output to b,01c
+    # reshape fcn output to b,01c
     y_hat_dimshuffle = y_hat_var.dimshuffle((0, 2, 3, 1))
     sh = y_hat_dimshuffle.shape
     y_hat_2D = y_hat_dimshuffle.reshape((T.prod(sh[:3]), sh[3]))
 
+    # reshape target to b01,c
+    target_var_dimshuffle = target_var.dimshuffle((0, 2, 3, 1))
+    sh2 = target_var_dimshuffle.shape
+    target_var_2D = target_var_dimshuffle.reshape((T.prod(sh2[:3]), sh2[3]))
+
     # metrics to evaluate iterative inference
-    test_acc = accuracy(y_hat_2D, target_var, void_labels)
-    test_jacc = jaccard(y_hat_2D, target_var, n_classes)
+    test_acc = accuracy(y_hat_2D, target_var_2D, void_labels, one_hot=True)
+    test_jacc = jaccard(y_hat_2D, target_var_2D, n_classes, one_hot=True)
 
     # functions to compute metrics
-    val_fn = theano.function([y_hat_var, target_var],
-                             [test_acc, test_jacc])
+    val_fn = theano.function([y_hat_var, target_var], [test_acc, test_jacc])
 
+    #
+    # Infer
+    #
     print 'Start infering'
-    acc_tot = 0
-    acc_tot_old = 0
-    jacc_tot = 0
-    jacc_tot_old = 0
+    acc_tot_crf = 0
+    acc_tot_fcn = 0
+    jacc_tot_crf = 0
+    jacc_tot_fcn = 0
     for i in range(n_batches_test):
         info_str = "Batch %d out of %d" % (i, n_batches_test)
         print info_str
 
         # Get minibatch
-        X_test_batch, L_test_batch = test_iter.next()
-        L_test_target = L_test_batch.argmax(1)
-        L_test_target = np.reshape(L_test_target,
-                                   np.prod(L_test_target.shape))
-        L_test_target = L_test_target.astype('int32')
+        X_test_batch, L_test_batch = data_iter.next()
+        L_test_batch = L_test_batch.astype(_FLOATX)
 
-        # Compute fcn prediction y
-        Y_test_batch = pred_fcn_y_fn(X_test_batch)
-        # Compute metrics before iterative inference
-        acc_old, jacc_old = val_fn(Y_test_batch, L_test_target)
-        acc_tot_old += acc_old
-        jacc_tot_old += jacc_old
-        Y_test_batch_old = Y_test_batch
+        # Compute fcn prediction
+        Y_test_batch = pred_fcn_fn(X_test_batch)
 
-        # Iterative inference
-        d = dcrf.DenseCRF2D(Y_test_batch.shape[2], Y_test_batch.shape[3],
+        # Compute metrics before CRF
+        acc_fcn, jacc_fcn = val_fn(Y_test_batch, L_test_batch)
+        acc_tot_fcn += acc_fcn
+        jacc_tot_fcn += jacc_fcn
+        Y_test_batch_fcn = Y_test_batch
+
+        # CRF
+        d = dcrf.DenseCRF2D(Y_test_batch.shape[3], Y_test_batch.shape[2],
                             n_classes)
         sm = Y_test_batch[0, 0:n_classes, :, :]
         sm = sm.reshape((n_classes, -1))
         img = X_test_batch[0]
         img = np.transpose(img, (1, 2, 0))
-        img = np.array(img)
         img = (255 * img).astype('uint8')
-        img2 = np.zeros(img.shape).astype('uint8')
-        img2 = img2 + img
+        img2 = np.asarray(img, order='C')
+
         # set unary potentials (neg log probability)
         U = unary_from_softmax(sm)
         d.setUnaryEnergy(U)
+
+        # set pairwise potentials
+
         # This adds the color-independent term, features are the
         # locations only. Smoothness kernel.
         # sxy: gaussian x, y std
@@ -128,37 +170,44 @@ def inference(dataset, layer_name=None, learn_step=0.005, num_iter=5, Bilateral=
         #     NO_NORMALIZAITION, NORMALIZE_SYMMETRIC
         d.addPairwiseGaussian(sxy=(3, 3), compat=3, kernel=dcrf.DIAG_KERNEL,
                               normalization=dcrf.NORMALIZE_SYMMETRIC)
-        # Appearance kernel. This adds the color-dependent term, i.e. features
-        # are (x,y,r,g,b).
-        # im is an image-array, e.g. im.dtype == np.uint8 and im.shape == (640,480,3)
-        # to set sxy and srgb perform grid search on validation set
+
         if Bilateral:
+            # Appearance kernel. This adds the color-dependent term, i.e. features
+            # are (x,y,r,g,b).
+            # im is an image-array, e.g. im.dtype == np.uint8 and im.shape == (640,480,3)
+            # to set sxy and srgb perform grid search on validation set
             d.addPairwiseBilateral(sxy=(3, 3), srgb=(13, 13, 13),
                                    rgbim=img2, compat=10, kernel=dcrf.DIAG_KERNEL,
                                    normalization=dcrf.NORMALIZE_SYMMETRIC)
+
+        # inference
         Q = d.inference(num_iter)
         Q = np.reshape(Q, (n_classes, Y_test_batch.shape[2], Y_test_batch.shape[3]))
         Y_test_batch = np.expand_dims(Q, axis=0)
-        # Compute metrics
-        acc, jacc = val_fn(Y_test_batch, L_test_target)
 
-        acc_tot += acc
-        jacc_tot += jacc
+        # Compute metrics after CRF
+        acc_crf, jacc_crf = val_fn(Y_test_batch, L_test_batch)
+        acc_tot_crf += acc_crf
+        jacc_tot_crf += jacc_crf
 
         # Save images
-        save_img(X_test_batch, L_test_batch.argmax(1), Y_test_batch,
-                 Y_test_batch_old, savepath, n_classes,
-                 'batch' + str(i), void_labels)
+        save_img(X_test_batch, L_test_batch, Y_test_batch,
+                 Y_test_batch_fcn, savepath, 'batch' + str(i), void_labels, colors)
 
-    acc_test = acc_tot/n_batches_test
-    jacc_test = np.mean(jacc_tot[0, :] / jacc_tot[1, :])
-    acc_test_old = acc_tot_old/n_batches_test
-    jacc_test_old = np.mean(jacc_tot_old[0, :] / jacc_tot_old[1, :])
+    acc_test_crf = acc_tot_crf/n_batches_test
+    jacc_test_crf = np.mean(jacc_tot_crf[0, :] / jacc_tot_crf[1, :])
+    acc_test_fcn = acc_tot_fcn/n_batches_test
+    jacc_test_fcn = np.mean(jacc_tot_fcn[0, :] / jacc_tot_fcn[1, :])
 
-    out_str = "TEST: acc  % f, jacc %f, acc old %f, jacc old %f"
-    out_str = out_str % (acc_test, jacc_test,
-                         acc_test_old, jacc_test_old)
+    out_str = "TEST: acc crf  % f, jacc crf %f, acc fcn %f, jacc fcn %f"
+    out_str = out_str % (acc_test_crf, jacc_test_crf,
+                         acc_test_fcn, jacc_test_fcn)
     print out_str
+
+    # Move segmentations
+    if savepath != loadpath:
+        print('Copying images to {}'.format(loadpath))
+        copy_tree(savepath, loadpath)
 
 
 def main():
@@ -167,32 +216,19 @@ def main():
                         type=str,
                         default='camvid',
                         help='Dataset.')
-    parser.add_argument('-layer_name',
-                        type=list,
-                        default=['pool1', 'pool3'],
-                        help='All h to introduce to the DAE.')
-    parser.add_argument('-step',
-                        type=float,
-                        default=0.001,
+    parser.add_argument('-segmentation_net',
+                        type=str,
+                        default='fcn8',
+                        help='Segmentation network.')
+    parser.add_argument('-which_set',
+                        type=str,
+                        default='val',
                         help='Step')
     parser.add_argument('--num_iter',
                         '-nit',
                         type=int,
                         default=10,
                         help='Max number of iterations.')
-    parser.add_argument('-num_filters',
-                        type=list,
-                        default=[512],
-                        help='All h to introduce to the DAE.')
-    parser.add_argument('-skip',
-                        type=bool,
-                        default=False,
-                        help='Whether to skip connections in the DAE.')
-    parser.add_argument('--savepath',
-                        '-sp',
-                        type=str,
-                        default='/home/michal/Experiments/iter_inf/',
-                        help='Path to save images')
     parser.add_argument('-test_from_0_255',
                         type=bool,
                         default=False,
@@ -200,9 +236,9 @@ def main():
 
     args = parser.parse_args()
 
-    inference(args.dataset, args.layer_name, float(args.step),
-              int(args.num_iter), args.num_filters, args.skip,
-              savepath=args.savepath, test_from_0_255=args.test_from_0_255)
+    inference(args.dataset, args.segmentation_net, which_set=args.which_set,
+              num_iter=int(args.num_iter), savepath=SAVEPATH, loadpath=LOADPATH,
+              test_from_0_255=args.test_from_0_255)
 
 if __name__ == "__main__":
     main()
