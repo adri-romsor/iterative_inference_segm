@@ -18,6 +18,7 @@ from metrics import accuracy, jaccard, squared_error
 from models.DAE_h import buildDAE
 from models.fcn8 import buildFCN8
 from models.fcn8_dae import buildFCN8_DAE
+from models.FCDenseNet import build_fcdensenet
 from models.contextmod_dae import buildDAE_contextmod
 from helpers import save_img
 from models.model_helpers import softmax4D
@@ -117,7 +118,7 @@ def inference(dataset, segm_net, learn_step=0.005, num_iter=500,
     #
 
     # Build segmentation network
-    print ' Building segmentation network'
+    print 'Building segmentation network'
     if segm_net == 'fcn8':
         fcn = buildFCN8(nb_in_channels, input_var=input_x_var,
                         n_classes=n_classes, void_labels=void_labels,
@@ -135,7 +136,7 @@ def inference(dataset, segm_net, learn_step=0.005, num_iter=500,
         raise ValueError
 
     # Build DAE with pre-trained weights
-    print ' Building DAE network'
+    print 'Building DAE network'
     if dae_dict['kind'] == 'standard':
         dae = buildDAE(input_concat_h_vars, y_hat_var, n_classes,
                        nb_features_to_concat=fcn[0].output_shape[1],
