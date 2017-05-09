@@ -28,7 +28,7 @@ def buildDAE(input_concat_h_vars, input_mask_var, n_classes, nb_features_to_conc
         concat_layers=concat_h,
         noise=noise, n_filters=n_filters,
         conv_before_pool=conv_before_pool,
-        additional_pool=additional_pool, ae_h=ae_h)
+        additional_pool=additional_pool, ae_h=ae_h, dropout=dropout)
 
     dae = fcn_down
 
@@ -43,7 +43,7 @@ def buildDAE(input_concat_h_vars, input_mask_var, n_classes, nb_features_to_conc
     fcn_up = buildFCN_up(dae, last_layer_down, n_pool, skip=skip,
                          n_classes=n_classes, unpool_type=unpool_type,
                          out_nonlin=out_nonlin, ae_h=ae_h,
-                         additional_pool=additional_pool)
+                         additional_pool=additional_pool, dropout=dropout)
 
     dae.update(fcn_up)
 

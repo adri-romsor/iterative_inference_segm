@@ -1,7 +1,7 @@
 import theano.tensor as T
 import lasagne
 from lasagne.layers import ReshapeLayer
-from lasagne.layers import NonlinearityLayer, DimshuffleLayer, ElemwiseSumLayer, InverseLayer
+from lasagne.layers import NonlinearityLayer, DimshuffleLayer, ElemwiseSumLayer, InverseLayer, DropoutLayer
 from layers.mylayers import CroppingLayer, DePool2D
 from lasagne.layers import Deconv2DLayer as DeconvLayer
 from lasagne.layers import Conv2DLayer as ConvLayer
@@ -9,7 +9,7 @@ from lasagne.nonlinearities import softmax, linear
 
 
 def UnpoolNet(incoming_net, net, p, unpool, n_classes,
-              incoming_layer, skip, unpool_type='standard',
+              incoming_layer, skip, dropout=0., unpool_type='standard',
               layer_name=None):
     '''
     Add upsampling layer
@@ -80,14 +80,20 @@ def UnpoolNet(incoming_net, net, p, unpool, n_classes,
 
 
         # Convolve
-        net['up_conv'+str(p)] = \
+        out = 'up_conv'+str(p)
+        net[out] = \
             ConvLayer(net['up'+str(p)], n_cl, 3,
                       pad='same', flip_filters=False, nonlinearity=linear)
+
+        if dropout > 0:
+            net[out+'_drop'] = DropoutLayer(net[out], p=dropout)
+            out += '_drop'
+
         # Add skip connection if required (sum)
         if skip and p > 1:
             # Merge
             net['fused_up'+str(p)] = \
-                ElemwiseSumLayer((net['up_conv'+str(p)],
+                ElemwiseSumLayer((net[out],
                                   incoming_net['pool'+str(p-1)]),
                                  cropping=[None, None, 'center', 'center'],
                                  name=layer_name)
@@ -97,7 +103,7 @@ def UnpoolNet(incoming_net, net, p, unpool, n_classes,
             net['fused_up'+str(p)] = \
                     CroppingLayer((incoming_net['pool'+str(p-1) if p >
                                                 1 else 'input'],
-                                   net['up_conv'+str(p)]),
+                                   net[out]),
                                   merge_function=lambda input, deconv:
                                   deconv, cropping=[None, None,
                                                     'center', 'center'],
@@ -109,7 +115,7 @@ def UnpoolNet(incoming_net, net, p, unpool, n_classes,
 def buildFCN_up(incoming_net, incoming_layer, unpool,
                 skip=False, unpool_type='standard',
                 n_classes=21, out_nonlin=linear,
-                additional_pool=0, ae_h=False):
+                additional_pool=0, ae_h=False, dropout=0.):
     '''
     Build fcn decontracting path
 
@@ -139,7 +145,7 @@ def buildFCN_up(incoming_net, incoming_layer, unpool,
             layer_name = None
         UnpoolNet(incoming_net, net, p, unpool, n_classes,
                   incoming_layer, skip, unpool_type=unpool_type,
-                  layer_name=layer_name)
+                  layer_name=layer_name, dropout=dropout)
 
     # final dimshuffle, reshape and softmax
     net['final_dimshuffle'] = DimshuffleLayer(net['fused_up'+str(p) if

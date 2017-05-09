@@ -77,7 +77,8 @@ class Network():
         skip_connection_list = []
 
         assert (hn in ['input', 'pool1', 'pool2', 'pool3', 'pool4', 'pool5'] for h in hidden_output_names)
-        hidden_output_ints = [int(re.findall('\d+', h )[0]) for h in hidden_output_names]
+
+        hidden_output_ints = [int(re.findall('\d+', h )[0]) for h in hidden_output_names if any(re.findall('\d+', h ))]
 
         for i in range(n_pool):
             # Dense Block

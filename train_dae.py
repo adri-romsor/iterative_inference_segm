@@ -53,7 +53,8 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
           optimizer='rmsprop', training_loss=['squared_error'],
           batch_size=[10, 1, 1], ae_h=False,
           dae_dict_updates={}, data_augmentation={},
-          savepath=None, loadpath=None, resume=False, train_from_0_255=False):
+          savepath=None, loadpath=None, resume=False, train_from_0_255=False,
+          lmb=1):
 
     #
     # Update DAE parameters
@@ -267,8 +268,8 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
     test_mse_loss = squared_error(test_dae_prediction, target_var, void)
     if 'squared_error' in training_loss:
         mse_loss = squared_error(dae_prediction, target_var, void)
-        loss += mse_loss
-        test_loss += test_mse_loss
+        loss += lmb*mse_loss
+        test_loss += lmb*test_mse_loss
 
     # Add intermediate losses
     if 'squared_error_h' in training_loss:
@@ -438,7 +439,7 @@ def main():
                         help='Dataset.')
     parser.add_argument('-segmentation_net',
                         type=str,
-                        default='fcn8',
+                        default='densenet',
                         help='Segmentation network.')
     parser.add_argument('-train_dict',
                         type=dict,

@@ -55,7 +55,7 @@ def inference(dataset, segm_net, which_set='val', num_iter=5, Bilateral=True,
     #
     # Build dataset iterator
     #
-    data_iter = load_data(dataset, {}, one_hot=True, batch_size=[1, 1, 1],
+    data_iter = load_data(dataset, {}, one_hot=True, batch_size=[10, 10, 10],
                           return_0_255=test_from_0_255, which_set=which_set)
 
     colors = data_iter.cmap
@@ -128,7 +128,7 @@ def inference(dataset, segm_net, which_set='val', num_iter=5, Bilateral=True,
     jacc_tot_crf = 0
     jacc_tot_fcn = 0
     for i in range(n_batches_test):
-        info_str = "Batch %d out of %d" % (i, n_batches_test)
+        info_str = "Batch %d out of %d" % (i+1, n_batches_test)
         print info_str
 
         # Get minibatch
@@ -143,55 +143,58 @@ def inference(dataset, segm_net, which_set='val', num_iter=5, Bilateral=True,
         acc_tot_fcn += acc_fcn
         jacc_tot_fcn += jacc_fcn
         Y_test_batch_fcn = Y_test_batch
+        Y_test_batch_crf = []
 
-        # CRF
-        d = dcrf.DenseCRF2D(Y_test_batch.shape[3], Y_test_batch.shape[2],
-                            n_classes)
-        sm = Y_test_batch[0, 0:n_classes, :, :]
-        sm = sm.reshape((n_classes, -1))
-        img = X_test_batch[0]
-        img = np.transpose(img, (1, 2, 0))
-        img = (255 * img).astype('uint8')
-        img2 = np.asarray(img, order='C')
+        for im in range(X_test_batch.shape[0]):
+            # CRF
+            d = dcrf.DenseCRF2D(Y_test_batch.shape[3], Y_test_batch.shape[2],
+                                n_classes)
+            sm = Y_test_batch[im, 0:n_classes, :, :]
+            sm = sm.reshape((n_classes, -1))
+            img = X_test_batch[im]
+            img = np.transpose(img, (1, 2, 0))
+            img = (255 * img).astype('uint8')
+            img2 = np.asarray(img, order='C')
 
-        # set unary potentials (neg log probability)
-        U = unary_from_softmax(sm)
-        d.setUnaryEnergy(U)
+            # set unary potentials (neg log probability)
+            U = unary_from_softmax(sm)
+            d.setUnaryEnergy(U)
 
-        # set pairwise potentials
+            # set pairwise potentials
 
-        # This adds the color-independent term, features are the
-        # locations only. Smoothness kernel.
-        # sxy: gaussian x, y std
-        # compat: ways to weight contributions, a number for potts compatibility,
-        #     vector for diagonal compatibility, an array for matrix compatibility
-        # kernel: kernel used, CONST_KERNEL, FULL_KERNEL, DIAG_KERNEL
-        # normalization: NORMALIZE_AFTER, NORMALIZE_BEFORE,
-        #     NO_NORMALIZAITION, NORMALIZE_SYMMETRIC
-        d.addPairwiseGaussian(sxy=(3, 3), compat=3, kernel=dcrf.DIAG_KERNEL,
-                              normalization=dcrf.NORMALIZE_SYMMETRIC)
+            # This adds the color-independent term, features are the
+            # locations only. Smoothness kernel.
+            # sxy: gaussian x, y std
+            # compat: ways to weight contributions, a number for potts compatibility,
+            #     vector for diagonal compatibility, an array for matrix compatibility
+            # kernel: kernel used, CONST_KERNEL, FULL_KERNEL, DIAG_KERNEL
+            # normalization: NORMALIZE_AFTER, NORMALIZE_BEFORE,
+            #     NO_NORMALIZAITION, NORMALIZE_SYMMETRIC
+            d.addPairwiseGaussian(sxy=(3, 3), compat=3, kernel=dcrf.DIAG_KERNEL,
+                                  normalization=dcrf.NORMALIZE_SYMMETRIC)
 
-        if Bilateral:
-            # Appearance kernel. This adds the color-dependent term, i.e. features
-            # are (x,y,r,g,b).
-            # im is an image-array, e.g. im.dtype == np.uint8 and im.shape == (640,480,3)
-            # to set sxy and srgb perform grid search on validation set
-            d.addPairwiseBilateral(sxy=(3, 3), srgb=(13, 13, 13),
-                                   rgbim=img2, compat=10, kernel=dcrf.DIAG_KERNEL,
-                                   normalization=dcrf.NORMALIZE_SYMMETRIC)
+            if Bilateral:
+                # Appearance kernel. This adds the color-dependent term, i.e. features
+                # are (x,y,r,g,b).
+                # im is an image-array, e.g. im.dtype == np.uint8 and im.shape == (640,480,3)
+                # to set sxy and srgb perform grid search on validation set
+                d.addPairwiseBilateral(sxy=(3, 3), srgb=(13, 13, 13),
+                                       rgbim=img2, compat=10, kernel=dcrf.DIAG_KERNEL,
+                                       normalization=dcrf.NORMALIZE_SYMMETRIC)
 
-        # inference
-        Q = d.inference(num_iter)
-        Q = np.reshape(Q, (n_classes, Y_test_batch.shape[2], Y_test_batch.shape[3]))
-        Y_test_batch = np.expand_dims(Q, axis=0)
+            # inference
+            Q = d.inference(num_iter)
+            Q = np.reshape(Q, (n_classes, Y_test_batch.shape[2], Y_test_batch.shape[3]))
+            Y_test_batch_crf += [np.expand_dims(Q, axis=0)]
 
-        # Compute metrics after CRF
-        acc_crf, jacc_crf = val_fn(Y_test_batch, L_test_batch)
-        acc_tot_crf += acc_crf
-        jacc_tot_crf += jacc_crf
+            # Compute metrics after CRF
+            acc_crf, jacc_crf = val_fn(Y_test_batch_crf[im], L_test_batch[np.newaxis, im, :, :])
+            acc_tot_crf += acc_crf
+            jacc_tot_crf += jacc_crf
 
         # Save images
-        save_img(X_test_batch, L_test_batch, Y_test_batch,
+        Y_test_batch = np.concatenate(Y_test_batch_crf, axis=0)
+        save_img(X_test_batch.astype(_FLOATX), L_test_batch, Y_test_batch,
                  Y_test_batch_fcn, savepath, 'batch' + str(i), void_labels, colors)
 
     acc_test_crf = acc_tot_crf/n_batches_test
@@ -222,7 +225,7 @@ def main():
                         help='Segmentation network.')
     parser.add_argument('-which_set',
                         type=str,
-                        default='val',
+                        default='test',
                         help='Step')
     parser.add_argument('--num_iter',
                         '-nit',

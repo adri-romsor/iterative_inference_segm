@@ -36,7 +36,8 @@ def buildFCN_down(input_var, concat_h_vars, nb_features_to_concat, padding,
     dropout: float, dropout probability
     '''
 
-    assert all([el in ['pool1', 'pool2', 'pool3', 'pool4', 'input']
+    assert all([el in ['pool1', 'pool2', 'pool3', 'pool4', 'input',
+                       'pool5']
                 for el in concat_layers])
 
     if 'pool' in concat_layers[-1]:
@@ -103,7 +104,8 @@ def buildFCN_down(input_var, concat_h_vars, nb_features_to_concat, padding,
             out = 'conv'+str(p+1)+'_'+str(i)
 
             # add dropout layer
-            if p > n_pool and dropout > 0.:
+            # if p > n_pool and dropout > 0.:
+            if dropout > 0:
                 net[out+'_drop'] = DropoutLayer(net[out], p=dropout)
                 out += '_drop'
 
@@ -113,7 +115,7 @@ def buildFCN_down(input_var, concat_h_vars, nb_features_to_concat, padding,
         else:
             layer_name = None
         # add pooling layer
-        net['pool'+str(p+1)] = PoolLayer(net['conv'+str(p+1)+'_'+str(i)], 2,
+        net['pool'+str(p+1)] = PoolLayer(net[out], 2,
                                          name=layer_name)
 
         out = 'pool'+str(p+1)

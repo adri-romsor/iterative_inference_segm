@@ -211,7 +211,7 @@ def inference(dataset, segm_net, learn_step=0.005, num_iter=500,
     jacc_tot_dae = 0
     print 'Inference step: '+str(learn_step)+ 'num iter '+str(num_iter)
     for i in range(n_batches_test):
-        info_str = "Batch %d out of %d" % (i, n_batches_test)
+        info_str = "Batch %d out of %d" % (i+1, n_batches_test)
         print '-'*30
         print '*'*5 + info_str + '*'*5
         print '-'*30
@@ -222,10 +222,7 @@ def inference(dataset, segm_net, learn_step=0.005, num_iter=500,
 
         # Compute fcn prediction y and h
         pred_test_batch = pred_fcn_fn(X_test_batch)
-        if dae_dict['from_gt']:
-            Y_test_batch = L_test_batch[:, :void, :, :]
-        else:
-            Y_test_batch = pred_test_batch[-1]
+        Y_test_batch = pred_test_batch[-1]
         # Y_test_batch = pred_test_batch[-1]
         H_test_batch = pred_test_batch[:-1]
 
@@ -256,16 +253,6 @@ def inference(dataset, segm_net, learn_step=0.005, num_iter=500,
             # Clip prediction
             Y_test_batch = np.clip(Y_test_batch, 0.0, 1.0)
 
-            # if save_perstep:
-            #     # Save images
-            #     save_img(np.copy(X_test_batch),
-            #              np.copy(L_test_batch),
-            #              np.copy(Y_test_batch),
-            #              np.copy(Y_test_batch_fcn),
-            #              savepath,
-            #              'batch' + str(i) + '_' + 'step' + str(it),
-            #              void_labels, colors)
-
             norm = np.linalg.norm(grad, axis=1).mean()
             if norm < _EPSILON:
                 break
@@ -280,14 +267,13 @@ def inference(dataset, segm_net, learn_step=0.005, num_iter=500,
         rec_tot += rec
         print_results('>>>>> ITERTIVE INFERENCE:', rec_tot, acc_tot, jacc_tot, i+1)
 
-        # if not save_perstep:
-        #     # Save images
-        #     save_img(np.copy(X_test_batch),
-        #              np.copy(L_test_batch),
-        #              np.copy(Y_test_batch),
-        #              np.copy(Y_test_batch_fcn),
-        #              savepath, 'batch' + str(i),
-        #              void_labels, colors)
+        # Save images
+        save_img(X_test_batch,
+                 L_test_batch,
+                 Y_test_batch,
+                 Y_test_batch_fcn,
+                 savepath, 'batch' + str(i),
+                 void_labels, colors)
 
     # Print summary of how things went
     print('-------------------------------------------------------------------')
@@ -324,7 +310,7 @@ def main():
                         help='Dataset.')
     parser.add_argument('-segmentation_net',
                         type=str,
-                        default='fcn8',
+                        default='densenet',
                         help='Segmentation network.')
     parser.add_argument('-step',
                         type=float,
@@ -341,21 +327,22 @@ def main():
                         help='Save new segmentations after each step update')
     parser.add_argument('-which_set',
                         type=str,
-                        default='val',
+                        default='test',
                         help='Inference set')
     parser.add_argument('-dae_dict',
                         type=dict,
                         default={'kind': 'standard', 'dropout': 0.5, 'skip': True,
                                   'unpool_type': 'trackind', 'noise': 0,
-                                  'concat_h': ['pool4'], 'from_gt': False,
+                                  'concat_h': ['pool5'], 'from_gt': False,
                                   'n_filters': 64, 'conv_before_pool': 1,
-                                  'additional_pool': 2,
+                                  'additional_pool': 1,
                                   'path_weights': '', 'layer': 'probs_dimshuffle',
                                   'exp_name' : ''},
                         help='DAE kind and parameters')
     parser.add_argument('-training_dict',
                         type=dict,
-                        default={'training_loss': ['crossentropy', 'squared_error'],
+                        default={'training_loss': ['crossentropy',
+                                                   'squared_error'],
                                  'learning_rate': 0.001, 'lr_anneal': 0.99,
                                  'weight_decay':0.0001, 'optimizer': 'rmsprop'},
                         help='Training parameters')
