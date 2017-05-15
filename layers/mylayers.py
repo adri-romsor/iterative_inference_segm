@@ -161,7 +161,7 @@ class GaussianNoiseLayerSoftmax(Layer):
 
 
 
-class GaussianNoiseLayerClipping(Layer):
+class GaussianNoiseLayerClip(Layer):
     """
     Gaussian noise layer. Adapted from Lasagne.
     Add zero-mean Gaussian noise of given standard deviation to the input [1],
@@ -185,7 +185,7 @@ class GaussianNoiseLayerClipping(Layer):
            IEEE Transactions on Neural Networks, 7(6):1424-1438.
     """
     def __init__(self, incoming, sigma=0.1, **kwargs):
-        super(GaussianNoiseLayerSoftmax, self).__init__(incoming, **kwargs)
+        super(GaussianNoiseLayerClip, self).__init__(incoming, **kwargs)
         self._srng = RandomStreams(get_rng().randint(1, 2147462579))
         self.sigma = sigma
 

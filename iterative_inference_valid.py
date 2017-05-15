@@ -80,7 +80,7 @@ def inference(dataset, segm_net, learn_step=0.005, num_iter=500,
     if savepath is None:
         raise ValueError('A saving directory must be specified')
 
-    savepath = os.path.join(savepath, dataset, exp_name, 'img_plots',
+    savepath = os.path.join(savepath, dataset, exp_name, 'img_plots', str(learn_step),
                             which_set)
     loadpath = os.path.join(loadpath, dataset, exp_name)
     if not os.path.exists(savepath):
@@ -291,7 +291,7 @@ def inference(dataset, segm_net, learn_step=0.005, num_iter=500,
     # Move segmentations
     if savepath != loadpath:
         print('Copying images to {}'.format(loadpath))
-        copy_tree(savepath, os.path.join(loadpath, 'img_plots', which_set))
+        copy_tree(savepath, os.path.join(loadpath, 'img_plots', str(learn_step), which_set))
 
 
 def main():
@@ -303,16 +303,16 @@ def main():
                         help='Dataset.')
     parser.add_argument('-segmentation_net',
                         type=str,
-                        default='densenet',
+                        default='fcn8',
                         help='Segmentation network.')
     parser.add_argument('-step',
                         type=float,
-                        default=0.08,
+                        default=0.01,
                         help='step')
     parser.add_argument('--num_iter',
                         '-ne',
                         type=int,
-                        default=20,
+                        default=50,
                         help='Max number of iterations')
     parser.add_argument('-which_set',
                         type=str,
@@ -320,8 +320,8 @@ def main():
                         help='Inference set')
     parser.add_argument('-dae_dict',
                         type=dict,
-                        default={'kind': 'standard', 'dropout': 0.2, 'skip': True,
-                                  'unpool_type': 'trackind', 'noise':0.5,
+                        default={'kind': 'standard', 'dropout': 0, 'skip': True,
+                                  'unpool_type': 'trackind', 'noise':0.1,
                                   'concat_h': ['pool4'], 'from_gt': False,
                                   'n_filters': 64, 'conv_before_pool': 1,
                                   'additional_pool': 2,
@@ -337,7 +337,7 @@ def main():
                         help='Training parameters')
     parser.add_argument('-full_im_ft',
                         type=bool,
-                        default=True,
+                        default=False,
                         help='Whether to finetune at full image resolution')
     parser.add_argument('-ae_h',
                         type=bool,
