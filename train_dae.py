@@ -27,11 +27,14 @@ from models.fcn8_dae import buildFCN8_DAE
 from models.contextmod_dae import buildDAE_contextmod
 from layers.mylayers import DePool2D
 from helpers import build_experiment_name
-
-from deepliver.models.model import assemble_model
-from deepliver.models.blocks import (bottleneck,
-                           basic_block,
-                           basic_block_mp)
+# imports for keras
+from keras.layers import Input
+from keras.models import Model
+from ResUNet.model import assemble_model
+from ResUNet.preprocessing import build_preprocessing
+from ResUNet.blocks import (bottleneck,
+                            basic_block,
+                            basic_block_mp)
 
 _FLOATX = config.floatX
 if getuser() == 'romerosa':
@@ -42,10 +45,10 @@ elif getuser() == 'jegousim':
     SAVEPATH = '/data/lisatmp4/jegousim/iterative_inference/'
     LOADPATH = '/data/lisatmp4/jegousim/iterative_inference/'
     WEIGHTS_PATH = '/data/lisatmp4/romerosa/rnncnn/fcn8_model.npz'
-elif getuser() == 'michal':
-    SAVEPATH = '/home/michal/Experiments/iter_inf/'
-    LOADPATH = SAVEPATH
-    WEIGHTS_PATH = '/home/michal/model_earlyjacc.npz'
+elif getuser() == 'drozdzam':
+    SAVEPATH = '/Tmp/drozdzam/itinf/models/'
+    LOADPATH = '/data/lisatmp4/erraqabi/iterative_inference/models/'
+    WEIGHTS_PATH = LOADPATH
 elif getuser() == 'erraqaba':
     SAVEPATH = '/Tmp/erraqaba/iterative_inference/models/'
     LOADPATH = '/data/lisatmp4/erraqabi/iterative_inference/models/'
@@ -170,6 +173,18 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
                                 n_classes=n_classes, layer=dae_dict['concat_h'])
         padding = 0
     elif segm_net == 'resunet':
+        print("-")*10
+        print("ResUNet is the best!")
+        print("-")*10
+        preprocessing_kwargs = OrderedDict((
+            ('img_shape', (1, None, None)),
+            ('regularize_weights', None),
+            ('nb_filter', 16),
+            ('kernel_size', 3),
+            ('nb_layers', 4),
+            ('pre_unet', True),
+            ('output_nb_filter', 1)
+            ))
         resunet_model_kwargs = OrderedDict((
             ('input_shape', (1, None, None)),
             ('num_classes', 2),
@@ -185,11 +200,22 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
             ('use_skip_blocks', False),
             ('relative_num_across_filters', 1),
             ('mainblock', bottleneck),
-            ('initblock', basic_block_mp),
-            ('hidden_outputs', [4])
+            ('initblock', basic_block_mp)
             ))
+        # build preprocessort
+        prep_model = build_preprocessing(**preprocessing_kwargs)
+        # build resnet
         resunet = assemble_model(**resunet_model_kwargs)
-        resunet.load_weights("best_weights.hdf5")
+        # setup model (preprocessor + resunet)
+        inputs = Input(shape=preprocessing_kwargs['img_shape'])
+        out_prep = prep_model(inputs)
+        out_model = resunet(out_prep)
+        model = Model(input=inputs, output=out_model)
+        # load weights
+        model.load_weights("/data/lisatmp4/romerosa/itinf/models/em/best_weights.hdf5")
+        print("-")*10
+        print ("We are done!")
+        print("-")*10
     elif segm_net == 'fcn_fcresnet':
         raise NotImplementedError
     else:
@@ -480,7 +506,7 @@ def main():
                         help='Dataset.')
     parser.add_argument('-segmentation_net',
                         type=str,
-                        default='densenet',
+                        default='resunet',
                         help='Segmentation network.')
     parser.add_argument('-train_dict',
                         type=dict,
