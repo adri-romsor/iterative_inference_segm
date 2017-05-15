@@ -160,6 +160,52 @@ class GaussianNoiseLayerSoftmax(Layer):
                                                        std=self.sigma))
 
 
+
+class GaussianNoiseLayerClipping(Layer):
+    """
+    Gaussian noise layer. Adapted from Lasagne.
+    Add zero-mean Gaussian noise of given standard deviation to the input [1],
+    and then normalize with softmax.
+    Parameters
+    ----------
+    incoming : a :class:`Layer` instance or a tuple
+            the layer feeding into this layer, or the expected input shape
+    sigma : float or tensor scalar
+            Standard deviation of added Gaussian noise
+    Notes
+    -----
+    The Gaussian noise layer is a regularizer. During training you should set
+    deterministic to false and during testing you should set deterministic to
+    true.
+    References
+    ----------
+    .. [1] K.-C. Jim, C. Giles, and B. Horne (1996):
+           An analysis of noise in recurrent neural networks: convergence and
+           generalization.
+           IEEE Transactions on Neural Networks, 7(6):1424-1438.
+    """
+    def __init__(self, incoming, sigma=0.1, **kwargs):
+        super(GaussianNoiseLayerSoftmax, self).__init__(incoming, **kwargs)
+        self._srng = RandomStreams(get_rng().randint(1, 2147462579))
+        self.sigma = sigma
+
+    def get_output_for(self, input, deterministic=False, **kwargs):
+        """
+        Parameters
+        ----------
+        input : tensor
+            output from the previous layer
+        deterministic : bool
+            If true noise is disabled, see notes
+        """
+        if deterministic or self.sigma == 0:
+            return input
+        else:
+            return T.clip(input + self._srng.normal(input.shape,
+                                                       avg=0.0,
+                                                       std=self.sigma), 0.0, 1.0)
+
+
 class RGBtoBGRLayer(lasagne.layers.Layer):
     def __init__(self, l_in, bgr_mean=np.array([103.939, 116.779, 123.68]),
                  data_format='bc01', **kwargs):

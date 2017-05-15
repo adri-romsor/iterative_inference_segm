@@ -14,7 +14,6 @@ import lasagne
 
 from data_loader import load_data
 from metrics import accuracy, jaccard
-from models.DAE_h import buildDAE
 from models.fcn8_void import buildFCN8
 from models.FCDenseNet import build_fcdensenet
 from helpers import save_img
@@ -187,24 +186,37 @@ def inference(dataset, segm_net, which_set='val', num_iter=5, Bilateral=True,
             Q = np.reshape(Q, (n_classes, Y_test_batch.shape[2], Y_test_batch.shape[3]))
             Y_test_batch_crf += [np.expand_dims(Q, axis=0)]
 
-            # Compute metrics after CRF
-            acc_crf, jacc_crf = val_fn(Y_test_batch_crf[im], L_test_batch[np.newaxis, im, :, :])
-            acc_tot_crf += acc_crf
-            jacc_tot_crf += jacc_crf
-
         # Save images
         Y_test_batch = np.concatenate(Y_test_batch_crf, axis=0)
+
+        # Compute metrics after CRF
+        acc_crf, jacc_crf = val_fn(Y_test_batch, L_test_batch)
+        acc_tot_crf += acc_crf
+        jacc_tot_crf += jacc_crf
+
         save_img(X_test_batch.astype(_FLOATX), L_test_batch, Y_test_batch,
                  Y_test_batch_fcn, savepath, 'batch' + str(i), void_labels, colors)
 
-    acc_test_crf = acc_tot_crf/n_batches_test
-    jacc_test_crf = np.mean(jacc_tot_crf[0, :] / jacc_tot_crf[1, :])
-    acc_test_fcn = acc_tot_fcn/n_batches_test
-    jacc_test_fcn = np.mean(jacc_tot_fcn[0, :] / jacc_tot_fcn[1, :])
+    acc_test_crf = acc_tot_crf/(n_batches_test)
+    jacc_test_perclass_crf = jacc_tot_crf[0, :] / jacc_tot_crf[1, :]
+    jacc_test_crf = np.nanmean(jacc_test_perclass_crf)
 
-    out_str = "TEST: acc crf  % f, jacc crf %f, acc fcn %f, jacc fcn %f"
+    acc_test_fcn = acc_tot_fcn/n_batches_test
+    jacc_test_perclass_fcn = jacc_tot_fcn[0, :] / jacc_tot_fcn[1, :]
+    jacc_test_fcn = np.nanmean(jacc_test_perclass_fcn)
+
+    out_str = "TEST: acc crf %f, jacc crf %f, acc fcn %f, jacc fcn %f"
     out_str = out_str % (acc_test_crf, jacc_test_crf,
                          acc_test_fcn, jacc_test_fcn)
+
+    print ">>>>> Per class jaccard:"
+    labs = data_iter.mask_labels
+
+    for i in range(len(labs)-len(void_labels)):
+        class_str = '    ' + labs[i] + ' : fcn ->  %f, crf ->  %f'
+        class_str = class_str % (jacc_test_perclass_fcn[i], jacc_test_perclass_crf[i])
+        print class_str
+
     print out_str
 
     # Move segmentations

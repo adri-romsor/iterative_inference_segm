@@ -12,23 +12,17 @@ from theano import config
 
 import lasagne
 from lasagne.nonlinearities import softmax
-from lasagne.updates import sgd, adam, rmsprop
 
 from data_loader import load_data
 from metrics import accuracy, jaccard, squared_error
 from models.DAE_h import buildDAE
 from models.fcn8 import buildFCN8
 from models.fcn8_dae import buildFCN8_DAE
+from models.FCDenseNet import build_fcdensenet
 from models.contextmod_dae import buildDAE_contextmod
 from helpers import save_img
 from models.model_helpers import softmax4D
 from helpers import build_experiment_name, print_results
-
-from models.DAE_h import buildDAE
-from models.fcn8 import buildFCN8
-from models.fcn8_dae import buildFCN8_DAE
-from models.FCDenseNet import build_fcdensenet
-from models.contextmod_dae import buildDAE_contextmod
 
 _FLOATX = config.floatX
 _EPSILON = 10e-8
@@ -51,9 +45,10 @@ else:
 _EPSILON = 1e-3
 
 
-def inference(dataset, segm_net, optimize=rmsprop, learn_step=0.005, num_iter=500, optimizer=sgd,
+def inference(dataset, segm_net, learn_step=0.005, num_iter=500,
               dae_dict_updates= {}, training_dict={}, data_augmentation=False,
-              which_set='test', ae_h=False, savepath=None, loadpath=None, test_from_0_255=False):
+              which_set='test', ae_h=False, full_im_ft=False,
+              savepath=None, loadpath=None, test_from_0_255=False):
 
     #
     # Update DAE parameters
@@ -80,6 +75,8 @@ def inference(dataset, segm_net, optimize=rmsprop, learn_step=0.005, num_iter=50
     #
     exp_name = build_experiment_name(segm_net, data_aug=data_augmentation, ae_h=ae_h,
                                      **dict(dae_dict.items() + training_dict.items()))
+    exp_name += '_ftsmall' if full_im_ft else ''
+
     if savepath is None:
         raise ValueError('A saving directory must be specified')
 
@@ -103,9 +100,8 @@ def inference(dataset, segm_net, optimize=rmsprop, learn_step=0.005, num_iter=50
     #
     input_x_var = T.tensor4('input_x_var')  # tensor for input image batch
     input_concat_h_vars = [T.tensor4()] * len(dae_dict['concat_h'])  # tensor for hidden repr batch (input dae)
+    y_hat_var = T.tensor4('pred_y_var')
     target_var = T.tensor4('target_var')  # tensor for target batch
-    y_hat_var = theano.shared(np.zeros((10, 10, 10, 10), dtype=_FLOATX))
-    y_hat_var_metrics = T.tensor4('y_hat_var_metrics')
 
     #
     # Build dataset iterator
@@ -134,7 +130,7 @@ def inference(dataset, segm_net, optimize=rmsprop, learn_step=0.005, num_iter=50
                         layer=dae_dict['concat_h']+[dae_dict['layer']])
         padding = 100
     elif segm_net == 'densenet':
-        fcn  = build_fcdensenet(input_x_var, nb_in_channels=nb_in_channels,
+        fcn = build_fcdensenet(input_x_var, nb_in_channels=nb_in_channels,
                                 n_classes=n_classes, layer=dae_dict['concat_h'])
         padding = 0
     elif segm_net == 'fcn_fcresnet':
@@ -182,10 +178,10 @@ def inference(dataset, segm_net, optimize=rmsprop, learn_step=0.005, num_iter=50
     pred_fcn = lasagne.layers.get_output(fcn, deterministic=True, batch_norm_use_averages=False)
     pred_dae = lasagne.layers.get_output(dae, deterministic=True)
     pred_fcn_fn = theano.function([input_x_var], pred_fcn)
-    pred_dae_fn = theano.function(input_concat_h_vars, pred_dae)
+    pred_dae_fn = theano.function(input_concat_h_vars+[y_hat_var], pred_dae)
 
     # Reshape iterative inference output to b01,c
-    y_hat_dimshuffle = y_hat_var_metrics.dimshuffle((0, 2, 3, 1))
+    y_hat_dimshuffle = y_hat_var.dimshuffle((0, 2, 3, 1))
     sh = y_hat_dimshuffle.shape
     y_hat_2D = y_hat_dimshuffle.reshape((T.prod(sh[:3]), sh[3]))
 
@@ -194,26 +190,15 @@ def inference(dataset, segm_net, optimize=rmsprop, learn_step=0.005, num_iter=50
     sh2 = target_var_dimshuffle.shape
     target_var_2D = target_var_dimshuffle.reshape((T.prod(sh2[:3]), sh2[3]))
 
-    # derivative of energy wrt input
+    # derivative of energy wrt input and theano function
     de = - (pred_dae - y_hat_var)
+    de_fn = theano.function(input_concat_h_vars+[y_hat_var], de)
 
-    # Updates (grad, shared variable to update, learning_rate)
-    updates = optimizer([de], [y_hat_var], learning_rate=learn_step)
-    de_fn = theano.function(input_concat_h_vars, de, updates=updates)
-
-    # metrics to evaluate iterative inference
-    test_loss = squared_error(y_hat_var_metrics, target_var, void)
+    # metrics and theano functions
+    test_loss =  squared_error(y_hat_var, target_var, void)
     test_acc = accuracy(y_hat_2D, target_var_2D, void_labels, one_hot=True)
     test_jacc = jaccard(y_hat_2D, target_var_2D, n_classes, one_hot=True)
-    pred_dae_fn = theano.function(input_concat_h_vars, pred_dae)
-
-    # functions to compute metrics
-    val_fn = theano.function([y_hat_var_metrics, target_var],
-                             [test_acc, test_jacc, test_loss])
-
-    # Clip function
-    clip_fn = theano.function([y_hat_var_metrics],
-                              T.clip(y_hat_var_metrics, 0.0, 1.0))
+    val_fn = theano.function([y_hat_var, target_var], [test_acc, test_jacc, test_loss])
 
     #
     # Infer
@@ -224,13 +209,19 @@ def inference(dataset, segm_net, optimize=rmsprop, learn_step=0.005, num_iter=50
     rec_tot_dae = 0
     acc_tot = 0
     acc_tot_fcn = 0
-    acc_tot_dae = 0
     jacc_tot = 0
     jacc_tot_fcn = 0
+    acc_tot_dae = 0
     jacc_tot_dae = 0
+
+    valid_mat = np.zeros((2, n_classes, num_iter))
+
+    print 'Inference step: '+str(learn_step)+ 'num iter '+str(num_iter)
     for i in range(n_batches_test):
-        info_str = "Batch %d out of %d" % (i, n_batches_test)
-        print info_str
+        info_str = "Batch %d out of %d" % (i+1, n_batches_test)
+        print '-'*30
+        print '*'*5 + info_str + '*'*5
+        print '-'*30
 
         # Get minibatch
         X_test_batch, L_test_batch = data_iter.next()
@@ -240,54 +231,47 @@ def inference(dataset, segm_net, optimize=rmsprop, learn_step=0.005, num_iter=50
         pred_test_batch = pred_fcn_fn(X_test_batch)
         Y_test_batch = pred_test_batch[-1]
         H_test_batch = pred_test_batch[:-1]
-        y_hat_var.set_value(Y_test_batch)
 
         # Compute metrics before iterative inference
         acc_fcn, jacc_fcn, rec_fcn = val_fn(Y_test_batch, L_test_batch)
         acc_tot_fcn += acc_fcn
         jacc_tot_fcn += jacc_fcn
         rec_tot_fcn += rec_fcn
+        Y_test_batch_fcn = Y_test_batch
         print_results('>>>>> FCN:', rec_tot_fcn, acc_tot_fcn, jacc_tot_fcn, i+1)
 
-        # Compute rec loss by using DAE in a standard way
-        Y_test_batch_dae = pred_dae_fn(*(H_test_batch))
-
+        # Compute dae output and metrics after dae
+        Y_test_batch_dae = pred_dae_fn(*(H_test_batch+[Y_test_batch]))
         acc_dae, jacc_dae, rec_dae = val_fn(Y_test_batch_dae, L_test_batch)
         acc_tot_dae += acc_dae
         jacc_tot_dae += jacc_dae
         rec_tot_dae += rec_dae
         print_results('>>>>> FCN+DAE:', rec_tot_dae, acc_tot_dae, jacc_tot_dae, i+1)
 
-        Y_test_batch_ii = []
         for im in range(X_test_batch.shape[0]):
             print('-----------------------')
             h_im = [el[np.newaxis, im] for el in H_test_batch]
             y_im = Y_test_batch[np.newaxis, im]
-            y_hat_var.set_value(y_im)
             t_im = L_test_batch[np.newaxis, im]
 
             # Iterative inference
             for it in range(num_iter):
-                grad = de_fn(*(h_im))
-                y_hat_var.set_value(clip_fn(y_hat_var.get_value()))
+                # Compute gradient
+                grad = de_fn(*(h_im+[y_im]))
+
+                # Update prediction
+                y_im = y_im - learn_step * grad
+
+                # Clip prediction
+                y_im = np.clip(y_im, 0.0, 1.0)
 
                 norm = np.linalg.norm(grad, axis=1).mean()
                 if norm < _EPSILON:
                     break
 
-                acc_iter, jacc_iter, rec_iter = val_fn(y_hat_var.get_value(), t_im)
+                acc_iter, jacc_iter, rec_iter = val_fn(y_im, t_im)
                 print rec_iter, acc_iter, np.nanmean(jacc_iter[0, :]/jacc_iter[1, :])
-
-            Y_test_batch_ii += [clip_fn(y_hat_var.get_value())]
-
-        Y_test_batch_ii = np.concatenate(Y_test_batch_ii, axis=0)
-
-        # Compute metrics
-        acc, jacc, rec = val_fn(Y_test_batch_ii, L_test_batch)
-        acc_tot += acc
-        jacc_tot += jacc
-        rec_tot += rec
-        print_results('>>>>> ITERATIVE INFERENCE:', rec_tot, acc_tot, jacc_tot, i+1)
+                valid_mat[:, :, it] += jacc_iter
 
     # Print summary of how things went
     print('-------------------------------------------------------------------')
@@ -295,19 +279,14 @@ def inference(dataset, segm_net, optimize=rmsprop, learn_step=0.005, num_iter=50
     print('-------------------------------------------------------------------')
     print_results('>>>>> FCN:', rec_tot_fcn, acc_tot_fcn, jacc_tot_fcn, i+1)
     print_results('>>>>> FCN+DAE:', rec_tot_dae, acc_tot_dae, jacc_tot_dae, i+1)
-    print_results('>>>>> ITERATIVE INFERENCE:', rec_tot, acc_tot, jacc_tot, i+1)
 
-    # Compute per class jaccard
-    jacc_perclass_fcn = jacc_tot_fcn[0, :]/jacc_tot_fcn[1, :]
-    jacc_perclass = jacc_tot[0, :]/jacc_tot[1, :]
+    res = np.nanmean(valid_mat[0, :, :] / valid_mat[1, :, :], axis=0)
+    print res.max()
+    print res.argmax()
+    print learn_step
 
-    print ">>>>> Per class jaccard:"
-    labs = data_iter.mask_labels
-
-    for i in range(len(labs)-len(void_labels)):
-        class_str = '    ' + labs[i] + ' : fcn ->  %f, ii ->  %f'
-        class_str = class_str % (jacc_perclass_fcn[i], jacc_perclass[i])
-        print class_str
+    print savepath
+    np.savez(os.path.join(savepath, 'iterations'+str(learn_step)+'.npz'), valid_mat)
 
     # Move segmentations
     if savepath != loadpath:
@@ -326,9 +305,6 @@ def main():
                         type=str,
                         default='densenet',
                         help='Segmentation network.')
-    parser.add_argument('-optimizer',
-                        default=sgd,
-                        help='Optimizer (sgd, rmsprop or adam)')
     parser.add_argument('-step',
                         type=float,
                         default=0.08,
@@ -336,11 +312,11 @@ def main():
     parser.add_argument('--num_iter',
                         '-ne',
                         type=int,
-                        default=10,
+                        default=20,
                         help='Max number of iterations')
     parser.add_argument('-which_set',
                         type=str,
-                        default='test',
+                        default='val',
                         help='Inference set')
     parser.add_argument('-dae_dict',
                         type=dict,
@@ -359,6 +335,10 @@ def main():
                                  'learning_rate': 0.001, 'lr_anneal': 0.99,
                                  'weight_decay':0.0001, 'optimizer': 'rmsprop'},
                         help='Training parameters')
+    parser.add_argument('-full_im_ft',
+                        type=bool,
+                        default=True,
+                        help='Whether to finetune at full image resolution')
     parser.add_argument('-ae_h',
                         type=bool,
                         default=False,
@@ -374,12 +354,12 @@ def main():
 
     args = parser.parse_args()
 
-    inference(args.dataset, args.segmentation_net, args.optimizer, float(args.step),
+    inference(args.dataset, args.segmentation_net, float(args.step),
               int(args.num_iter), which_set=args.which_set,
               savepath=SAVEPATH, loadpath=LOADPATH,
               test_from_0_255=args.test_from_0_255, ae_h=args.ae_h,
               dae_dict_updates=args.dae_dict, data_augmentation=args.data_augmentation,
-              training_dict=args.training_dict)
+              training_dict=args.training_dict, full_im_ft=args.full_im_ft)
 
 
 if __name__ == "__main__":

@@ -47,7 +47,7 @@ _EPSILON = 1e-3
 
 def inference(dataset, segm_net, learn_step=0.005, num_iter=500,
               dae_dict_updates= {}, training_dict={}, data_augmentation=False,
-              save_perstep=False, which_set='test', ae_h=False,
+              which_set='test', ae_h=False, full_im_ft=False,
               savepath=None, loadpath=None, test_from_0_255=False):
 
     #
@@ -65,7 +65,8 @@ def inference(dataset, segm_net, learn_step=0.005, num_iter=500,
                 'from_gt': True,
                 'temperature': 1.0,
                 'layer': 'probs_dimshuffle',
-                'exp_name': ''}
+                'exp_name': '',
+                'bn': 0}
 
     dae_dict.update(dae_dict_updates)
 
@@ -74,6 +75,8 @@ def inference(dataset, segm_net, learn_step=0.005, num_iter=500,
     #
     exp_name = build_experiment_name(segm_net, data_aug=data_augmentation, ae_h=ae_h,
                                      **dict(dae_dict.items() + training_dict.items()))
+    exp_name += '_ftsmall' if full_im_ft else ''
+
     if savepath is None:
         raise ValueError('A saving directory must be specified')
 
@@ -148,7 +151,8 @@ def inference(dataset, segm_net, learn_step=0.005, num_iter=500,
                        conv_before_pool=dae_dict['conv_before_pool'],
                        additional_pool=dae_dict['additional_pool'],
                        dropout=dae_dict['dropout'], skip=dae_dict['skip'],
-                       unpool_type=dae_dict['unpool_type'])
+                       unpool_type=dae_dict['unpool_type'],
+                       bn=dae_dict['bn'])
     elif dae_dict['kind'] == 'fcn8':
         dae = buildFCN8_DAE(input_concat_h_vars, y_hat_var, n_classes,
                             nb_in_channels=n_classes, path_weights=loadpath,
@@ -223,7 +227,6 @@ def inference(dataset, segm_net, learn_step=0.005, num_iter=500,
         # Compute fcn prediction y and h
         pred_test_batch = pred_fcn_fn(X_test_batch)
         Y_test_batch = pred_test_batch[-1]
-        # Y_test_batch = pred_test_batch[-1]
         H_test_batch = pred_test_batch[:-1]
 
         # Compute metrics before iterative inference
@@ -242,35 +245,46 @@ def inference(dataset, segm_net, learn_step=0.005, num_iter=500,
         rec_tot_dae += rec_dae
         print_results('>>>>> FCN+DAE:', rec_tot_dae, acc_tot_dae, jacc_tot_dae, i+1)
 
-        # Iterative inference
-        for it in range(num_iter):
-            # Compute gradient
-            grad = de_fn(*(H_test_batch+[Y_test_batch]))
+        Y_test_batch_ii = []
+        for im in range(X_test_batch.shape[0]):
+            print('-----------------------')
+            h_im = [el[np.newaxis, im] for el in H_test_batch]
+            y_im = Y_test_batch[np.newaxis, im]
+            t_im = L_test_batch[np.newaxis, im]
 
-            # Update prediction
-            Y_test_batch = Y_test_batch - learn_step * grad
+            # Iterative inference
+            for it in range(num_iter):
+                # Compute gradient
+                grad = de_fn(*(h_im+[y_im]))
 
-            # Clip prediction
-            Y_test_batch = np.clip(Y_test_batch, 0.0, 1.0)
+                # Update prediction
+                y_im = y_im - learn_step * grad
 
-            norm = np.linalg.norm(grad, axis=1).mean()
-            if norm < _EPSILON:
-                break
+                # Clip prediction
+                y_im = np.clip(y_im, 0.0, 1.0)
 
-            acc_iter, jacc_iter, rec_iter = val_fn(Y_test_batch, L_test_batch)
-            print rec_iter, acc_iter, np.mean(jacc_iter[0, :]/jacc_iter[1, :])
+                norm = np.linalg.norm(grad, axis=1).mean()
+                if norm < _EPSILON:
+                    break
+
+                acc_iter, jacc_iter, rec_iter = val_fn(y_im, t_im)
+                print rec_iter, acc_iter, np.nanmean(jacc_iter[0, :]/jacc_iter[1, :])
+
+            Y_test_batch_ii += [y_im]
+
+        Y_test_batch_ii = np.concatenate(Y_test_batch_ii, axis=0)
 
         # Compute metrics
-        acc, jacc, rec = val_fn(Y_test_batch, L_test_batch)
+        acc, jacc, rec = val_fn(Y_test_batch_ii, L_test_batch)
         acc_tot += acc
         jacc_tot += jacc
         rec_tot += rec
-        print_results('>>>>> ITERTIVE INFERENCE:', rec_tot, acc_tot, jacc_tot, i+1)
+        print_results('>>>>> ITERATIVE INFERENCE:', rec_tot, acc_tot, jacc_tot, i+1)
 
         # Save images
         save_img(X_test_batch,
                  L_test_batch,
-                 Y_test_batch,
+                 Y_test_batch_ii,
                  Y_test_batch_fcn,
                  savepath, 'batch' + str(i),
                  void_labels, colors)
@@ -319,25 +333,21 @@ def main():
     parser.add_argument('--num_iter',
                         '-ne',
                         type=int,
-                        default=10,
+                        default=7,
                         help='Max number of iterations')
-    parser.add_argument('-save_perstep',
-                        type=bool,
-                        default=False,
-                        help='Save new segmentations after each step update')
     parser.add_argument('-which_set',
                         type=str,
                         default='test',
                         help='Inference set')
     parser.add_argument('-dae_dict',
                         type=dict,
-                        default={'kind': 'standard', 'dropout': 0.5, 'skip': True,
-                                  'unpool_type': 'trackind', 'noise': 0,
-                                  'concat_h': ['pool5'], 'from_gt': False,
+                        default={'kind': 'standard', 'dropout': 0.2, 'skip': True,
+                                  'unpool_type': 'trackind', 'noise':0.5,
+                                  'concat_h': ['pool4'], 'from_gt': False,
                                   'n_filters': 64, 'conv_before_pool': 1,
-                                  'additional_pool': 1,
+                                  'additional_pool': 2,
                                   'path_weights': '', 'layer': 'probs_dimshuffle',
-                                  'exp_name' : ''},
+                                 'exp_name' : 'lmb1_mse_', 'bn': 0},
                         help='DAE kind and parameters')
     parser.add_argument('-training_dict',
                         type=dict,
@@ -346,6 +356,10 @@ def main():
                                  'learning_rate': 0.001, 'lr_anneal': 0.99,
                                  'weight_decay':0.0001, 'optimizer': 'rmsprop'},
                         help='Training parameters')
+    parser.add_argument('-full_im_ft',
+                        type=bool,
+                        default=True,
+                        help='Whether to finetune at full image resolution')
     parser.add_argument('-ae_h',
                         type=bool,
                         default=False,
@@ -362,8 +376,8 @@ def main():
     args = parser.parse_args()
 
     inference(args.dataset, args.segmentation_net, float(args.step),
-              int(args.num_iter), save_perstep=args.save_perstep, which_set=args.which_set,
-              savepath=SAVEPATH, loadpath=LOADPATH,
+              int(args.num_iter), which_set=args.which_set,
+              savepath=SAVEPATH, loadpath=LOADPATH, full_im_ft=args.full_im_ft,
               test_from_0_255=args.test_from_0_255, ae_h=args.ae_h,
               dae_dict_updates=args.dae_dict, data_augmentation=args.data_augmentation,
               training_dict=args.training_dict)
