@@ -11,14 +11,10 @@ from keras import backend as K
 from theano import tensor as T
 from keras.regularizers import l2
 import numpy as np
-from .blocks import (bottleneck,
-                     basic_block,
-                     basic_block_mp,
-                     residual_block)
-from .loss import (categorical_crossentropy_ND,
-                   dice_loss,
-                   masked_dice_loss,
-                   cce_with_regional_penalty)
+from .fcn_resunet_blocks import (bottleneck,
+                                 basic_block,
+                                 basic_block_mp,
+                                 residual_block)
 
 
 def _l2(decay):
@@ -29,7 +25,7 @@ def _l2(decay):
         return l2(decay)
     else:
         return None
-    
+
 
 def _softmax(x):
     """
@@ -39,7 +35,7 @@ def _softmax(x):
     s = K.sum(e, axis=-1, keepdims=True)
     return e / s
 
-    
+
 class _layer_tracker(object):
     """
     Helper object to keep track of previously added layer and allow layer
@@ -48,23 +44,23 @@ class _layer_tracker(object):
     def __init__(self):
         self.layer_dict = {}
         self.prev_layer = None
-        
+
     def record(self, layer, name):
         layer.name = name
         self.layer_dict[name] = layer
         self.prev_layer = layer
-        
+
     def __getitem__(self, name):
         return self.layer_dict[name]
-    
-    
+
+
 #def _pad_to_fit(x, target_shape):
     #"""
     #Spatially pad a tensor's feature maps with zeros as evenly as possible
     #(center it) to fit the target shape.
-    
+
     #Expected target shape is larger than the shape of the tensor.
-    
+
     #NOTE: padding may be unequal on either side of the map if the target
     #dimension is odd. This is why keras's ZeroPadding2D isn't used.
     #"""
@@ -79,8 +75,8 @@ class _layer_tracker(object):
                #slice(pad_0[2], target_shape[2]-pad_1[2]),
                #slice(pad_0[3], target_shape[3]-pad_1[3]))
     #return T.set_subtensor(output[indices], x)
-    
-    
+
+
 def _make_long_skip(prev_layer, concat_layer, num_concat_filters,
                     num_target_filters, use_skip_blocks, repetitions,
                     dropout, skip, batch_norm, weight_decay,
@@ -109,8 +105,8 @@ def _make_long_skip(prev_layer, concat_layer, num_concat_filters,
     #prev_layer = zero_pad(prev_layer)
     merged = merge([prev_layer, concat_layer], mode=merge_mode, concat_axis=1)
     return merged
-    
-    
+
+
 def assemble_model(input_shape, num_classes, num_main_blocks, main_block_depth,
                    num_init_blocks, input_num_filters, short_skip=True,
                    long_skip=True, long_skip_merge_mode='concat',
@@ -147,7 +143,7 @@ def assemble_model(input_shape, num_classes, num_main_blocks, main_block_depth,
     batch_norm : enable or disable batch normalization.
     weight_decay : the weight decay (L2 penalty) used in every convolution.
     """
-    
+
     '''
     By default, use depth 2 bottleneck for mainblock
     '''
@@ -157,9 +153,9 @@ def assemble_model(input_shape, num_classes, num_main_blocks, main_block_depth,
         initblock = basic_block_mp
     if skipblock is None:
         skipblock = basic_block_mp
-    
+
     '''
-    main_block_depth can be a list per block or a single value 
+    main_block_depth can be a list per block or a single value
     -- ensure the list length is correct (if list) and that no length is 0
     '''
     if not hasattr(main_block_depth, '__len__'):
@@ -167,13 +163,13 @@ def assemble_model(input_shape, num_classes, num_main_blocks, main_block_depth,
             raise ValueError("main_block_depth must never be zero")
     else:
         if len(main_block_depth)!=num_main_blocks+1:
-            raise ValueError("main_block_depth must have " 
-                             "`num_main_blocks+1` values when " 
+            raise ValueError("main_block_depth must have "
+                             "`num_main_blocks+1` values when "
                              "passed as a list")
         for d in main_block_depth:
             if d==0:
                 raise ValueError("main_block_depth must never be zero")
-    
+
     '''
     Returns the depth of a mainblock for a given pooling level
     '''
@@ -181,7 +177,7 @@ def assemble_model(input_shape, num_classes, num_main_blocks, main_block_depth,
         if hasattr(main_block_depth, '__len__'):
             return main_block_depth[level]
         return main_block_depth
-    
+
     '''
     Constant kwargs passed to the init and main blocks.
     '''
@@ -189,7 +185,7 @@ def assemble_model(input_shape, num_classes, num_main_blocks, main_block_depth,
                     'dropout': dropout,
                     'batch_norm': batch_norm,
                     'weight_decay': weight_decay}
-    
+
     '''
     If long skip is not (the defualt) identity, always pass these
     parameters to _make_long_skip
@@ -199,18 +195,18 @@ def assemble_model(input_shape, num_classes, num_main_blocks, main_block_depth,
                         'merge_mode': long_skip_merge_mode,
                         'block': skipblock}
     long_skip_kwargs.update(block_kwargs)
-    
+
     layers = _layer_tracker()
-    
+
     # INPUT
     input = Input(shape=input_shape)
-    
+
     # Initial convolution
     layers.record(Convolution2D(input_num_filters, 3, 3,
                                init='he_normal', border_mode='same',
                                W_regularizer=_l2(weight_decay))(input),
                   name='first_conv')
-    
+
     # DOWN (initial subsampling blocks)
     for b in range(num_init_blocks):
         layers.record(initblock(input_num_filters, subsample=True,
@@ -218,25 +214,25 @@ def assemble_model(input_shape, num_classes, num_main_blocks, main_block_depth,
                       name='initblock_d'+str(b))
         print("INIT DOWN {}: {} -- {}".format(b, layers.prev_layer.name,
                                               layers.prev_layer._keras_shape))
-    
+
     # DOWN (resnet blocks)
     for b in range(num_main_blocks):
         num_filters = input_num_filters*(2**b)
-        layers.record(residual_block(mainblock, nb_filter=num_filters, 
+        layers.record(residual_block(mainblock, nb_filter=num_filters,
                               repetitions=get_repetitions(b), subsample=True,
                               **block_kwargs)(layers.prev_layer),
                       name='mainblock_d'+str(b))
         print("MAIN DOWN {}: {} (depth {}) -- {}".format(b,
               layers.prev_layer.name, get_repetitions(b),
               layers.prev_layer._keras_shape))
-        
+
     # ACROSS
     num_filters = input_num_filters*(2**num_main_blocks)
     num_filters *= relative_num_across_filters
-    layers.record(residual_block(mainblock, nb_filter=num_filters, 
+    layers.record(residual_block(mainblock, nb_filter=num_filters,
                                  repetitions=get_repetitions(num_main_blocks),
                                  subsample=True, upsample=True,
-                                 **block_kwargs)(layers.prev_layer), 
+                                 **block_kwargs)(layers.prev_layer),
                   name='mainblock_a')
     print("ACROSS: {} (depth {}) -- {}".format( \
           layers.prev_layer.name, get_repetitions(num_main_blocks),
@@ -254,14 +250,14 @@ def assemble_model(input_shape, num_classes, num_main_blocks, main_block_depth,
                                      num_target_filters=num_filters,
                                      **long_skip_kwargs),
                           name='concat_main_'+str(b))
-        layers.record(residual_block(mainblock, nb_filter=num_filters, 
+        layers.record(residual_block(mainblock, nb_filter=num_filters,
                                repetitions=get_repetitions(b), upsample=True,
                                **block_kwargs)(layers.prev_layer),
                       name='mainblock_u'+str(b))
         print("MAIN UP {}: {} (depth {}) -- {}".format(b,
               layers.prev_layer.name, get_repetitions(b),
               layers.prev_layer._keras_shape))
-        
+
     # UP (final upsampling blocks)
     for b in range(num_init_blocks-1, -1, -1):
         if long_skip:
@@ -272,13 +268,13 @@ def assemble_model(input_shape, num_classes, num_main_blocks, main_block_depth,
                                      num_concat_filters=num_across_filters,
                                      num_target_filters=input_num_filters,
                                      **long_skip_kwargs),
-                          name='concat_init_'+str(b))  
+                          name='concat_init_'+str(b))
         layers.record(initblock(input_num_filters, upsample=True,
                                 **block_kwargs)(layers.prev_layer),
                       name='initblock_u'+str(b))
         print("INIT UP {}: {} -- {}".format(b,
               layers.prev_layer.name, layers.prev_layer._keras_shape))
-        
+
     # Final convolution
     layers.record(Convolution2D(input_num_filters, 3, 3,
                                init='he_normal', border_mode='same',
@@ -297,9 +293,9 @@ def assemble_model(input_shape, num_classes, num_main_blocks, main_block_depth,
         layers.record(BatchNormalization(mode=0, axis=1)(layers.prev_layer),
                     name='final_bn')
     layers.record(Activation('relu')(layers.prev_layer), name='final_relu')
-    
+
     # OUTPUT (SOFTMAX)
-    layers.record(Convolution2D(num_classes,1,1,activation='linear', 
+    layers.record(Convolution2D(num_classes,1,1,activation='linear',
                   W_regularizer=_l2(weight_decay))(layers.prev_layer), name='sm_1')
     layers.record(Permute((2,3,1))(layers.prev_layer), name='sm_2')
     if num_classes==1:
@@ -307,7 +303,7 @@ def assemble_model(input_shape, num_classes, num_main_blocks, main_block_depth,
     else:
         output = Activation(_softmax)(layers.prev_layer)
     output = Permute((3,1,2))(output)
-    
+
     # MODEL
     model = Model(input=input, output=output)
 

@@ -5,7 +5,7 @@ from keras.layers.core import Dropout
 from keras.layers import Input
 from keras.regularizers import l2
 
-from unet import build_unet
+from fcn_resunet_unet import build_unet
 
 def build_preprocessing(img_shape,
                         nb_filter=64,

@@ -29,11 +29,12 @@ from helpers import build_experiment_name
 # imports for keras
 from keras.layers import Input
 from keras.models import Model
-from ResUNet.model import assemble_model
-from ResUNet.preprocessing import build_preprocessing
-from ResUNet.blocks import (bottleneck,
-                            basic_block,
-                            basic_block_mp)
+from models.fcn_resunet_model import assemble_model
+from models.fcn_resunet_preprocessing import build_preprocessing
+from models.fcn_resunet_blocks import (bottleneck,
+                                       basic_block,
+                                       basic_block_mp)
+from collections import OrderedDict
 
 _FLOATX = config.floatX
 if getuser() == 'romerosa':
@@ -167,7 +168,7 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
         fcn  = build_fcdensenet(input_x_var, nb_in_channels=nb_in_channels,
                                 n_classes=n_classes, layer=dae_dict['concat_h'])
         padding = 0
-    elif segm_net == 'resunet':
+    elif segm_net == 'fcn_fcresnet':
         print("-")*10
         print("ResUNet is the best!")
         print("-")*10
@@ -499,11 +500,11 @@ def main():
     parser = argparse.ArgumentParser(description='DAE training')
     parser.add_argument('-dataset',
                         type=str,
-                        default='camvid',
+                        default='em',
                         help='Dataset.')
     parser.add_argument('-segmentation_net',
                         type=str,
-                        default='resunet',
+                        default='fcn_fcresnet',
                         help='Segmentation network.')
     parser.add_argument('-train_dict',
                         type=dict,
