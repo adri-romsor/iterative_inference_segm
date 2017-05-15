@@ -22,7 +22,7 @@ def _l2(decay):
 # This is an improved scheme proposed in http://arxiv.org/pdf/1603.05027v2.pdf
 def _bn_relu_conv(nb_filter, nb_row, nb_col, subsample=False, upsample=False,
                   batch_norm=True, weight_decay=None):
-    
+
     def f(input):
         processed = input
         if batch_norm:
@@ -47,9 +47,9 @@ def _shortcut(input, residual, subsample, upsample, weight_decay=None):
     # Stride appropriately to match residual (width, height)
     # Should be int if network architecture is correctly configured.
     equal_channels = residual._keras_shape[1] == input._keras_shape[1]
-    
+
     shortcut = input
-    
+
     # Downsample input
     if subsample:
         def downsample_output_shape(input_shape):
@@ -61,18 +61,18 @@ def _shortcut(input, residual, subsample, upsample, weight_decay=None):
             return tuple(output_shape)
         shortcut = Lambda(lambda x: x[:,:, ::2, ::2],
                           output_shape=downsample_output_shape)(shortcut)
-        
+
     # Upsample input
     if upsample:
         shortcut = UpSampling2D(size=(2, 2))(shortcut)
-        
+
     # Adjust input channels to match residual
     if not equal_channels:
         shortcut = Convolution2D(nb_filter=residual._keras_shape[1],
                                  nb_row=1, nb_col=1,
                                  init='he_normal', border_mode='valid',
                                  W_regularizer=_l2(weight_decay))(shortcut)
-        
+
     return merge([shortcut, residual], mode='sum')
 
 
@@ -92,7 +92,7 @@ def bottleneck(nb_filter, subsample=False, upsample=False, skip=True,
                                  weight_decay=weight_decay)(processed)
         if dropout > 0:
             processed = Dropout(dropout)(processed)
-            
+
         output = processed
         if skip:
             output = _shortcut(input, output,
@@ -117,7 +117,7 @@ def basic_block(nb_filter, subsample=False, upsample=False, skip=True,
         processed = _bn_relu_conv(nb_filter, 3, 3,
                                   upsample=upsample, batch_norm=batch_norm,
                                   weight_decay=weight_decay)(processed)
-        
+
         output = processed
         if skip:
             output = _shortcut(input, processed,
@@ -144,12 +144,13 @@ def residual_block(block_function, nb_filter, repetitions, skip=True,
             input = block_function(**kwargs)(input)
         return input
 
-    return f 
+    return f
 
 
 # A single basic 3x3 convolution
 def basic_block_mp(nb_filter, subsample=False, upsample=False, skip=True,
-                   dropout=0., batch_norm=True, weight_decay=None):
+                   dropout=0., batch_norm=True, weight_decay=None,
+                   return_pool=False):
     def f(input):
         processed = input
         if batch_norm:
@@ -157,6 +158,8 @@ def basic_block_mp(nb_filter, subsample=False, upsample=False, skip=True,
         processed = Activation('relu')(processed)
         if subsample:
             processed = MaxPooling2D(pool_size=(2,2))(processed)
+            if return_pool:
+                output_pool = processed
         processed = Convolution2D(nb_filter=nb_filter, nb_row=3, nb_col=3,
                                   init='he_normal', border_mode='same',
                                   W_regularizer=_l2(weight_decay))(processed)
@@ -164,12 +167,13 @@ def basic_block_mp(nb_filter, subsample=False, upsample=False, skip=True,
             processed = Dropout(dropout)(processed)
         if upsample:
             processed = UpSampling2D(size=(2, 2))(processed)
-            
+
         output = processed
         if skip:
-            output = _shortcut(input, processed,
-                               subsample=subsample, upsample=upsample,
-                               weight_decay=weight_decay)
+            output = _shortcut(input, processed, weight_decay=weight_decay,
+                               subsample=subsample, upsample=upsample)
+        if subsample and return_pool:
+            return output, output_pool
         return output
-    
+
     return f

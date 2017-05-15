@@ -29,7 +29,7 @@ from helpers import build_experiment_name
 # imports for keras
 from keras.layers import Input
 from keras.models import Model
-from models.fcn_resunet_model import assemble_model
+from models.fcn_resunet_model import assemble_model_1
 from models.fcn_resunet_preprocessing import build_preprocessing
 from models.fcn_resunet_blocks import (bottleneck,
                                        basic_block,
@@ -169,9 +169,6 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
                                 n_classes=n_classes, layer=dae_dict['concat_h'])
         padding = 0
     elif segm_net == 'fcn_fcresnet':
-        print("-")*10
-        print("ResUNet is the best!")
-        print("-")*10
         preprocessing_kwargs = OrderedDict((
             ('img_shape', (1, None, None)),
             ('regularize_weights', None),
@@ -198,10 +195,10 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
             ('mainblock', bottleneck),
             ('initblock', basic_block_mp)
             ))
-        # build preprocessort
+        # build preprocessor
         prep_model = build_preprocessing(**preprocessing_kwargs)
         # build resnet
-        resunet = assemble_model(**resunet_model_kwargs)
+        resunet = assemble_model_1(**resunet_model_kwargs)
         # setup model (preprocessor + resunet)
         inputs = Input(shape=preprocessing_kwargs['img_shape'])
         out_prep = prep_model(inputs)
@@ -210,7 +207,7 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
         # load weights
         model.load_weights("/data/lisatmp4/romerosa/itinf/models/em/best_weights.hdf5")
         print("-")*10
-        print ("We are done!")
+        print ("Resunet model loading done!")
         print("-")*10
     elif segm_net == 'fcn_fcresnet':
         raise NotImplementedError
