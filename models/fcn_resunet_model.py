@@ -520,6 +520,6 @@ def assemble_model_1(input_shape, num_classes, num_main_blocks, main_block_depth
     output = Permute((3,1,2))(output)
 
     # MODEL
-    model = Model(input=inputs, output=output)
+    model = Model(input=inputs, output=[output]+model_outputs)
     # model_outputs
     return model

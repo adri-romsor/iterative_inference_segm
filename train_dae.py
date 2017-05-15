@@ -165,7 +165,7 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
                         load_weights=True, layer=dae_dict['concat_h']+[dae_dict['layer']])
         padding = 100
     elif segm_net == 'densenet':
-        fcn  = build_fcdensenet(input_x_var, nb_in_channels=nb_in_channels,
+        fcn = build_fcdensenet(input_x_var, nb_in_channels=nb_in_channels,
                                 n_classes=n_classes, layer=dae_dict['concat_h'])
         padding = 0
     elif segm_net == 'fcn_fcresnet':
@@ -193,7 +193,8 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
             ('use_skip_blocks', False),
             ('relative_num_across_filters', 1),
             ('mainblock', bottleneck),
-            ('initblock', basic_block_mp)
+            ('initblock', basic_block_mp),
+            ('hidden_outputs', [1])
             ))
         # build preprocessor
         prep_model = build_preprocessing(**preprocessing_kwargs)
@@ -203,9 +204,9 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
         inputs = Input(shape=preprocessing_kwargs['img_shape'])
         out_prep = prep_model(inputs)
         out_model = resunet(out_prep)
-        model = Model(input=inputs, output=out_model)
+        resunet_model = Model(input=inputs, output=out_model)
         # load weights
-        model.load_weights("/data/lisatmp4/romerosa/itinf/models/em/best_weights.hdf5")
+        resunet_model.load_weights("/data/lisatmp4/romerosa/itinf/models/em/best_weights.hdf5")
         print("-")*10
         print ("Resunet model loading done!")
         print("-")*10
