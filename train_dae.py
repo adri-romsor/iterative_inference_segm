@@ -26,6 +26,15 @@ from models.fcn8_dae import buildFCN8_DAE
 from models.contextmod_dae import buildDAE_contextmod
 from layers.mylayers import DePool2D
 from helpers import build_experiment_name
+# imports for keras
+from keras.layers import Input
+from keras.models import Model
+from models.fcn_resunet_model import assemble_model
+from models.fcn_resunet_preprocessing import build_preprocessing
+from models.fcn_resunet_blocks import (bottleneck,
+                                       basic_block,
+                                       basic_block_mp)
+from collections import OrderedDict
 
 _FLOATX = config.floatX
 if getuser() == 'romerosa':
@@ -36,10 +45,10 @@ elif getuser() == 'jegousim':
     SAVEPATH = '/data/lisatmp4/jegousim/iterative_inference/'
     LOADPATH = '/data/lisatmp4/jegousim/iterative_inference/'
     WEIGHTS_PATH = '/data/lisatmp4/romerosa/rnncnn/fcn8_model.npz'
-elif getuser() == 'michal':
-    SAVEPATH = '/home/michal/Experiments/iter_inf/'
-    LOADPATH = SAVEPATH
-    WEIGHTS_PATH = '/home/michal/model_earlyjacc.npz'
+elif getuser() == 'drozdzam':
+    SAVEPATH = '/Tmp/drozdzam/itinf/models/'
+    LOADPATH = '/data/lisatmp4/erraqabi/iterative_inference/models/'
+    WEIGHTS_PATH = LOADPATH
 elif getuser() == 'erraqaba':
     SAVEPATH = '/Tmp/erraqaba/iterative_inference/models/'
     LOADPATH = '/data/lisatmp4/erraqabi/iterative_inference/models/'
@@ -159,6 +168,50 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
         fcn  = build_fcdensenet(input_x_var, nb_in_channels=nb_in_channels,
                                 n_classes=n_classes, layer=dae_dict['concat_h'])
         padding = 0
+    elif segm_net == 'fcn_fcresnet':
+        print("-")*10
+        print("ResUNet is the best!")
+        print("-")*10
+        preprocessing_kwargs = OrderedDict((
+            ('img_shape', (1, None, None)),
+            ('regularize_weights', None),
+            ('nb_filter', 16),
+            ('kernel_size', 3),
+            ('nb_layers', 4),
+            ('pre_unet', True),
+            ('output_nb_filter', 1)
+            ))
+        resunet_model_kwargs = OrderedDict((
+            ('input_shape', (1, None, None)),
+            ('num_classes', 2),
+            ('input_num_filters', 32),
+            ('main_block_depth', [3, 8, 10, 3]),
+            ('num_main_blocks', 3),
+            ('num_init_blocks', 2),
+            ('weight_decay', None),
+            ('dropout', 0.5),
+            ('short_skip', True),
+            ('long_skip', True),
+            ('long_skip_merge_mode', 'sum'),
+            ('use_skip_blocks', False),
+            ('relative_num_across_filters', 1),
+            ('mainblock', bottleneck),
+            ('initblock', basic_block_mp)
+            ))
+        # build preprocessort
+        prep_model = build_preprocessing(**preprocessing_kwargs)
+        # build resnet
+        resunet = assemble_model(**resunet_model_kwargs)
+        # setup model (preprocessor + resunet)
+        inputs = Input(shape=preprocessing_kwargs['img_shape'])
+        out_prep = prep_model(inputs)
+        out_model = resunet(out_prep)
+        model = Model(input=inputs, output=out_model)
+        # load weights
+        model.load_weights("/data/lisatmp4/romerosa/itinf/models/em/best_weights.hdf5")
+        print("-")*10
+        print ("We are done!")
+        print("-")*10
     elif segm_net == 'fcn_fcresnet':
         raise NotImplementedError
     else:
@@ -447,11 +500,11 @@ def main():
     parser = argparse.ArgumentParser(description='DAE training')
     parser.add_argument('-dataset',
                         type=str,
-                        default='camvid',
+                        default='em',
                         help='Dataset.')
     parser.add_argument('-segmentation_net',
                         type=str,
-                        default='densenet',
+                        default='fcn_fcresnet',
                         help='Segmentation network.')
     parser.add_argument('-train_dict',
                         type=dict,
