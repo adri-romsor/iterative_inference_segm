@@ -1,4 +1,4 @@
-from lasagne.layers import InputLayer, GaussianNoiseLayer
+from lasagne.layers import InputLayer, GaussianNoiseLayer, BatchNormLayer
 from lasagne.layers import Pool2DLayer as PoolLayer, ConcatLayer
 from lasagne.layers import Conv2DLayer as ConvLayer, DropoutLayer
 from layers.mylayers import GaussianNoiseLayerSoftmax
@@ -9,7 +9,7 @@ import model_helpers
 def buildFCN_down(input_var, concat_h_vars, nb_features_to_concat, padding,
                   n_classes=21, concat_layers=['pool5'], noise=0.1,
                   n_filters=64, conv_before_pool=1, additional_pool=0,
-                  dropout=0., ae_h=False):
+                  dropout=0., bn=0, ae_h=False):
 
     '''
     Build fcn contracting path. The contracting path is built by combining
@@ -108,6 +108,9 @@ def buildFCN_down(input_var, concat_h_vars, nb_features_to_concat, padding,
             if dropout > 0:
                 net[out+'_drop'] = DropoutLayer(net[out], p=dropout)
                 out += '_drop'
+            if bn:
+                net[out+'_bn'] = BatchNormLayer(net[out])
+                out += '_bn'
 
         # Define pool
         if p == n_pool-1:

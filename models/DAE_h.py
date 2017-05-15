@@ -14,7 +14,7 @@ def buildDAE(input_concat_h_vars, input_mask_var, n_classes, nb_features_to_conc
              model_name='dae_model.npz', trainable=False, load_weights=False,
              out_nonlin=linear, concat_h=['input'], noise=0.1, n_filters=64,
              conv_before_pool=1, additional_pool=0, dropout=0., skip=False,
-             unpool_type='standard'):
+             unpool_type='standard', bn=0):
     '''
     Build score model
     '''
@@ -28,7 +28,7 @@ def buildDAE(input_concat_h_vars, input_mask_var, n_classes, nb_features_to_conc
         concat_layers=concat_h,
         noise=noise, n_filters=n_filters,
         conv_before_pool=conv_before_pool,
-        additional_pool=additional_pool, ae_h=ae_h, dropout=dropout)
+        additional_pool=additional_pool, ae_h=ae_h, dropout=dropout, bn=bn)
 
     dae = fcn_down
 
@@ -43,7 +43,8 @@ def buildDAE(input_concat_h_vars, input_mask_var, n_classes, nb_features_to_conc
     fcn_up = buildFCN_up(dae, last_layer_down, n_pool, skip=skip,
                          n_classes=n_classes, unpool_type=unpool_type,
                          out_nonlin=out_nonlin, ae_h=ae_h,
-                         additional_pool=additional_pool, dropout=dropout)
+                         additional_pool=additional_pool, dropout=dropout,
+                         bn=bn)
 
     dae.update(fcn_up)
 

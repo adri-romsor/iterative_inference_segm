@@ -120,7 +120,8 @@ def build_experiment_name(segm_net='fcn8', kind='fcn8', concat_h=[], optimizer='
                           from_gt=False, temperature=1.0, n_filters=64,
                           conv_before_pool=1, skip=True, additional_pool=0,
                           unpool_type='standard', ae_h=False,
-                          path_weights='', layer='probs_dimshuffle', exp_name=''):
+                          path_weights='', layer='probs_dimshuffle',
+                          exp_name='', bn=0):
     """
     Build experiment name
 
@@ -159,13 +160,15 @@ def build_experiment_name(segm_net='fcn8', kind='fcn8', concat_h=[], optimizer='
     exp_name += '_pretrained' if len(path_weights) > 0 else ''
     exp_name += '_PlugPlay' if ae_h else ''
     exp_name += '_' + layer
+
+    exp_name += '_bn' if bn else ''
     print(exp_name)
 
     return exp_name
 
 
 def print_results(st, rec, acc, jacc, nbatches):
-        jacc_mean = np.mean(jacc[0, :] / jacc[1, :])
+        jacc_mean = np.nanmean(jacc[0, :] / jacc[1, :])
         print st
         print '    Loss: ' + str(rec/nbatches)
         print '    Acc: ' + str(acc/nbatches)
