@@ -29,7 +29,7 @@ from helpers import build_experiment_name
 # imports for keras
 from keras.layers import Input
 from keras.models import Model
-from models.fcn_resunet_model import assemble_model_1
+from models.fcn_resunet_model import assemble_model
 from models.fcn_resunet_preprocessing import build_preprocessing
 from models.fcn_resunet_blocks import (bottleneck,
                                        basic_block,
@@ -47,7 +47,7 @@ elif getuser() == 'jegousim':
     WEIGHTS_PATH = '/data/lisatmp4/romerosa/rnncnn/fcn8_model.npz'
 elif getuser() == 'drozdzam':
     SAVEPATH = '/Tmp/drozdzam/itinf/models/'
-    LOADPATH = '/data/lisatmp4/erraqabi/iterative_inference/models/'
+    LOADPATH = '/data/lisatmp4/drozdzam/itinf/models/'
     WEIGHTS_PATH = LOADPATH
 elif getuser() == 'erraqaba':
     SAVEPATH = '/Tmp/erraqaba/iterative_inference/models/'
@@ -169,6 +169,7 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
                                 n_classes=n_classes, layer=dae_dict['concat_h'])
         padding = 0
     elif segm_net == 'fcn_fcresnet':
+        padding = 0
         preprocessing_kwargs = OrderedDict((
             ('img_shape', (1, None, None)),
             ('regularize_weights', None),
@@ -194,19 +195,20 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
             ('relative_num_across_filters', 1),
             ('mainblock', bottleneck),
             ('initblock', basic_block_mp),
-            ('hidden_outputs', [1])
+            # possible strings: input, initblock_d{0, 1}, mainblock_d{0, 1, 2, 3}
+            ('hidden_outputs', ['mainblock_d1'])
             ))
         # build preprocessor
         prep_model = build_preprocessing(**preprocessing_kwargs)
         # build resnet
-        resunet = assemble_model_1(**resunet_model_kwargs)
+        resunet = assemble_model(**resunet_model_kwargs)
         # setup model (preprocessor + resunet)
         inputs = Input(shape=preprocessing_kwargs['img_shape'])
         out_prep = prep_model(inputs)
         out_model = resunet(out_prep)
-        resunet_model = Model(input=inputs, output=out_model)
+        fcn = Model(input=inputs, output=out_model)
         # load weights
-        resunet_model.load_weights("/data/lisatmp4/romerosa/itinf/models/em/best_weights.hdf5")
+        fcn.load_weights("/data/lisatmp4/romerosa/itinf/models/em/best_weights.hdf5")
         print("-")*10
         print ("Resunet model loading done!")
         print("-")*10
@@ -225,8 +227,12 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
     ae_h = ae_h and 'pool' in dae_dict['concat_h'][-1]
 
     if dae_dict['kind'] == 'standard':
+        if segm_net in ['fcn_fcresnet']:
+            nb_features_to_concat=fcn.output_shape[0][1]
+        else:
+            nb_features_to_concat=fcn[0].output_shape[1]
         dae = buildDAE(input_concat_h_vars, input_mask_var, n_classes,
-                       nb_features_to_concat=fcn[0].output_shape[1], padding=padding,
+                       nb_features_to_concat=nb_features_to_concat, padding=padding,
                        trainable=True,
                        void_labels=void_labels, load_weights=resume or full_im_ft,
                        path_weights=loadpath_init, model_name='dae_model_best.npz',
@@ -264,7 +270,11 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
     print "Defining and compiling training functions"
 
     # fcn prediction
-    fcn_prediction = lasagne.layers.get_output(fcn, deterministic=True, batch_norm_use_averages=False)
+    if segm_net in ['fcn_fcresnet']:
+        # no need if we use keras, viva keras!
+        pass
+    else:
+        fcn_prediction = lasagne.layers.get_output(fcn, deterministic=True, batch_norm_use_averages=False)
 
     # select prediction layers (pooling and upsampling layers)
     dae_all_lays = lasagne.layers.get_all_layers(dae)
@@ -373,7 +383,11 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
     # functions
     train_fn = theano.function(input_concat_h_vars + [input_mask_var, target_var],
                                loss, updates=updates)
-    fcn_fn = theano.function([input_x_var], fcn_prediction)
+    if segm_net in ['fcn_fcresnet']:
+        # no need if we use keras, viva keras!
+        pass
+    else:
+        fcn_fn = theano.function([input_x_var], fcn_prediction)
     val_fn = theano.function(input_concat_h_vars + [input_mask_var, target_var], [test_loss, test_jacc, test_mse_loss])
 
     err_train = []
@@ -405,7 +419,11 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
             ####################################################################
 
             # h prediction
-            H_pred_batch = fcn_fn(X_train_batch)
+            if segm_net in ['fcn_fcresnet']:
+                H_pred_batch = fcn.predict(X_train_batch)
+            else:
+                H_pred_batch = fcn_fn(X_train_batch)
+
             if dae_dict['from_gt']:
                 Y_pred_batch = L_train_batch[:, :void, :, :]
             else:
@@ -428,7 +446,10 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
             L_val_batch = L_val_batch.astype(_FLOATX)
 
             # h prediction
-            H_pred_batch = fcn_fn(X_val_batch)
+            if segm_net in ['fcn_fcresnet']:
+                H_pred_batch = fcn.predict(X_val_batch)
+            else:
+                H_pred_batch = fcn_fn(X_val_batch)
             if dae_dict['from_gt']:
                 Y_pred_batch = L_val_batch[:, :void, :, :]
             else:
@@ -525,7 +546,7 @@ def main():
                         help='DAE kind and parameters')
     parser.add_argument('-data_augmentation',
                         type=dict,
-                        default={'crop_size': (224, 224),
+                        default={'crop_size': (256, 256),
                                  'horizontal_flip': True,
                                  'fill_mode':'constant'},
                         help='Dictionary of data augmentation to be used')
@@ -535,7 +556,7 @@ def main():
                         help='Whether to reconstruct intermediate h')
     parser.add_argument('-train_from_0_255',
                         type=bool,
-                        default=False,
+                        default=True,
                         help='Whether to train from images within 0-255 range')
     args = parser.parse_args()
 
