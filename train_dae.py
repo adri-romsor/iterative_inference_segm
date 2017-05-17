@@ -179,6 +179,10 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
             ('pre_unet', True),
             ('output_nb_filter', 1)
             ))
+        translation = {'input': 'input', 'pool1': 'initblock_d0',
+                       'pool2': 'initblock_d1', 'pool3': 'mainblock_d0',
+                       'pool4': 'mainblock_d1', 'pool5': 'mainblock_d2',
+                       'pool6': 'mainblock_d3'}
         resunet_model_kwargs = OrderedDict((
             ('input_shape', (1, None, None)),
             ('num_classes', 2),
@@ -196,7 +200,7 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
             ('mainblock', bottleneck),
             ('initblock', basic_block_mp),
             # possible strings: input, initblock_d{0, 1}, mainblock_d{0, 1, 2, 3}
-            ('hidden_outputs', ['mainblock_d0'])
+            ('hidden_outputs', [translation[dae_dict['concat_h'][0]]])
             ))
         # build preprocessor
         prep_model = build_preprocessing(**preprocessing_kwargs)
@@ -544,7 +548,7 @@ def main():
                         type=dict,
                         default={'kind': 'standard', 'dropout': 0.2, 'skip': True,
                                  'unpool_type': 'trackind', 'noise': 0.1,
-                                 'concat_h': ['pool4'], 'from_gt': False,
+                                 'concat_h': ['pool2'], 'from_gt': False,
                                  'n_filters': 64, 'conv_before_pool': 1,
                                  'additional_pool': 2, 'temperature': 1.0,
                                  'path_weights': '',  'layer': 'probs_dimshuffle',

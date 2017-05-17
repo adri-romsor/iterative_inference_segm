@@ -158,6 +158,29 @@ def inference(dataset, segm_net, learn_step=0.005, num_iter=500,
             ('pre_unet', True),
             ('output_nb_filter', 1)
             ))
+        translation = {'input': 'input', 'pool1': 'initblock_d0',
+                       'pool2': 'initblock_d1', 'pool3': 'mainblock_d0',
+                       'pool4': 'mainblock_d1', 'pool5': 'mainblock_d2',
+                       'pool6': 'mainblock_d3'}
+        resunet_model_kwargs = OrderedDict((
+            ('input_shape', (1, None, None)),
+            ('num_classes', 2),
+            ('input_num_filters', 32),
+            ('main_block_depth', [3, 8, 10, 3]),
+            ('num_main_blocks', 3),
+            ('num_init_blocks', 2),
+            ('weight_decay', None),
+            ('dropout', 0.5),
+            ('short_skip', True),
+            ('long_skip', True),
+            ('long_skip_merge_mode', 'sum'),
+            ('use_skip_blocks', False),
+            ('relative_num_across_filters', 1),
+            ('mainblock', bottleneck),
+            ('initblock', basic_block_mp),
+            # possible strings: input, initblock_d{0, 1}, mainblock_d{0, 1, 2, 3}
+            ('hidden_outputs', [translation[dae_dict['concat_h'][0]]])
+            ))
         resunet_model_kwargs = OrderedDict((
             ('input_shape', (1, None, None)),
             ('num_classes', 2),
