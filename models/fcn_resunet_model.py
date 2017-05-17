@@ -112,7 +112,7 @@ def assemble_model(input_shape, num_classes, num_main_blocks, main_block_depth,
                    long_skip=True, long_skip_merge_mode='concat',
                    mainblock=None, initblock=None, use_skip_blocks=True,
                    skipblock=None, relative_num_across_filters=1, dropout=0.,
-                   batch_norm=True, weight_decay=None):
+                   batch_norm=True, weight_decay=None, hidden_outputs=[]):
     """
     input_shape : tuple specifiying the 2D image input shape.
     num_classes : number of classes in the segmentation output.
@@ -196,11 +196,13 @@ def assemble_model(input_shape, num_classes, num_main_blocks, main_block_depth,
                         'block': skipblock}
     long_skip_kwargs.update(block_kwargs)
 
+    model_outputs = []
     layers = _layer_tracker()
 
     # INPUT
     input = Input(shape=input_shape)
-
+    if 'input' in hidden_outputs:
+        model_outputs += [inputs]
     # Initial convolution
     layers.record(Convolution2D(input_num_filters, 3, 3,
                                init='he_normal', border_mode='same',
@@ -212,6 +214,10 @@ def assemble_model(input_shape, num_classes, num_main_blocks, main_block_depth,
         layers.record(initblock(input_num_filters, subsample=True,
                                 **block_kwargs)(layers.prev_layer),
                       name='initblock_d'+str(b))
+
+        if layers.prev_layer.name in hidden_outputs:
+            model_outputs += [layers.prev_layer]
+
         print("INIT DOWN {}: {} -- {}".format(b, layers.prev_layer.name,
                                               layers.prev_layer._keras_shape))
 
@@ -222,6 +228,9 @@ def assemble_model(input_shape, num_classes, num_main_blocks, main_block_depth,
                               repetitions=get_repetitions(b), subsample=True,
                               **block_kwargs)(layers.prev_layer),
                       name='mainblock_d'+str(b))
+
+        if layers.prev_layer.name in hidden_outputs:
+            model_outputs += [layers.prev_layer]
         print("MAIN DOWN {}: {} (depth {}) -- {}".format(b,
               layers.prev_layer.name, get_repetitions(b),
               layers.prev_layer._keras_shape))
@@ -305,6 +314,6 @@ def assemble_model(input_shape, num_classes, num_main_blocks, main_block_depth,
     output = Permute((3,1,2))(output)
 
     # MODEL
-    model = Model(input=input, output=output)
+    model = Model(input=input, output=model_outputs+[output])
 
     return model

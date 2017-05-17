@@ -18,7 +18,7 @@ from layers.mylayers import CroppingLayer
 from lasagne.objectives import squared_error as squared_error_L
 
 from data_loader import load_data
-from metrics import crossentropy, entropy, squared_error_h, squared_error, jaccard
+from metrics import crossentropy, entropy, squared_error_h, squared_error, jaccard, dice_loss
 from models.fcn8 import buildFCN8
 from models.FCDenseNet import build_fcdensenet
 from models.DAE_h import buildDAE
@@ -47,7 +47,7 @@ elif getuser() == 'jegousim':
     WEIGHTS_PATH = '/data/lisatmp4/romerosa/rnncnn/fcn8_model.npz'
 elif getuser() == 'drozdzam':
     SAVEPATH = '/Tmp/drozdzam/itinf/models/'
-    LOADPATH = '/data/lisatmp4/erraqabi/iterative_inference/models/'
+    LOADPATH = '/data/lisatmp4/drozdzam/itinf/models/'
     WEIGHTS_PATH = LOADPATH
 elif getuser() == 'erraqaba':
     SAVEPATH = '/Tmp/erraqaba/iterative_inference/models/'
@@ -165,13 +165,11 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
                         load_weights=True, layer=dae_dict['concat_h']+[dae_dict['layer']])
         padding = 100
     elif segm_net == 'densenet':
-        fcn  = build_fcdensenet(input_x_var, nb_in_channels=nb_in_channels,
+        fcn = build_fcdensenet(input_x_var, nb_in_channels=nb_in_channels,
                                 n_classes=n_classes, layer=dae_dict['concat_h'])
         padding = 0
     elif segm_net == 'fcn_fcresnet':
-        print("-")*10
-        print("ResUNet is the best!")
-        print("-")*10
+        padding = 0
         preprocessing_kwargs = OrderedDict((
             ('img_shape', (1, None, None)),
             ('regularize_weights', None),
@@ -181,6 +179,10 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
             ('pre_unet', True),
             ('output_nb_filter', 1)
             ))
+        translation = {'input': 'input', 'pool1': 'initblock_d0',
+                       'pool2': 'initblock_d1', 'pool3': 'mainblock_d0',
+                       'pool4': 'mainblock_d1', 'pool5': 'mainblock_d2',
+                       'pool6': 'mainblock_d3'}
         resunet_model_kwargs = OrderedDict((
             ('input_shape', (1, None, None)),
             ('num_classes', 2),
@@ -196,9 +198,11 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
             ('use_skip_blocks', False),
             ('relative_num_across_filters', 1),
             ('mainblock', bottleneck),
-            ('initblock', basic_block_mp)
+            ('initblock', basic_block_mp),
+            # possible strings: input, initblock_d{0, 1}, mainblock_d{0, 1, 2, 3}
+            ('hidden_outputs', [translation[dae_dict['concat_h'][0]]])
             ))
-        # build preprocessort
+        # build preprocessor
         prep_model = build_preprocessing(**preprocessing_kwargs)
         # build resnet
         resunet = assemble_model(**resunet_model_kwargs)
@@ -206,11 +210,11 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
         inputs = Input(shape=preprocessing_kwargs['img_shape'])
         out_prep = prep_model(inputs)
         out_model = resunet(out_prep)
-        model = Model(input=inputs, output=out_model)
+        fcn = Model(input=inputs, output=out_model)
         # load weights
-        model.load_weights("/data/lisatmp4/romerosa/itinf/models/em/best_weights.hdf5")
+        fcn.load_weights("/data/lisatmp4/romerosa/itinf/models/em/best_weights.hdf5")
         print("-")*10
-        print ("We are done!")
+        print ("Resunet model loading done!")
         print("-")*10
     elif segm_net == 'fcn_fcresnet':
         raise NotImplementedError
@@ -227,8 +231,12 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
     ae_h = ae_h and 'pool' in dae_dict['concat_h'][-1]
 
     if dae_dict['kind'] == 'standard':
+        if segm_net in ['fcn_fcresnet']:
+            nb_features_to_concat=fcn.output_shape[0][1]
+        else:
+            nb_features_to_concat=fcn[0].output_shape[1]
         dae = buildDAE(input_concat_h_vars, input_mask_var, n_classes,
-                       nb_features_to_concat=fcn[0].output_shape[1], padding=padding,
+                       nb_features_to_concat=nb_features_to_concat, padding=padding,
                        trainable=True,
                        void_labels=void_labels, load_weights=resume or full_im_ft,
                        path_weights=loadpath_init, model_name='dae_model_best.npz',
@@ -266,7 +274,11 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
     print "Defining and compiling training functions"
 
     # fcn prediction
-    fcn_prediction = lasagne.layers.get_output(fcn, deterministic=True, batch_norm_use_averages=False)
+    if segm_net in ['fcn_fcresnet']:
+        # no need if we use keras, viva keras!
+        pass
+    else:
+        fcn_prediction = lasagne.layers.get_output(fcn, deterministic=True, batch_norm_use_averages=False)
 
     # select prediction layers (pooling and upsampling layers)
     dae_all_lays = lasagne.layers.get_all_layers(dae)
@@ -327,6 +339,9 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
                              one_hot=True)
         test_loss += crossentropy(test_dae_prediction_2D, target_var_2D,
                                   void_labels, one_hot=True)
+    if 'dice' in training_loss:
+        loss += dice_loss(dae_prediction, target_var, void_labels)
+        test_loss += dice_loss(test_dae_prediction, target_var, void_labels)
 
     test_mse_loss = squared_error(test_dae_prediction, target_var, void)
     if 'squared_error' in training_loss:
@@ -375,7 +390,11 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
     # functions
     train_fn = theano.function(input_concat_h_vars + [input_mask_var, target_var],
                                loss, updates=updates)
-    fcn_fn = theano.function([input_x_var], fcn_prediction)
+    if segm_net in ['fcn_fcresnet']:
+        # no need if we use keras, viva keras!
+        pass
+    else:
+        fcn_fn = theano.function([input_x_var], fcn_prediction)
     val_fn = theano.function(input_concat_h_vars + [input_mask_var, target_var], [test_loss, test_jacc, test_mse_loss])
 
     err_train = []
@@ -398,6 +417,9 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
         for i in range(n_batches_train):
             # Get minibatch
             X_train_batch, L_train_batch = train_iter.next()
+            if segm_net in ['fcn_fcresnet']:
+                # flip labels to the format used in Keras
+                L_train_batch = 1 - L_train_batch
             L_train_batch = L_train_batch.astype(_FLOATX)
 
             #####uncomment if you want to control the feasability of pooling####
@@ -407,7 +429,11 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
             ####################################################################
 
             # h prediction
-            H_pred_batch = fcn_fn(X_train_batch)
+            if segm_net in ['fcn_fcresnet']:
+                H_pred_batch = fcn.predict(X_train_batch)
+            else:
+                H_pred_batch = fcn_fn(X_train_batch)
+
             if dae_dict['from_gt']:
                 Y_pred_batch = L_train_batch[:, :void, :, :]
             else:
@@ -427,10 +453,16 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
         for i in range(n_batches_val):
             # Get minibatch
             X_val_batch, L_val_batch = val_iter.next()
+            if segm_net in ['fcn_fcresnet']:
+                # flip labels to the format used in Keras
+                L_val_batch = 1 - L_val_batch
             L_val_batch = L_val_batch.astype(_FLOATX)
 
             # h prediction
-            H_pred_batch = fcn_fn(X_val_batch)
+            if segm_net in ['fcn_fcresnet']:
+                H_pred_batch = fcn.predict(X_val_batch)
+            else:
+                H_pred_batch = fcn_fn(X_val_batch)
             if dae_dict['from_gt']:
                 Y_pred_batch = L_val_batch[:, :void, :, :]
             else:
@@ -511,15 +543,15 @@ def main():
                         default={'learning_rate': 0.001, 'lr_anneal': 0.99,
                                  'weight_decay': 0.0001, 'num_epochs': 1000,
                                  'max_patience': 100, 'optimizer': 'rmsprop',
-                                 'batch_size': [10, 10, 10],
-                                 'training_loss': ['crossentropy', 'squared_error'],
+                                 'batch_size': [10, 5, 10],
+                                 'training_loss': ['dice', 'squared_error'],
                                  'lmb': 1, 'full_im_ft': False},
                         help='Training configuration')
     parser.add_argument('-dae_dict',
                         type=dict,
                         default={'kind': 'standard', 'dropout': 0.2, 'skip': True,
-                                 'unpool_type': 'trackind', 'noise': 0,
-                                 'concat_h': ['pool4'], 'from_gt': False,
+                                 'unpool_type': 'trackind', 'noise': 0.1,
+                                 'concat_h': ['pool2'], 'from_gt': False,
                                  'n_filters': 64, 'conv_before_pool': 1,
                                  'additional_pool': 2, 'temperature': 1.0,
                                  'path_weights': '',  'layer': 'probs_dimshuffle',
@@ -527,9 +559,12 @@ def main():
                         help='DAE kind and parameters')
     parser.add_argument('-data_augmentation',
                         type=dict,
-                        default={'crop_size': (224, 224),
+                        default={'crop_size': (256, 256),
                                  'horizontal_flip': True,
-                                 'fill_mode':'constant'},
+                                 'vertical_flip': True,
+                                 'rotation_range': 25,
+                                 'shear_range': 0.41,
+                                 'fill_mode':'reflect'},
                         help='Dictionary of data augmentation to be used')
     parser.add_argument('-ae_h',
                         type=bool,
@@ -537,7 +572,7 @@ def main():
                         help='Whether to reconstruct intermediate h')
     parser.add_argument('-train_from_0_255',
                         type=bool,
-                        default=False,
+                        default=True,
                         help='Whether to train from images within 0-255 range')
     args = parser.parse_args()
 
