@@ -432,7 +432,7 @@ def main():
                         help='Training parameters')
     parser.add_argument('-full_im_ft',
                         type=bool,
-                        default=True,
+                        default=False,
                         help='Whether to finetune at full image resolution')
     parser.add_argument('-ae_h',
                         type=bool,
