@@ -181,25 +181,6 @@ def inference(dataset, segm_net, learn_step=0.005, num_iter=500,
             # possible strings: input, initblock_d{0, 1}, mainblock_d{0, 1, 2, 3}
             ('hidden_outputs', [translation[dae_dict['concat_h'][0]]])
             ))
-        resunet_model_kwargs = OrderedDict((
-            ('input_shape', (1, None, None)),
-            ('num_classes', 2),
-            ('input_num_filters', 32),
-            ('main_block_depth', [3, 8, 10, 3]),
-            ('num_main_blocks', 3),
-            ('num_init_blocks', 2),
-            ('weight_decay', None),
-            ('dropout', 0.5),
-            ('short_skip', True),
-            ('long_skip', True),
-            ('long_skip_merge_mode', 'sum'),
-            ('use_skip_blocks', False),
-            ('relative_num_across_filters', 1),
-            ('mainblock', bottleneck),
-            ('initblock', basic_block_mp),
-            # possible strings: input, initblock_d{0, 1}, mainblock_d{0, 1, 2, 3}
-            ('hidden_outputs', ['mainblock_d1'])
-            ))
         # build preprocessor
         prep_model = build_preprocessing(**preprocessing_kwargs)
         # build resnet
@@ -403,7 +384,7 @@ def main():
                         help='Segmentation network.')
     parser.add_argument('-step',
                         type=float,
-                        default=0.0005,
+                        default=0.005,
                         help='step')
     parser.add_argument('--num_iter',
                         '-ne',
@@ -418,7 +399,7 @@ def main():
                         type=dict,
                         default={'kind': 'standard', 'dropout': 0.2, 'skip': True,
                                   'unpool_type': 'trackind', 'noise':0.1,
-                                  'concat_h': ['pool4'], 'from_gt': False,
+                                  'concat_h': ['pool2'], 'from_gt': False,
                                   'n_filters': 64, 'conv_before_pool': 1,
                                   'additional_pool': 2,
                                   'path_weights': '', 'layer': 'probs_dimshuffle',

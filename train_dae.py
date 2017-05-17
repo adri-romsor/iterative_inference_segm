@@ -18,7 +18,7 @@ from layers.mylayers import CroppingLayer
 from lasagne.objectives import squared_error as squared_error_L
 
 from data_loader import load_data
-from metrics import crossentropy, entropy, squared_error_h, squared_error, jaccard
+from metrics import crossentropy, entropy, squared_error_h, squared_error, jaccard, dice_loss
 from models.fcn8 import buildFCN8
 from models.FCDenseNet import build_fcdensenet
 from models.DAE_h import buildDAE
@@ -339,6 +339,9 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
                              one_hot=True)
         test_loss += crossentropy(test_dae_prediction_2D, target_var_2D,
                                   void_labels, one_hot=True)
+    if 'dice' in training_loss:
+        loss += dice_loss(dae_prediction, target_var, void_labels)
+        test_loss += dice_loss(test_dae_prediction, target_var, void_labels)
 
     test_mse_loss = squared_error(test_dae_prediction, target_var, void)
     if 'squared_error' in training_loss:
@@ -541,7 +544,7 @@ def main():
                                  'weight_decay': 0.0001, 'num_epochs': 1000,
                                  'max_patience': 100, 'optimizer': 'rmsprop',
                                  'batch_size': [10, 5, 10],
-                                 'training_loss': ['crossentropy', 'squared_error'],
+                                 'training_loss': ['dice', 'squared_error'],
                                  'lmb': 1, 'full_im_ft': False},
                         help='Training configuration')
     parser.add_argument('-dae_dict',
