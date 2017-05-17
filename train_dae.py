@@ -499,7 +499,7 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
             best_err_val = err_valid[epoch]
             best_jacc_val = jacc_val_arr[epoch]
             best_mse_val = mse_val_arr[epoch]
-        elif epoch > 0  and mse_val_arr[epoch] < best_mse_val:
+        elif epoch > 0  and err_valid[epoch] < best_err_val:
             best_err_val = err_valid[epoch]
             best_jacc_val = jacc_val_arr[epoch]
             best_mse_val = mse_val_arr[epoch]
@@ -551,7 +551,7 @@ def main():
                         type=dict,
                         default={'kind': 'standard', 'dropout': 0.2, 'skip': True,
                                  'unpool_type': 'trackind', 'noise': 0.1,
-                                 'concat_h': ['pool2'], 'from_gt': False,
+                                 'concat_h': ['pool4'], 'from_gt': False,
                                  'n_filters': 64, 'conv_before_pool': 1,
                                  'additional_pool': 2, 'temperature': 1.0,
                                  'path_weights': '',  'layer': 'probs_dimshuffle',

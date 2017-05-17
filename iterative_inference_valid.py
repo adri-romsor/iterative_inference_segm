@@ -384,7 +384,7 @@ def main():
                         help='Segmentation network.')
     parser.add_argument('-step',
                         type=float,
-                        default=0.005,
+                        default=0.0003,
                         help='step')
     parser.add_argument('--num_iter',
                         '-ne',
@@ -399,7 +399,7 @@ def main():
                         type=dict,
                         default={'kind': 'standard', 'dropout': 0.2, 'skip': True,
                                   'unpool_type': 'trackind', 'noise':0.1,
-                                  'concat_h': ['pool2'], 'from_gt': False,
+                                  'concat_h': ['pool4'], 'from_gt': False,
                                   'n_filters': 64, 'conv_before_pool': 1,
                                   'additional_pool': 2,
                                   'path_weights': '', 'layer': 'probs_dimshuffle',
@@ -407,7 +407,7 @@ def main():
                         help='DAE kind and parameters')
     parser.add_argument('-training_dict',
                         type=dict,
-                        default={'training_loss': ['crossentropy',
+                        default={'training_loss': ['dice',
                                                    'squared_error'],
                                  'learning_rate': 0.001, 'lr_anneal': 0.99,
                                  'weight_decay':0.0001, 'optimizer': 'rmsprop'},
