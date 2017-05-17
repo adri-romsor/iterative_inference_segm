@@ -60,8 +60,8 @@ def buildFCN_down(input_var, concat_h_vars, nb_features_to_concat, padding,
     if noise > 0:
         # net['noisy_input'] = GaussianNoiseLayerSoftmax(net['input'],
         #                                                sigma=noise)
-        net['noisy_input'] = GaussianNoiseLayer(net['input'], sigma=noise)
-        # net['noisy_input'] = GaussianNoiseLayerClip(net['input'], sigma=noise)  # TODO: Be careful!!!
+        # net['noisy_input'] = GaussianNoiseLayer(net['input'], sigma=noise)
+        net['noisy_input'] = GaussianNoiseLayerClip(net['input'], sigma=noise)  # TODO: Be careful!!!
         in_next = 'noisy_input'
     else:
         in_next = 'input'

@@ -65,8 +65,8 @@ def inference(dataset, segm_net, which_set='val', num_iter=5, Bilateral=True,
     #
     # Prepare saving directory
     #
-    savepath = os.path.join(savepath, dataset, segm_net, 'img_plots', which_set)
-    loadpath = os.path.join(loadpath, dataset, segm_net, 'img_plots', which_set)
+    savepath = os.path.join(savepath, dataset, segm_net, 'img_plots', 'crf', str(num_iter), which_set)
+    loadpath = os.path.join(loadpath, dataset, segm_net, 'img_plots', 'crf', str(num_iter), which_set)
     if not os.path.exists(savepath):
         os.makedirs(savepath)
 
@@ -224,6 +224,8 @@ def inference(dataset, segm_net, which_set='val', num_iter=5, Bilateral=True,
         print('Copying images to {}'.format(loadpath))
         copy_tree(savepath, loadpath)
 
+    return jacc_test_perclass_crf
+
 
 def main():
     parser = argparse.ArgumentParser(description='Unet model training')
@@ -233,11 +235,11 @@ def main():
                         help='Dataset.')
     parser.add_argument('-segmentation_net',
                         type=str,
-                        default='fcn8',
+                        default='densenet',
                         help='Segmentation network.')
     parser.add_argument('-which_set',
                         type=str,
-                        default='test',
+                        default='val',
                         help='Step')
     parser.add_argument('--num_iter',
                         '-nit',
@@ -251,9 +253,23 @@ def main():
 
     args = parser.parse_args()
 
-    inference(args.dataset, args.segmentation_net, which_set=args.which_set,
-              num_iter=int(args.num_iter), savepath=SAVEPATH, loadpath=LOADPATH,
-              test_from_0_255=args.test_from_0_255)
+    sp = os.path.join(LOADPATH, args.dataset, args.segmentation_net, 'img_plots', 'crf')
+    num_iter = [5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 100]
+    # num_iter = [80]
+    valid_mat = np.zeros((11, len(num_iter)))
+
+    for i, val_i in enumerate(num_iter):
+        res = inference(args.dataset, args.segmentation_net, which_set=args.which_set,
+                        num_iter=val_i, savepath=SAVEPATH, loadpath=LOADPATH,
+                        test_from_0_255=args.test_from_0_255)
+
+        print res.shape
+        print valid_mat.shape
+        print valid_mat[:, i].shape
+
+        valid_mat[:, i] = res
+
+    np.savez(os.path.join(sp, 'results_'+args.which_set+'.npz'), valid_mat)
 
 if __name__ == "__main__":
     main()
