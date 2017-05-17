@@ -83,8 +83,6 @@ def load_data(dataset, train_data_augm_kwargs={}, one_hot=False,
                                   return_0_255=return_0_255)
     elif dataset == 'em':
         train_iter = IsbiEmStacksDataset(which_set='train',
-                                         start=0,
-                                         end=25,
                                          batch_size=batch_size[0],
                                          seq_per_subset=0,
                                          seq_length=0,
@@ -97,7 +95,7 @@ def load_data(dataset, train_data_augm_kwargs={}, one_hot=False,
                                          return_list=True,
                                          return_0_255=return_0_255)
 
-        val_iter = IsbiEmStacksDataset(which_set='train',
+        val_iter = IsbiEmStacksDataset(which_set='val',
                                        batch_size=batch_size[1],
                                        seq_per_subset=0,
                                        seq_length=0,
@@ -105,8 +103,6 @@ def load_data(dataset, train_data_augm_kwargs={}, one_hot=False,
                                        return_01c=False,
                                        use_threads=True,
                                        shuffle_at_each_epoch=False,
-                                       start=25,
-                                       end=30,
                                        return_list=True,
                                        return_0_255=return_0_255)
         test_iter = None

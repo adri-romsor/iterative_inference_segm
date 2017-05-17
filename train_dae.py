@@ -196,7 +196,7 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
             ('mainblock', bottleneck),
             ('initblock', basic_block_mp),
             # possible strings: input, initblock_d{0, 1}, mainblock_d{0, 1, 2, 3}
-            ('hidden_outputs', ['mainblock_d1'])
+            ('hidden_outputs', ['mainblock_d0'])
             ))
         # build preprocessor
         prep_model = build_preprocessing(**preprocessing_kwargs)
@@ -410,6 +410,9 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
         for i in range(n_batches_train):
             # Get minibatch
             X_train_batch, L_train_batch = train_iter.next()
+            if segm_net in ['fcn_fcresnet']:
+                # flip labels to the format used in Keras
+                L_train_batch = 1 - L_train_batch
             L_train_batch = L_train_batch.astype(_FLOATX)
 
             #####uncomment if you want to control the feasability of pooling####
@@ -443,6 +446,9 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
         for i in range(n_batches_val):
             # Get minibatch
             X_val_batch, L_val_batch = val_iter.next()
+            if segm_net in ['fcn_fcresnet']:
+                # flip labels to the format used in Keras
+                L_val_batch = 1 - L_val_batch
             L_val_batch = L_val_batch.astype(_FLOATX)
 
             # h prediction
@@ -530,7 +536,7 @@ def main():
                         default={'learning_rate': 0.001, 'lr_anneal': 0.99,
                                  'weight_decay': 0.0001, 'num_epochs': 1000,
                                  'max_patience': 100, 'optimizer': 'rmsprop',
-                                 'batch_size': [10, 10, 10],
+                                 'batch_size': [10, 5, 10],
                                  'training_loss': ['crossentropy', 'squared_error'],
                                  'lmb': 1, 'full_im_ft': False},
                         help='Training configuration')
