@@ -194,7 +194,7 @@ class Network():
 
 
 def build_fcdensenet(input_var, layer,nb_in_channels=3, n_classes=11,
-                     output_d='4d',
+                     output_d='4d', from_gt=False,
                      weight_path='/data/lisatmp4/romerosa/itinf/models/camvid/DenseNet103/weights/FC-DenseNet103_weights.npz'):
 
 
@@ -213,7 +213,10 @@ def build_fcdensenet(input_var, layer,nb_in_channels=3, n_classes=11,
 
     net.restore(weight_path)
 
-    return net.hidden_outputs+[net.output_layer]
+    net_ret = net.hidden_outputs
+    net_ret += [net.output_layer] if not from_gt else []
+
+    return net_ret
 
 
 if __name__ == '__main__':

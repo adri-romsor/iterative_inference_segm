@@ -106,9 +106,11 @@ def save_img(image_batch, mask_batch, prediction_ii, prediction_fcn,
                                          pred_ii_on_img), axis=1)
 
         # prepare filename and save image
-        out_name = os.path.join(out_images_folder, tag + '_img' + str(j) +
-                                '.png')
-        scipy.misc.toimage(combined_image).save(out_name)
+        out_name = os.path.join(out_images_folder, tag + '_img' + str(j))
+
+        np.savez(out_name+'.npz', combined_image)
+
+        scipy.misc.toimage(combined_image).save(out_name+'.png')
         images.append(combined_image)
     return images
 

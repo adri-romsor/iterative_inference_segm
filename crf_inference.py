@@ -194,8 +194,10 @@ def inference(dataset, segm_net, which_set='val', num_iter=5, Bilateral=True,
         acc_tot_crf += acc_crf
         jacc_tot_crf += jacc_crf
 
-        save_img(X_test_batch.astype(_FLOATX), L_test_batch, Y_test_batch,
-                 Y_test_batch_fcn, savepath, 'batch' + str(i), void_labels, colors)
+        # save_img(X_test_batch.astype(_FLOATX), L_test_batch, Y_test_batch,
+        #         Y_test_batch_fcn, savepath, 'batch' + str(i), void_labels, colors)
+        np.savez(savepath+'batch'+str(i)+'.npz', X=X_test_batch,
+                 L=L_test_batch, Y_crf=Y_test_batch, Y_fcn=Y_test_batch_fcn)
 
     acc_test_crf = acc_tot_crf/(n_batches_test)
     jacc_test_perclass_crf = jacc_tot_crf[0, :] / jacc_tot_crf[1, :]
@@ -235,11 +237,11 @@ def main():
                         help='Dataset.')
     parser.add_argument('-segmentation_net',
                         type=str,
-                        default='densenet',
+                        default='fcn8',
                         help='Segmentation network.')
     parser.add_argument('-which_set',
                         type=str,
-                        default='val',
+                        default='test',
                         help='Step')
     parser.add_argument('--num_iter',
                         '-nit',
@@ -254,8 +256,8 @@ def main():
     args = parser.parse_args()
 
     sp = os.path.join(LOADPATH, args.dataset, args.segmentation_net, 'img_plots', 'crf')
-    num_iter = [5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 100]
-    # num_iter = [80]
+    # num_iter = [5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 100]
+    num_iter = [80]
     valid_mat = np.zeros((11, len(num_iter)))
 
     for i, val_i in enumerate(num_iter):

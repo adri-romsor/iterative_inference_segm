@@ -35,6 +35,12 @@ elif getuser() == 'jegousim':
     SAVEPATH = '/data/lisatmp4/jegousim/iterative_inference/'
     LOADPATH = '/data/lisatmp4/jegousim/iterative_inference/'
     WEIGHTS_PATH = '/data/lisatmp4/romerosa/rnncnn/fcn8_model.npz'
+elif getuser() == 'drozdzam':
+    SAVEPATH = '/Tmp/drozdzam/itinf/models/'
+    # LOADPATH = '/data/lisatmp4/drozdzam/itinf/models/'
+    # WEIGHTS_PATH = LOADPATH
+    LOADPATH = '/data/lisatmp4/romerosa/itinf/models/'
+    WEIGHTS_PATH = '/data/lisatmp4/romerosa/itinf/models/'
 elif getuser() == 'erraqaba':
     SAVEPATH = '/Tmp/erraqaba/iterative_inference/models/'
     LOADPATH = '/data/lisatmp4/erraqabi/iterative_inference/models/'
@@ -281,13 +287,15 @@ def inference(dataset, segm_net, learn_step=0.005, num_iter=500,
         rec_tot += rec
         print_results('>>>>> ITERATIVE INFERENCE:', rec_tot, acc_tot, jacc_tot, i+1)
 
+        np.savez(savepath+'batch'+str(i)+'.npz', X=X_test_batch, L=L_test_batch,
+                 Y_ii=Y_test_batch_ii, Y_fcn=Y_test_batch_fcn)
         # Save images
-        save_img(X_test_batch,
-                 L_test_batch,
-                 Y_test_batch_ii,
-                 Y_test_batch_fcn,
-                 savepath, 'batch' + str(i),
-                 void_labels, colors)
+        # save_img(X_test_batch,
+        #         L_test_batch,
+        #         Y_test_batch_ii,
+        #         Y_test_batch_fcn,
+        #         savepath, 'batch' + str(i),
+        #         void_labels, colors)
 
     # Print summary of how things went
     print('-------------------------------------------------------------------')
@@ -324,16 +332,16 @@ def main():
                         help='Dataset.')
     parser.add_argument('-segmentation_net',
                         type=str,
-                        default='densenet',
+                        default='fcn8',
                         help='Segmentation network.')
     parser.add_argument('-step',
                         type=float,
-                        default=0.08,
+                        default=0.05,
                         help='step')
     parser.add_argument('--num_iter',
                         '-ne',
                         type=int,
-                        default=7,
+                        default=47,
                         help='Max number of iterations')
     parser.add_argument('-which_set',
                         type=str,
@@ -341,9 +349,9 @@ def main():
                         help='Inference set')
     parser.add_argument('-dae_dict',
                         type=dict,
-                        default={'kind': 'standard', 'dropout': 0.2, 'skip': True,
+                        default={'kind': 'standard', 'dropout': 0, 'skip': True,
                                   'unpool_type': 'trackind', 'noise':0.5,
-                                  'concat_h': ['pool4'], 'from_gt': False,
+                                  'concat_h': ['pool4'], 'from_gt': True,
                                   'n_filters': 64, 'conv_before_pool': 1,
                                   'additional_pool': 2,
                                   'path_weights': '', 'layer': 'probs_dimshuffle',

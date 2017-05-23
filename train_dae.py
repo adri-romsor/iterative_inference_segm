@@ -3,6 +3,7 @@
 import os
 import argparse
 import time
+import copy
 from getpass import getuser
 from distutils.dir_util import copy_tree
 
@@ -159,14 +160,19 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
     # Build segmentation network
     print 'Building segmentation network'
     if segm_net == 'fcn8':
+        layer_out = copy.copy(dae_dict['concat_h'])
+        layer_out += [copy.copy(dae_dict['layer'])] if not dae_dict['from_gt'] else []
         fcn = buildFCN8(nb_in_channels, input_x_var, n_classes=n_classes,
                         void_labels=void_labels,
                         path_weights=WEIGHTS_PATH+dataset+'/fcn8_model.npz',
-                        load_weights=True, layer=dae_dict['concat_h']+[dae_dict['layer']])
+                        load_weights=True,
+                        layer=layer_out)
         padding = 100
     elif segm_net == 'densenet':
         fcn = build_fcdensenet(input_x_var, nb_in_channels=nb_in_channels,
-                                n_classes=n_classes, layer=dae_dict['concat_h'])
+                                n_classes=n_classes,
+                               layer=dae_dict['concat_h'],
+                               from_gt=dae_dict['from_gt'])
         padding = 0
     elif segm_net == 'fcn_fcresnet':
         padding = 0
@@ -438,7 +444,7 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
                 Y_pred_batch = L_train_batch[:, :void, :, :]
             else:
                 Y_pred_batch = H_pred_batch[-1]
-            H_pred_batch = H_pred_batch[:-1]
+                H_pred_batch = H_pred_batch[:-1]
 
             # Training step
             cost_train = train_fn(*(H_pred_batch + [Y_pred_batch, L_train_batch]))
@@ -467,7 +473,7 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
                 Y_pred_batch = L_val_batch[:, :void, :, :]
             else:
                 Y_pred_batch = H_pred_batch[-1]
-            H_pred_batch = H_pred_batch[:-1]
+                H_pred_batch = H_pred_batch[:-1]
 
             # Validation step
             cost_val, jacc_val, mse_val = val_fn(*(H_pred_batch + [Y_pred_batch, L_val_batch]))
@@ -532,26 +538,26 @@ def main():
     parser = argparse.ArgumentParser(description='DAE training')
     parser.add_argument('-dataset',
                         type=str,
-                        default='em',
+                        default='camvid',
                         help='Dataset.')
     parser.add_argument('-segmentation_net',
                         type=str,
-                        default='fcn_fcresnet',
+                        default='fcn8',
                         help='Segmentation network.')
     parser.add_argument('-train_dict',
                         type=dict,
                         default={'learning_rate': 0.001, 'lr_anneal': 0.99,
-                                 'weight_decay': 0.0001, 'num_epochs': 1000,
+                                 'weight_decay': 0.0001, 'num_epochs': 500,
                                  'max_patience': 100, 'optimizer': 'rmsprop',
-                                 'batch_size': [10, 5, 10],
-                                 'training_loss': ['dice', 'squared_error'],
+                                 'batch_size': [10, 10, 10],
+                                 'training_loss': ['crossentropy', 'squared_error'],
                                  'lmb': 1, 'full_im_ft': False},
                         help='Training configuration')
     parser.add_argument('-dae_dict',
                         type=dict,
-                        default={'kind': 'standard', 'dropout': 0.2, 'skip': True,
-                                 'unpool_type': 'trackind', 'noise': 0.1,
-                                 'concat_h': ['pool2'], 'from_gt': False,
+                        default={'kind': 'standard', 'dropout': 0, 'skip': True,
+                                 'unpool_type': 'trackind', 'noise': 0.5,
+                                 'concat_h': ['pool4'], 'from_gt': True,
                                  'n_filters': 64, 'conv_before_pool': 1,
                                  'additional_pool': 2, 'temperature': 1.0,
                                  'path_weights': '',  'layer': 'probs_dimshuffle',
@@ -559,12 +565,10 @@ def main():
                         help='DAE kind and parameters')
     parser.add_argument('-data_augmentation',
                         type=dict,
-                        default={'crop_size': (256, 256),
+                        default={'crop_size': (224, 224),
                                  'horizontal_flip': True,
-                                 'vertical_flip': True,
-                                 'rotation_range': 25,
-                                 'shear_range': 0.41,
-                                 'fill_mode':'reflect'},
+                                 'fill_mode':'constant'
+                                },
                         help='Dictionary of data augmentation to be used')
     parser.add_argument('-ae_h',
                         type=bool,
@@ -572,7 +576,7 @@ def main():
                         help='Whether to reconstruct intermediate h')
     parser.add_argument('-train_from_0_255',
                         type=bool,
-                        default=True,
+                        default=False,
                         help='Whether to train from images within 0-255 range')
     args = parser.parse_args()
 
