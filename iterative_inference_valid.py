@@ -411,7 +411,7 @@ def main():
                         help='DAE kind and parameters')
     parser.add_argument('-training_dict',
                         type=dict,
-                        default={'training_loss': ['crossentropy',
+                        default={'training_loss': ['dice',
                                                    'squared_error'],
                                  'learning_rate': 0.001, 'lr_anneal': 0.99,
                                  'weight_decay':0.0001, 'optimizer': 'rmsprop'},

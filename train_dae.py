@@ -505,7 +505,7 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
             best_err_val = err_valid[epoch]
             best_jacc_val = jacc_val_arr[epoch]
             best_mse_val = mse_val_arr[epoch]
-        elif epoch > 0  and mse_val_arr[epoch] < best_mse_val:
+        elif epoch > 0  and err_valid[epoch] < best_err_val:
             best_err_val = err_valid[epoch]
             best_jacc_val = jacc_val_arr[epoch]
             best_mse_val = mse_val_arr[epoch]
