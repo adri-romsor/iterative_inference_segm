@@ -301,7 +301,7 @@ def inference(dataset, segm_net, learn_step=0.005, num_iter=500,
         if segm_net in ['fcn_fcresnet']:
             pred_test_batch = fcn.predict(X_test_batch)
         else:
-            pred_test_batch = fcn_fn(X_test_batch)
+            pred_test_batch = pred_fcn_fn(X_test_batch)
         Y_test_batch = pred_test_batch[-1]
         H_test_batch = pred_test_batch[:-1]
 
@@ -398,38 +398,38 @@ def main():
 
     parser.add_argument('-dataset',
                         type=str,
-                        default='em',
+                        default='camvid',
                         help='Dataset.')
     parser.add_argument('-segmentation_net',
                         type=str,
-                        default='fcn8',
+                        default='densenet',
                         help='Segmentation network.')
     parser.add_argument('-step',
                         type=float,
-                        default=0.05,
+                        default=0.02,
                         help='step')
     parser.add_argument('--num_iter',
                         '-ne',
                         type=int,
-                        default=32,
+                        default=34,
                         help='Max number of iterations')
     parser.add_argument('-which_set',
                         type=str,
-                        default='val',
+                        default='test',
                         help='Inference set')
     parser.add_argument('-dae_dict',
                         type=dict,
                         default={'kind': 'standard', 'dropout': 0, 'skip': True,
-                                  'unpool_type': 'trackind', 'noise':0.1,
-                                  'concat_h': ['pool4'], 'from_gt': True,
+                                  'unpool_type': 'trackind', 'noise': 0.1,
+                                  'concat_h': ['pool4'], 'from_gt': False,
                                   'n_filters': 64, 'conv_before_pool': 1,
                                   'additional_pool': 2,
                                   'path_weights': '', 'layer': 'probs_dimshuffle',
-                                 'exp_name' : 'lmb1_mse_', 'bn': 0},
+                                 'exp_name' : 'flip_final_', 'bn': 0},
                         help='DAE kind and parameters')
     parser.add_argument('-training_dict',
                         type=dict,
-                        default={'training_loss': ['dice',
+                        default={'training_loss': ['crossentropy',
                                                    'squared_error'],
                                  'learning_rate': 0.001, 'lr_anneal': 0.99,
                                  'weight_decay':0.0001, 'optimizer': 'rmsprop'},
@@ -448,7 +448,7 @@ def main():
                         help='Dictionary of data augmentation to be used')
     parser.add_argument('-test_from_0_255',
                         type=bool,
-                        default=True,
+                        default=False,
                         help='Whether to train from images within 0-255 range')
 
     args = parser.parse_args()

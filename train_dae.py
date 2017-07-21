@@ -542,7 +542,7 @@ def main():
                         help='Dataset.')
     parser.add_argument('-segmentation_net',
                         type=str,
-                        default='fcn8',
+                        default='densenet',
                         help='Segmentation network.')
     parser.add_argument('-train_dict',
                         type=dict,
@@ -550,7 +550,8 @@ def main():
                                  'weight_decay': 0.0001, 'num_epochs': 500,
                                  'max_patience': 100, 'optimizer': 'rmsprop',
                                  'batch_size': [10, 10, 10],
-                                 'training_loss': ['crossentropy', 'squared_error'],
+                                 'training_loss': ['crossentropy',
+                                                   'squared_error'],
                                  'lmb': 1, 'full_im_ft': False},
                         help='Training configuration')
     parser.add_argument('-dae_dict',
@@ -561,19 +562,15 @@ def main():
                                  'n_filters': 64, 'conv_before_pool': 1,
                                  'additional_pool': 2, 'temperature': 1.0,
                                  'path_weights': '',  'layer': 'probs_dimshuffle',
-                                 'exp_name': 'lmb1_mse_', 'bn': 0},
+                                 'exp_name': 'flip_final_', 'bn': 0},
                         help='DAE kind and parameters')
     parser.add_argument('-data_augmentation',
                         type=dict,
                         default={'crop_size': (224, 224),
-                                 'horizontal_flip': True,
+                                 'horizontal_flip': 0.5,
                                  'fill_mode':'constant'
                                 },
                         help='Dictionary of data augmentation to be used')
-    parser.add_argument('-ae_h',
-                        type=bool,
-                        default=False,
-                        help='Whether to reconstruct intermediate h')
     parser.add_argument('-train_from_0_255',
                         type=bool,
                         default=False,
@@ -582,7 +579,7 @@ def main():
 
     train(dataset=args.dataset, segm_net=args.segmentation_net,
           dae_dict_updates=args.dae_dict, data_augmentation=args.data_augmentation,
-          train_from_0_255=args.train_from_0_255, ae_h=args.ae_h, resume=False,
+          train_from_0_255=args.train_from_0_255, resume=False,
           savepath=SAVEPATH, loadpath=LOADPATH,
           **args.train_dict)
 

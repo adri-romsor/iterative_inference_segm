@@ -374,6 +374,8 @@ def inference(dataset, segm_net, learn_step=0.005, num_iter=500,
         print('Copying images to {}'.format(loadpath))
         copy_tree(savepath, os.path.join(loadpath, 'img_plots', str(learn_step), which_set))
 
+    return res
+
 
 def main():
     parser = argparse.ArgumentParser(description='Iterative inference.')
@@ -384,7 +386,7 @@ def main():
                         help='Dataset.')
     parser.add_argument('-segmentation_net',
                         type=str,
-                        default='fcn8',
+                        default='densenet',
                         help='Segmentation network.')
     parser.add_argument('-step',
                         type=float,
@@ -402,16 +404,16 @@ def main():
     parser.add_argument('-dae_dict',
                         type=dict,
                         default={'kind': 'standard', 'dropout': 0, 'skip': True,
-                                  'unpool_type': 'trackind', 'noise':0.5,
-                                  'concat_h': ['pool4'], 'from_gt': True,
+                                  'unpool_type': 'trackind', 'noise':0.1,
+                                  'concat_h': ['pool4'], 'from_gt': False,
                                   'n_filters': 64, 'conv_before_pool': 1,
                                   'additional_pool': 2,
                                   'path_weights': '', 'layer': 'probs_dimshuffle',
-                                 'exp_name' : 'lmb1_mse_', 'bn': 0},
+                                  'exp_name' : 'flip_final_', 'bn': 0},  # lmb1_mse_
                         help='DAE kind and parameters')
     parser.add_argument('-training_dict',
                         type=dict,
-                        default={'training_loss': ['dice',
+                        default={'training_loss': ['crossentropy',
                                                    'squared_error'],
                                  'learning_rate': 0.001, 'lr_anneal': 0.99,
                                  'weight_decay':0.0001, 'optimizer': 'rmsprop'},
@@ -435,13 +437,24 @@ def main():
 
     args = parser.parse_args()
 
-    inference(args.dataset, args.segmentation_net, float(args.step),
-              int(args.num_iter), which_set=args.which_set,
-              savepath=SAVEPATH, loadpath=LOADPATH,
-              test_from_0_255=args.test_from_0_255, ae_h=args.ae_h,
-              dae_dict_updates=args.dae_dict, data_augmentation=args.data_augmentation,
-              training_dict=args.training_dict, full_im_ft=args.full_im_ft)
+    steps = [.01, .02, .05, .08, .1, .5, 1.]
+    all_results = np.zeros((len(steps), int(args.num_iter)))
 
+    for i, s in enumerate(steps):
+        all_results[i, :] = inference(args.dataset, args.segmentation_net, s,
+                                      int(args.num_iter), which_set=args.which_set,
+                                      savepath=SAVEPATH, loadpath=LOADPATH,
+                                      test_from_0_255=args.test_from_0_255, ae_h=args.ae_h,
+                                      dae_dict_updates=args.dae_dict, data_augmentation=args.data_augmentation,
+                                      training_dict=args.training_dict, full_im_ft=args.full_im_ft)
+    max_per_step = all_results.max(1)
+    argmax_per_step = all_results.argmax(1)
+    best_step_value = max_per_step.max()
+    best_step = max_per_step.argmax()
+
+    print 'Best step: ' + str(steps[best_step])
+    print 'Result: ' + str(best_step_value)
+    print 'Num iters: ' + str(argmax_per_step[best_step]+1)
 
 if __name__ == "__main__":
     main()
