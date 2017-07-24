@@ -15,6 +15,12 @@ replacing Gaussian corruption.
 
 [Link to paper](https://arxiv.org/abs/1705.07450)
 
+## Dependencies
+This code requires the following python library to load and preprocess datasets:
+
+```
+https://github.com/fvisin/dataset_loaders
+```
 ## Experiments
 
 ### fcn8
@@ -131,4 +137,4 @@ THEANO_FLAGS='device=cuda' python iterative_inference.py
 2) iterative_inference_valid.py will cross-validate the number of iterations and step to use at inference time
 3) with ```step``` and ```num_iter``` found in 2., iterative_inference.py will report the final results on the test set
 
-We used theano commit ddafc3e2c457a36871263b5549f916f821a67c29 and lasagne commit 45bb5689f0b2edb7114608e88305e8074d29bbe7.
+We used theano commit ```ddafc3e2c457a36871263b5549f916f821a67c29``` and lasagne commit ```45bb5689f0b2edb7114608e88305e8074d29bbe7```.
