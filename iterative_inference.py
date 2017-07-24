@@ -420,7 +420,7 @@ def main():
     parser.add_argument('-dae_dict',
                         type=dict,
                         default={'kind': 'standard', 'dropout': 0, 'skip': True,
-                                  'unpool_type': 'trackind', 'noise': 0.1,
+                                  'unpool_type': 'trackind', 'noise': 0.5,
                                   'concat_h': ['pool4'], 'from_gt': False,
                                   'n_filters': 64, 'conv_before_pool': 1,
                                   'additional_pool': 2,
