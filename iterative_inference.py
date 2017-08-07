@@ -24,14 +24,6 @@ from helpers import save_img
 from models.model_helpers import softmax4D
 from helpers import build_experiment_name, print_results
 
-# imports for keras
-from keras.layers import Input
-from keras.models import Model
-from models.fcn_resunet_model import assemble_model
-from models.fcn_resunet_preprocessing import build_preprocessing
-from models.fcn_resunet_blocks import (bottleneck,
-                                       basic_block,
-                                       basic_block_mp)
 from collections import OrderedDict
 
 _FLOATX = config.floatX
@@ -150,63 +142,14 @@ def inference(dataset, segm_net, learn_step=0.005, num_iter=500,
                                 n_classes=n_classes, layer=dae_dict['concat_h'])
         padding = 0
     elif segm_net == 'fcn_fcresnet':
-        padding = 0
-        preprocessing_kwargs = OrderedDict((
-            ('img_shape', (1, None, None)),
-            ('regularize_weights', None),
-            ('nb_filter', 16),
-            ('kernel_size', 3),
-            ('nb_layers', 4),
-            ('pre_unet', True),
-            ('output_nb_filter', 1)
-            ))
-        translation = {'input': 'input', 'pool1': 'initblock_d0',
-                       'pool2': 'initblock_d1', 'pool3': 'mainblock_d0',
-                       'pool4': 'mainblock_d1', 'pool5': 'mainblock_d2',
-                       'pool6': 'mainblock_d3'}
-        resunet_model_kwargs = OrderedDict((
-            ('input_shape', (1, None, None)),
-            ('num_classes', 2),
-            ('input_num_filters', 32),
-            ('main_block_depth', [3, 8, 10, 3]),
-            ('num_main_blocks', 3),
-            ('num_init_blocks', 2),
-            ('weight_decay', None),
-            ('dropout', 0.5),
-            ('short_skip', True),
-            ('long_skip', True),
-            ('long_skip_merge_mode', 'sum'),
-            ('use_skip_blocks', False),
-            ('relative_num_across_filters', 1),
-            ('mainblock', bottleneck),
-            ('initblock', basic_block_mp),
-            # possible strings: input, initblock_d{0, 1}, mainblock_d{0, 1, 2, 3}
-            ('hidden_outputs', [translation[dae_dict['concat_h'][0]]])
-            ))
-        # build preprocessor
-        prep_model = build_preprocessing(**preprocessing_kwargs)
-        # build resnet
-        resunet = assemble_model(**resunet_model_kwargs)
-        # setup model (preprocessor + resunet)
-        inputs = Input(shape=preprocessing_kwargs['img_shape'])
-        out_prep = prep_model(inputs)
-        out_model = resunet(out_prep)
-        fcn = Model(input=inputs, output=out_model)
-        # load weights
-        fcn.load_weights("/data/lisatmp4/romerosa/itinf/models/em/best_weights.hdf5")
-        print("-")*10
-        print ("Resunet model loading done!")
-        print("-")*10
+        raise NotImplementedError
     else:
         raise ValueError
 
     # Build DAE with pre-trained weights
     print 'Building DAE network'
     if dae_dict['kind'] == 'standard':
-        if segm_net in ['fcn_fcresnet']:
-            nb_features_to_concat=fcn.output_shape[0][1]
-        else:
-            nb_features_to_concat=fcn[0].output_shape[1]
+        nb_features_to_concat=fcn[0].output_shape[1]
         dae = buildDAE(input_concat_h_vars, y_hat_var, n_classes,
                        nb_features_to_concat=nb_features_to_concat,
                        padding=padding, trainable=True,
@@ -241,12 +184,8 @@ def inference(dataset, segm_net, learn_step=0.005, num_iter=500,
     print "Defining and compiling theano functions"
 
     # predictions and theano functions
-    if segm_net in ['fcn_fcresnet']:
-        # no need if we use keras, viva keras!
-        pass
-    else:
-        pred_fcn = lasagne.layers.get_output(fcn, deterministic=True, batch_norm_use_averages=False)
-        pred_fcn_fn = theano.function([input_x_var], pred_fcn)
+    pred_fcn = lasagne.layers.get_output(fcn, deterministic=True, batch_norm_use_averages=False)
+    pred_fcn_fn = theano.function([input_x_var], pred_fcn)
     pred_dae = lasagne.layers.get_output(dae, deterministic=True)
     pred_dae_fn = theano.function(input_concat_h_vars+[y_hat_var], pred_dae)
 
@@ -292,16 +231,10 @@ def inference(dataset, segm_net, learn_step=0.005, num_iter=500,
 
         # Get minibatch
         X_test_batch, L_test_batch = data_iter.next()
-        if segm_net in ['fcn_fcresnet']:
-            # flip labels to the format used in Keras
-            L_test_batch = 1 - L_test_batch
         L_test_batch = L_test_batch.astype(_FLOATX)
 
         # Compute fcn prediction y and h
-        if segm_net in ['fcn_fcresnet']:
-            pred_test_batch = fcn.predict(X_test_batch)
-        else:
-            pred_test_batch = pred_fcn_fn(X_test_batch)
+        pred_test_batch = pred_fcn_fn(X_test_batch)
         Y_test_batch = pred_test_batch[-1]
         H_test_batch = pred_test_batch[:-1]
 
@@ -402,7 +335,7 @@ def main():
                         help='Dataset.')
     parser.add_argument('-segmentation_net',
                         type=str,
-                        default='densenet',
+                        default='fcn8',
                         help='Segmentation network.')
     parser.add_argument('-step',
                         type=float,

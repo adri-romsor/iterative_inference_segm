@@ -27,14 +27,7 @@ from models.fcn8_dae import buildFCN8_DAE
 from models.contextmod_dae import buildDAE_contextmod
 from layers.mylayers import DePool2D
 from helpers import build_experiment_name
-# imports for keras
-from keras.layers import Input
-from keras.models import Model
-from models.fcn_resunet_model import assemble_model
-from models.fcn_resunet_preprocessing import build_preprocessing
-from models.fcn_resunet_blocks import (bottleneck,
-                                       basic_block,
-                                       basic_block_mp)
+
 from collections import OrderedDict
 
 _FLOATX = config.floatX
@@ -153,8 +146,7 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
     # Check that model and dataset get along
     print 'Checking options'
     assert (segm_net == 'fcn8' and dataset == 'camvid') or \
-        (segm_net == 'densenet' and dataset == 'camvid') or \
-        (segm_net == 'fcn_fcresnet' and dataset == 'em')
+        (segm_net == 'densenet' and dataset == 'camvid')
     assert (data_augmentation['crop_size'] == None and full_im_ft) or not full_im_ft
 
     # Build segmentation network
@@ -175,54 +167,6 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
                                from_gt=dae_dict['from_gt'])
         padding = 0
     elif segm_net == 'fcn_fcresnet':
-        padding = 0
-        preprocessing_kwargs = OrderedDict((
-            ('img_shape', (1, None, None)),
-            ('regularize_weights', None),
-            ('nb_filter', 16),
-            ('kernel_size', 3),
-            ('nb_layers', 4),
-            ('pre_unet', True),
-            ('output_nb_filter', 1)
-            ))
-        translation = {'input': 'input', 'pool1': 'initblock_d0',
-                       'pool2': 'initblock_d1', 'pool3': 'mainblock_d0',
-                       'pool4': 'mainblock_d1', 'pool5': 'mainblock_d2',
-                       'pool6': 'mainblock_d3'}
-        resunet_model_kwargs = OrderedDict((
-            ('input_shape', (1, None, None)),
-            ('num_classes', 2),
-            ('input_num_filters', 32),
-            ('main_block_depth', [3, 8, 10, 3]),
-            ('num_main_blocks', 3),
-            ('num_init_blocks', 2),
-            ('weight_decay', None),
-            ('dropout', 0.5),
-            ('short_skip', True),
-            ('long_skip', True),
-            ('long_skip_merge_mode', 'sum'),
-            ('use_skip_blocks', False),
-            ('relative_num_across_filters', 1),
-            ('mainblock', bottleneck),
-            ('initblock', basic_block_mp),
-            # possible strings: input, initblock_d{0, 1}, mainblock_d{0, 1, 2, 3}
-            ('hidden_outputs', [translation[dae_dict['concat_h'][0]]])
-            ))
-        # build preprocessor
-        prep_model = build_preprocessing(**preprocessing_kwargs)
-        # build resnet
-        resunet = assemble_model(**resunet_model_kwargs)
-        # setup model (preprocessor + resunet)
-        inputs = Input(shape=preprocessing_kwargs['img_shape'])
-        out_prep = prep_model(inputs)
-        out_model = resunet(out_prep)
-        fcn = Model(input=inputs, output=out_model)
-        # load weights
-        fcn.load_weights("/data/lisatmp4/romerosa/itinf/models/em/best_weights.hdf5")
-        print("-")*10
-        print ("Resunet model loading done!")
-        print("-")*10
-    elif segm_net == 'fcn_fcresnet':
         raise NotImplementedError
     else:
         raise ValueError
@@ -237,10 +181,7 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
     ae_h = ae_h and 'pool' in dae_dict['concat_h'][-1]
 
     if dae_dict['kind'] == 'standard':
-        if segm_net in ['fcn_fcresnet']:
-            nb_features_to_concat=fcn.output_shape[0][1]
-        else:
-            nb_features_to_concat=fcn[0].output_shape[1]
+        nb_features_to_concat=fcn[0].output_shape[1]
         dae = buildDAE(input_concat_h_vars, input_mask_var, n_classes,
                        nb_features_to_concat=nb_features_to_concat, padding=padding,
                        trainable=True,
@@ -280,11 +221,7 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
     print "Defining and compiling training functions"
 
     # fcn prediction
-    if segm_net in ['fcn_fcresnet']:
-        # no need if we use keras, viva keras!
-        pass
-    else:
-        fcn_prediction = lasagne.layers.get_output(fcn, deterministic=True, batch_norm_use_averages=False)
+    fcn_prediction = lasagne.layers.get_output(fcn, deterministic=True, batch_norm_use_averages=False)
 
     # select prediction layers (pooling and upsampling layers)
     dae_all_lays = lasagne.layers.get_all_layers(dae)
@@ -396,11 +333,8 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
     # functions
     train_fn = theano.function(input_concat_h_vars + [input_mask_var, target_var],
                                loss, updates=updates)
-    if segm_net in ['fcn_fcresnet']:
-        # no need if we use keras, viva keras!
-        pass
-    else:
-        fcn_fn = theano.function([input_x_var], fcn_prediction)
+
+    fcn_fn = theano.function([input_x_var], fcn_prediction)
     val_fn = theano.function(input_concat_h_vars + [input_mask_var, target_var], [test_loss, test_jacc, test_mse_loss])
 
     err_train = []
@@ -423,9 +357,6 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
         for i in range(n_batches_train):
             # Get minibatch
             X_train_batch, L_train_batch = train_iter.next()
-            if segm_net in ['fcn_fcresnet']:
-                # flip labels to the format used in Keras
-                L_train_batch = 1 - L_train_batch
             L_train_batch = L_train_batch.astype(_FLOATX)
 
             #####uncomment if you want to control the feasability of pooling####
@@ -435,10 +366,7 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
             ####################################################################
 
             # h prediction
-            if segm_net in ['fcn_fcresnet']:
-                H_pred_batch = fcn.predict(X_train_batch)
-            else:
-                H_pred_batch = fcn_fn(X_train_batch)
+            H_pred_batch = fcn_fn(X_train_batch)
 
             if dae_dict['from_gt']:
                 Y_pred_batch = L_train_batch[:, :void, :, :]
@@ -459,16 +387,11 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
         for i in range(n_batches_val):
             # Get minibatch
             X_val_batch, L_val_batch = val_iter.next()
-            if segm_net in ['fcn_fcresnet']:
-                # flip labels to the format used in Keras
-                L_val_batch = 1 - L_val_batch
             L_val_batch = L_val_batch.astype(_FLOATX)
 
             # h prediction
-            if segm_net in ['fcn_fcresnet']:
-                H_pred_batch = fcn.predict(X_val_batch)
-            else:
-                H_pred_batch = fcn_fn(X_val_batch)
+            H_pred_batch = fcn_fn(X_val_batch)
+
             if dae_dict['from_gt']:
                 Y_pred_batch = L_val_batch[:, :void, :, :]
             else:
