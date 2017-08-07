@@ -406,12 +406,12 @@ def main():
                         help='Segmentation network.')
     parser.add_argument('-step',
                         type=float,
-                        default=0.02,
+                        default=1.0,
                         help='step')
     parser.add_argument('--num_iter',
                         '-ne',
                         type=int,
-                        default=34,
+                        default=1,
                         help='Max number of iterations')
     parser.add_argument('-which_set',
                         type=str,
@@ -419,9 +419,10 @@ def main():
                         help='Inference set')
     parser.add_argument('-dae_dict',
                         type=dict,
-                        default={'kind': 'standard', 'dropout': 0, 'skip': True,
-                                  'unpool_type': 'trackind', 'noise': 0.5,
-                                  'concat_h': ['pool4'], 'from_gt': False,
+                        default={'kind': 'contextmod', 'dropout': 0, 'skip': True,
+                                  'unpool_type': 'trackind', 'noise':
+                                 0,
+                                  'concat_h': ['input'], 'from_gt': False,
                                   'n_filters': 64, 'conv_before_pool': 1,
                                   'additional_pool': 2,
                                   'path_weights': '', 'layer': 'probs_dimshuffle',
@@ -429,9 +430,8 @@ def main():
                         help='DAE kind and parameters')
     parser.add_argument('-training_dict',
                         type=dict,
-                        default={'training_loss': ['crossentropy',
-                                                   'squared_error'],
-                                 'learning_rate': 0.001, 'lr_anneal': 0.99,
+                        default={'training_loss': ['crossentropy'],
+                                 'learning_rate': 0.0001, 'lr_anneal': 0.99,
                                  'weight_decay':0.0001, 'optimizer': 'rmsprop'},
                         help='Training parameters')
     parser.add_argument('-full_im_ft',

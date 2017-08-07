@@ -181,7 +181,7 @@ def buildFCN8(nb_in_channels, input_var,
 
     # Do not train
     if not trainable:
-        model_helpers.freezeParameters(net['probs'])
+        model_helpers.freezeParameters(net['probs'], single=False)
 
     # Go back to 4D
     net['probs_reshape'] = ReshapeLayer(net['probs'], (laySize[0], laySize[1],

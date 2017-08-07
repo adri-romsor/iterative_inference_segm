@@ -48,7 +48,7 @@ elif getuser() == 'jegousim':
     WEIGHTS_PATH = '/data/lisatmp4/romerosa/rnncnn/fcn8_model.npz'
 elif getuser() == 'drozdzam':
     SAVEPATH = '/Tmp/drozdzam/itinf/models/'
-    LOADPATH = '/data/lisatmp4/drozdzam/itinf/models/'
+    LOADPATH = '/data/lisatmp4/romerosa/itinf/models/'
     WEIGHTS_PATH = LOADPATH
 elif getuser() == 'erraqaba':
     SAVEPATH = '/Tmp/erraqaba/iterative_inference/models/'
@@ -296,7 +296,7 @@ def train(dataset, segm_net, learning_rate=0.005, lr_anneal=1.0,
                     l == dae_all_lays[-1]]
         # dae_lays = dae_lays[::2]
     else:
-        dae_lays = [l for l in dae_all_lays if isinstance(l, DilatedConv2DLayer)]
+        dae_lays = [l for l in dae_all_lays if isinstance(l, DilatedConv2DLayer) or l == dae_all_lays[-1]]
 
     if ae_h:
         h_ae_idx = [i for i, el in enumerate(dae_lays) if el.name == 'h_to_recon'][0]
@@ -546,19 +546,18 @@ def main():
                         help='Segmentation network.')
     parser.add_argument('-train_dict',
                         type=dict,
-                        default={'learning_rate': 0.001, 'lr_anneal': 0.99,
+                        default={'learning_rate': 0.0001, 'lr_anneal': 0.99,
                                  'weight_decay': 0.0001, 'num_epochs': 500,
                                  'max_patience': 100, 'optimizer': 'rmsprop',
                                  'batch_size': [10, 10, 10],
-                                 'training_loss': ['crossentropy',
-                                                   'squared_error'],
+                                 'training_loss': ['crossentropy'],
                                  'lmb': 1, 'full_im_ft': False},
                         help='Training configuration')
     parser.add_argument('-dae_dict',
                         type=dict,
-                        default={'kind': 'standard', 'dropout': 0, 'skip': True,
-                                 'unpool_type': 'trackind', 'noise': 0.5,
-                                 'concat_h': ['pool4'], 'from_gt': True,
+                        default={'kind': 'contextmod', 'dropout': 0, 'skip': True,
+                                 'unpool_type': 'trackind', 'noise': 0,
+                                 'concat_h': ['input'], 'from_gt': False,
                                  'n_filters': 64, 'conv_before_pool': 1,
                                  'additional_pool': 2, 'temperature': 1.0,
                                  'path_weights': '',  'layer': 'probs_dimshuffle',

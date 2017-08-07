@@ -152,7 +152,7 @@ def main():
                         help='Dataset.')
     parser.add_argument('-segmentation_net',
                         type=str,
-                        default='densenet',
+                        default='fcn8',
                         help='Segmentation network.')
     parser.add_argument('-test_from_0_255',
                         type=bool,

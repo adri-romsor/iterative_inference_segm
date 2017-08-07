@@ -25,6 +25,8 @@ https://github.com/fvisin/dataset_loaders
 
 ### fcn8
 
+Arguments to use during training/iterative inference:
+
 ```
 parser.add_argument('-dataset',
                     type=str,

@@ -105,3 +105,41 @@ def concatenate(net, in_layer, concat_h, concat_vars, pos, nb_concat_features):
         concat_h[pos-1] = 'input'
 
     return pos, out
+
+
+def concatenate_end2end(net, in_layer, concat_h, layer_h, pos, nb_concat_features):
+    """
+    Auxiliary function that checks whether we should concatenate the output of
+    a layer `in_layer` of a network `net` to some a tensor in `concat_vars`
+
+    Parameters
+    ----------
+    net: dictionary containing layers of a network
+    in_layer: name of a layer in net
+    concat_h: list of layers to concatenate
+    concat_vars: list of variables (tensors) to concatenate
+    pos: position in lists `concat_h` and `concat_vars` we want to check
+    nb_concat_features: number of features in the layer we want to concatenate
+    """
+    if pos < len(concat_h) and concat_h[pos] == 'input':
+        concat_h[pos] = in_layer
+
+    # if this is the layer we want to concatenate, create an InputLayer with the
+    # tensor we want to concatenate and a ConcatLayer that does the job afterwards
+    if in_layer in concat_h:
+        net[in_layer + '_h'] = layer_h[pos]
+        net[in_layer + '_concat'] = ConcatLayer((net[in_layer + '_h'],
+                                            net[in_layer]), axis=1, cropping=None)
+        pos += 1
+        out = in_layer + '_concat'
+
+        laySize = net[out].output_shape
+        n_cl = laySize[1]
+        print('Number of feature maps (concat):', n_cl)
+    else:
+        out = in_layer
+
+    if concat_h and pos <= len(concat_h) and concat_h[pos-1] == 'noisy_input':
+        concat_h[pos-1] = 'input'
+
+    return pos, out
